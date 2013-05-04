@@ -1,0 +1,13 @@
+# Backup files
+*.*~
+# Compile output
+/sdcli
+*.o
+# IDE project files
+/sdcli.creator*
+/sdcli.includes
+/sdcli.files
+/sdcli.config
+# Blah
+/GNUmakefile
+/.clang_complete
