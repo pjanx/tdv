@@ -812,6 +812,58 @@ stardict_entry_field_free (StardictEntryField *sef)
 	g_slice_free1 (sizeof *sef, sef);
 }
 
+static StardictEntryField *
+read_entry (gchar type, const gchar **entry_iterator,
+	const gchar *end, gboolean is_final)
+{
+	const gchar *entry = *entry_iterator;
+	if (g_ascii_islower (type))
+	{
+		GString *data = g_string_new (NULL);
+
+		if (is_final)
+			g_string_append_len (data, entry, end - entry);
+		else
+		{
+			gchar c;
+			while (entry < end && (c = *entry++))
+				g_string_append_c (data, c);
+
+			if (c != '\0')
+				return (gpointer) g_string_free (data, TRUE);
+		}
+
+		StardictEntryField *sef = g_slice_alloc (sizeof *sef);
+		sef->type = type;
+		sef->data_size = data->len + 1;
+		sef->data = g_string_free (data, FALSE);
+		*entry_iterator = entry;
+		return sef;
+	}
+
+	gsize length;
+	if (is_final)
+		length = end - entry;
+	else
+	{
+		if (entry + sizeof (guint32) > end)
+			return NULL;
+
+		length = GUINT32_FROM_BE (*(guint32 *) entry);
+		entry += sizeof (guint32);
+
+		if (entry + length > end)
+			return NULL;
+	}
+
+	StardictEntryField *sef = g_slice_alloc (sizeof *sef);
+	sef->type = type;
+	sef->data_size = length;
+	sef->data = memcpy (g_malloc (length), entry, length);
+	*entry_iterator = entry;
+	return sef;
+}
+
 static GList *
 read_entries (const gchar *entry, gsize entry_size, GError **error)
 {
@@ -821,45 +873,10 @@ read_entries (const gchar *entry, gsize entry_size, GError **error)
 	while (entry < end)
 	{
 		gchar type = *entry++;
-		if (g_ascii_islower (type))
-		{
-			GString *data = g_string_new (NULL);
-			gchar c;
-			while (entry < end && (c = *entry++))
-				g_string_append_c (data, c);
-
-			if (c != '\0')
-			{
-				g_string_free (data, TRUE);
-				goto error;
-			}
-
-			StardictEntryField *sef = g_slice_alloc (sizeof *sef);
-			sef->type = type;
-			sef->data_size = data->len + 1;
-			sef->data = g_string_free (data, FALSE);
-			result = g_list_append (result, sef);
-		}
-		else
-		{
-			if (entry + sizeof (guint32) > end)
-				goto error;
-
-			gsize length = GUINT32_FROM_BE (*(guint32 *) entry);
-			entry += sizeof (guint32);
-
-			if (entry + length > end)
-				goto error;
-
-			gpointer data = g_malloc (length);
-			memcpy (data, entry, length);
-
-			StardictEntryField *sef = g_slice_alloc (sizeof *sef);
-			sef->type = type;
-			sef->data_size = length;
-			sef->data = data;
-			result = g_list_append (result, sef);
-		}
+		StardictEntryField *sef = read_entry (type, &entry, end, FALSE);
+		if (!sef)
+			goto error;
+		result = g_list_append (result, sef);
 	}
 
 	return result;
@@ -867,8 +884,7 @@ read_entries (const gchar *entry, gsize entry_size, GError **error)
 error:
 	g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 		"invalid data entry");
-	g_list_free_full (result,
-		(GDestroyNotify) stardict_entry_field_free);
+	g_list_free_full (result, (GDestroyNotify) stardict_entry_field_free);
 	return NULL;
 }
 
@@ -882,57 +898,10 @@ read_entries_sts (const gchar *entry, gsize entry_size,
 	while (*sts)
 	{
 		gchar type = *sts++;
-		gboolean is_final = !*sts;
-		if (g_ascii_islower (type))
-		{
-			GString *data = g_string_new (NULL);
-
-			if (is_final)
-				g_string_append_len (data, entry, end - entry);
-			else
-			{
-				gchar c;
-				while (entry < end && (c = *entry++))
-					g_string_append_c (data, c);
-
-				if (c != '\0')
-				{
-					g_string_free (data, TRUE);
-					goto error;
-				}
-			}
-
-
-			StardictEntryField *sef = g_slice_alloc (sizeof *sef);
-			sef->type = type;
-			sef->data_size = data->len + 1;
-			sef->data = g_string_free (data, FALSE);
-			result = g_list_append (result, sef);
-		}
-		else
-		{
-			gsize length;
-			if (is_final)
-				length = end - entry;
-			else
-			{
-				if (entry + sizeof (guint32) > end)
-					goto error;
-
-				length = GUINT32_FROM_BE (*(guint32 *) entry);
-				entry += sizeof (guint32);
-
-				if (entry + length > end)
-					goto error;
-
-			}
-
-			StardictEntryField *sef = g_slice_alloc (sizeof *sef);
-			sef->type = type;
-			sef->data_size = length;
-			sef->data = memcpy (g_malloc (length), entry, length);
-			result = g_list_append (result, sef);
-		}
+		StardictEntryField *sef = read_entry (type, &entry, end, !*sts);
+		if (!sef)
+			goto error;
+		result = g_list_append (result, sef);
 	}
 
 	return result;
@@ -940,8 +909,7 @@ read_entries_sts (const gchar *entry, gsize entry_size,
 error:
 	g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 		"invalid data entry");
-	g_list_free_full (result,
-		(GDestroyNotify) stardict_entry_field_free);
+	g_list_free_full (result, (GDestroyNotify) stardict_entry_field_free);
 	return NULL;
 }
 
