@@ -822,10 +822,13 @@ read_entry (gchar type, const gchar **entry_iterator,
 		GString *data = g_string_new (NULL);
 
 		if (is_final)
+		{
 			g_string_append_len (data, entry, end - entry);
+			entry += end - entry;
+		}
 		else
 		{
-			gchar c;
+			gint c = EOF;
 			while (entry < end && (c = *entry++))
 				g_string_append_c (data, c);
 
@@ -860,7 +863,7 @@ read_entry (gchar type, const gchar **entry_iterator,
 	sef->type = type;
 	sef->data_size = length;
 	sef->data = memcpy (g_malloc (length), entry, length);
-	*entry_iterator = entry;
+	*entry_iterator = entry + length;
 	return sef;
 }
 
