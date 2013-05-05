@@ -412,6 +412,8 @@ int
 main (int argc, char *argv[])
 {
 	g_test_init (&argc, &argv, NULL);
+	if (glib_check_version (2, 36, 0))
+		g_type_init ();
 
 	Dictionary *dict = dictionary_create ();
 
