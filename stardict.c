@@ -138,7 +138,6 @@ stardict_strcmp (const gchar *s1, const gchar *s2)
 	gint imin = 0, imax = max, imid;                                          \
 	while (imin <= imax) {                                                    \
 		imid = imin + (imax - imin) / 2;                                      \
-		g_assert (imid < imax);                                               \
 		gint cmp = compare;                                                   \
 		if      (cmp > 0) imin = imid + 1;                                    \
 		else if (cmp < 0) imax = imid - 1;                                    \
@@ -170,15 +169,16 @@ ifo_reader_init (IfoReader *ir, const gchar *path, GError **error)
 
 	static const char first_line[] = "StarDict's dict ifo file\n";
 	if (length < sizeof first_line - 1
-	 || strncmp (ir->data, first_line, sizeof first_line - 1))
+	 || strncmp (contents, first_line, sizeof first_line - 1))
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 			"%s: invalid header format", path);
 		return FALSE;
 	}
 
-	ir->data = contents + sizeof first_line - 1;
-	ir->data_end = ir->data + length;
+	ir->data = contents;
+	ir->start = contents + sizeof first_line - 1;
+	ir->data_end = contents + length;
 	return TRUE;
 }
 
@@ -282,6 +282,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		return FALSE;
 
 	gboolean ret_val = FALSE;
+	memset (sti, 0, sizeof *sti);
 
 	if (ifo_reader_read (&ir) != 1 || strcmp (ir.key, "version"))
 	{
@@ -403,6 +404,8 @@ error:
 			if (ifo_keys[i].type == IFO_STRING)
 				g_free (G_STRUCT_MEMBER (gchar *, sti, ifo_keys[i].offset));
 	}
+	else
+		sti->path = g_strdup (path);
 
 	ifo_reader_free (&ir);
 	return ret_val;
@@ -487,6 +490,14 @@ stardict_dict_new (const gchar *filename, GError **error)
 	return sd;
 }
 
+/** Return information about a loaded dictionary. */
+StardictInfo *
+stardict_dict_get_info (StardictDict *sd)
+{
+	g_return_val_if_fail (STARDICT_IS_DICT (sd), NULL);
+	return sd->info;
+}
+
 /** Load a StarDict index from a GIO input stream. */
 static gboolean
 load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
@@ -516,7 +527,9 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 		g_array_append_val (sd->index, entry);
 	}
 
-	g_error_free (err);
+	if (err != NULL)
+		goto error;
+
 	g_object_unref (dis);
 	return TRUE;
 
@@ -586,16 +599,13 @@ load_syn (StardictDict *sd, const gchar *filename, GError **error)
 		g_array_append_val (sd->synonyms, entry);
 	}
 
-	if (entry.word)
+	if (err != NULL)
 	{
 		g_free (entry.word);
 		g_propagate_error (error, err);
 	}
 	else
-	{
-		g_error_free (err);
 		ret_val = TRUE;
-	}
 
 	g_object_unref (dis);
 	g_object_unref (fis);
@@ -733,7 +743,7 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 	gchar *base_syn = g_strconcat (base, ".syn", NULL);
 	if (g_file_test (base_syn, G_FILE_TEST_EXISTS | G_FILE_TEST_IS_REGULAR))
 		load_syn (sd, base_syn, NULL);
-	g_free (load_syn);
+	g_free (base_syn);
 
 	g_free (base);
 	return sd;
@@ -883,7 +893,7 @@ read_entries_sts (const gchar *entry, gsize entry_size,
 			{
 				gchar c;
 				while (entry < end && (c = *entry++))
-					g_string_append_c (data, (c = *entry++));
+					g_string_append_c (data, c);
 
 				if (c != '\0')
 				{
@@ -948,11 +958,11 @@ stardict_dict_get_entry (StardictDict *sd, guint32 offset)
 
 	GList *entries;
 	if (sd->info->same_type_sequence)
-		entries = read_entries (sd->dict + sie->data_offset,
-			sie->data_size, NULL);
-	else
 		entries = read_entries_sts (sd->dict + sie->data_offset,
 			sie->data_size, sd->info->same_type_sequence, NULL);
+	else
+		entries = read_entries (sd->dict + sie->data_offset,
+			sie->data_size, NULL);
 
 	if (!entries)
 		return NULL;
