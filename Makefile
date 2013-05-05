@@ -1,14 +1,15 @@
 SHELL = /bin/sh
 
 pkgs = ncursesw glib-2.0 gio-2.0
-targets = sdcli
+tests = test-stardict
+targets = sdcli $(tests)
 
 CC = clang
 CFLAGS = -ggdb -std=gnu99 -Wall -Wextra -Wno-missing-field-initializers \
 		 `pkg-config --cflags $(pkgs)`
 LDFLAGS = `pkg-config --libs $(pkgs)`
 
-.PHONY: all clean
+.PHONY: all clean test
 
 all: $(targets)
 
@@ -17,6 +18,14 @@ clean:
 
 sdcli: sdcli.o stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
+
+test-stardict: test-stardict.o stardict.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+test: $(tests)
+	for i in $(tests); do         \
+		gtester --verbose ./$$i;  \
+	done
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
