@@ -126,6 +126,7 @@ struct stardict_dict
 	GArray        * synonyms;           //!< Synonyms
 	gpointer        dict;               //!< Dictionary data
 	gsize           dict_length;        //!< Length of the dict data in bytes
+	GMappedFile   * mapped_dict;        //!< Memory map handle
 };
 
 struct stardict_dict_class

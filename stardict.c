@@ -456,7 +456,11 @@ stardict_dict_finalize (GObject *self)
 	stardict_info_free (sd->info);
 	g_array_free (sd->index, TRUE);
 	g_array_free (sd->synonyms, TRUE);
-	g_free (sd->dict);
+
+	if (sd->mapped_dict)
+		g_mapped_file_unref (sd->mapped_dict);
+	else
+		g_free (sd->dict);
 
 	G_OBJECT_CLASS (stardict_dict_parent_class)->finalize (self);
 }
@@ -635,17 +639,17 @@ static gboolean
 load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 	GError **error)
 {
-	gboolean ret_val = FALSE;
-	GFile *file = g_file_new_for_path (filename);
-	GFileInputStream *fis = g_file_read (file, NULL, error);
-
-	if (!fis)
-		goto cannot_open;
-
-	// Just read it all, as it is, into memory
-	GByteArray *ba = g_byte_array_new ();
 	if (gzipped)
 	{
+		gboolean ret_val = FALSE;
+		GFile *file = g_file_new_for_path (filename);
+		GFileInputStream *fis = g_file_read (file, NULL, error);
+
+		if (!fis)
+			goto cannot_open;
+
+		// Just read it all, as it is, into memory
+		GByteArray *ba = g_byte_array_new ();
 		GZlibDecompressor *zd
 			= g_zlib_decompressor_new (G_ZLIB_COMPRESSOR_FORMAT_GZIP);
 		GInputStream *cis = g_converter_input_stream_new
@@ -655,24 +659,28 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 
 		g_object_unref (cis);
 		g_object_unref (zd);
-	}
-	else
-		ret_val = stream_read_all (ba, G_INPUT_STREAM (fis), error);
 
-	if (!ret_val)
-	{
-		g_byte_array_free (ba, TRUE);
-		goto reading_failed;
-	}
+		if (ret_val)
+		{
+			sd->dict_length = ba->len;
+			sd->dict = g_byte_array_free (ba, FALSE);
+		}
+		else
+			g_byte_array_free (ba, TRUE);
 
-	sd->dict_length = ba->len;
-	sd->dict = g_byte_array_free (ba, FALSE);
-
-reading_failed:
-	g_object_unref (fis);
+		g_object_unref (fis);
 cannot_open:
-	g_object_unref (file);
-	return ret_val;
+		g_object_unref (file);
+		return ret_val;
+	}
+
+	sd->mapped_dict = g_mapped_file_new (filename, FALSE, error);
+	if (!sd->mapped_dict)
+		return FALSE;
+
+	sd->dict_length = g_mapped_file_get_length (sd->mapped_dict);
+	sd->dict = g_mapped_file_get_contents (sd->mapped_dict);
+	return TRUE;
 }
 
 /** Load a StarDict dictionary.
