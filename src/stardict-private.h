@@ -62,4 +62,20 @@ struct stardict_synonym_entry
 	guint32           original_word;    //!< The original word's index
 };
 
+struct stardict_ifo_key
+{
+	const gchar *name;                  //!< Name of the key
+	enum {
+		IFO_STRING,                     //!< A @code gchar * @endcode value
+		IFO_NUMBER                      //!< A @code gulong @endcode value
+	} type;                             //!< Type of the value
+	size_t offset;                      //!< Offset within StardictInfo
+};
+
+/** Lists all the entries in StardictInfo. */
+extern const struct stardict_ifo_key _stardict_ifo_keys[];
+
+/** Denotes the length of _stardict_ifo_keys. */
+extern gsize _stardict_ifo_keys_length;
+
 #endif /* ! STARDICTPRIVATE_H */

@@ -29,6 +29,8 @@
 #include <gio/gio.h>
 
 #include "stardict.h"
+#include "stardict-private.h"
+#include "generator.h"
 
 
 // --- Pronunciation generator -------------------------------------------------

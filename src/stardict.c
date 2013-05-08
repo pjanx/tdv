@@ -235,6 +235,23 @@ stardict_info_free (StardictInfo *sdi)
 
 #define DEFINE_IFO_KEY(n, t, e) { (n), IFO_##t, offsetof (StardictInfo, e) }
 
+const struct stardict_ifo_key _stardict_ifo_keys[] =
+{
+	DEFINE_IFO_KEY ("bookname",         STRING, book_name),
+	DEFINE_IFO_KEY ("wordcount",        NUMBER, word_count),
+	DEFINE_IFO_KEY ("synwordcount",     NUMBER, syn_word_count),
+	DEFINE_IFO_KEY ("idxfilesize",      NUMBER, idx_filesize),
+	DEFINE_IFO_KEY ("idxoffsetbits",    NUMBER, idx_offset_bits),
+	DEFINE_IFO_KEY ("author",           STRING, author),
+	DEFINE_IFO_KEY ("email",            STRING, email),
+	DEFINE_IFO_KEY ("website",          STRING, website),
+	DEFINE_IFO_KEY ("description",      STRING, description),
+	DEFINE_IFO_KEY ("date",             STRING, date),
+	DEFINE_IFO_KEY ("sametypesequence", STRING, same_type_sequence)
+};
+
+gsize _stardict_ifo_keys_length = G_N_ELEMENTS (_stardict_ifo_keys);
+
 static gboolean
 load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 {
@@ -263,45 +280,24 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		goto error;
 	}
 
-	static const struct
-	{
-		const gchar *name;
-		enum { IFO_STRING, IFO_NUMBER } type;
-		size_t offset;
-	}
-	ifo_keys[] =
-	{
-		DEFINE_IFO_KEY ("bookname",         STRING, book_name),
-		DEFINE_IFO_KEY ("wordcount",        NUMBER, word_count),
-		DEFINE_IFO_KEY ("synwordcount",     NUMBER, syn_word_count),
-		DEFINE_IFO_KEY ("idxfilesize",      NUMBER, idx_filesize),
-		DEFINE_IFO_KEY ("idxoffsetbits",    NUMBER, idx_offset_bits),
-		DEFINE_IFO_KEY ("author",           STRING, author),
-		DEFINE_IFO_KEY ("email",            STRING, email),
-		DEFINE_IFO_KEY ("website",          STRING, website),
-		DEFINE_IFO_KEY ("description",      STRING, description),
-		DEFINE_IFO_KEY ("date",             STRING, date),
-		DEFINE_IFO_KEY ("sametypesequence", STRING, same_type_sequence)
-	};
-
 	gint ret;
 	while ((ret = ifo_reader_read (&ir)) == 1)
 	{
 		guint i;
-		for (i = 0; i < G_N_ELEMENTS (ifo_keys); i++)
-			if (!strcmp (ir.key, ifo_keys[i].name))
+		for (i = 0; i < _stardict_ifo_keys_length; i++)
+			if (!strcmp (ir.key, _stardict_ifo_keys[i].name))
 				break;
 
-		if (i == G_N_ELEMENTS (ifo_keys))
+		if (i == _stardict_ifo_keys_length)
 		{
 			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 				"%s: unknown key, ignoring: %s", path, ir.key);
 			continue;
 		}
 
-		if (ifo_keys[i].type == IFO_STRING)
+		if (_stardict_ifo_keys[i].type == IFO_STRING)
 		{
-			G_STRUCT_MEMBER (gchar *, sti, ifo_keys[i].offset)
+			G_STRUCT_MEMBER (gchar *, sti, _stardict_ifo_keys[i].offset)
 				= g_strdup (ir.value);
 			continue;
 		}
@@ -316,7 +312,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 			goto error;
 		}
 
-		G_STRUCT_MEMBER (gulong, sti, ifo_keys[i].offset) = wc;
+		G_STRUCT_MEMBER (gulong, sti, _stardict_ifo_keys[i].offset) = wc;
 	}
 
 	if (ret == -1)
@@ -361,9 +357,10 @@ error:
 	if (!ret_val)
 	{
 		guint i;
-		for (i = 0; i < G_N_ELEMENTS (ifo_keys); i++)
-			if (ifo_keys[i].type == IFO_STRING)
-				g_free (G_STRUCT_MEMBER (gchar *, sti, ifo_keys[i].offset));
+		for (i = 0; i < _stardict_ifo_keys_length; i++)
+			if (_stardict_ifo_keys[i].type == IFO_STRING)
+				g_free (G_STRUCT_MEMBER (gchar *, sti,
+					_stardict_ifo_keys[i].offset));
 	}
 	else
 		sti->path = g_strdup (path);

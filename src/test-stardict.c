@@ -1,5 +1,5 @@
 /*
- * stardict.c: StarDict API test
+ * test-stardict.c: StarDict API test
  *
  * Copyright (c) 2013, Přemysl Janouch <p.janouch@gmail.com>
  * All rights reserved.
@@ -26,6 +26,8 @@
 #include <gio/gio.h>
 
 #include "stardict.h"
+#include "stardict-private.h"
+#include "generator.h"
 
 
 // --- Utilities ---------------------------------------------------------------
@@ -184,96 +186,48 @@ dictionary_create (void)
 
 	Dictionary *dict = g_malloc (sizeof *dict);
 	dict->tmp_dir = g_file_new_for_path (tmp_dir_path);
+	dict->ifo_file = g_file_get_child (dict->tmp_dir, "test.ifo");
 
-	static const gint dictionary_size = 8;
+	gchar *base = g_build_filename (tmp_dir_path, "test", NULL);
+	Generator *generator = generator_new (base, &error);
+	g_free (base);
+
+	if (!generator)
+		g_error ("Failed to create a dictionary: %s", error->message);
+
+	static const guint dictionary_size = 8;
 	dict->data = generate_dictionary_data (dictionary_size);
-	GFile *dict_file = g_file_get_child (dict->tmp_dir, "test.dict");
-	GFile *idx_file = g_file_get_child (dict->tmp_dir, "test.idx");
 
-	GFileOutputStream *dict_stream = g_file_replace (dict_file,
-		NULL, FALSE, G_FILE_CREATE_NONE, NULL, &error);
-	if (!dict_stream)
-		g_error ("Failed to create the .dict file: %s", error->message);
+	generator->info->version             = SD_VERSION_3_0_0;
+	generator->info->book_name           = g_strdup ("Test Book");
+	generator->info->author              = g_strdup ("Lyra Heartstrings");
+	generator->info->email               = g_strdup ("lyra@equestria.net");
+	generator->info->description         = g_strdup ("Test dictionary");
+	generator->info->date                = g_strdup ("21.12.2012");
+	generator->info->same_type_sequence  = g_strdup ("mX");
 
-	GFileOutputStream *idx_stream = g_file_replace (idx_file,
-		NULL, FALSE, G_FILE_CREATE_NONE, NULL, &error);
-	if (!idx_stream)
-		g_error ("Failed to create the .idx file: %s", error->message);
-
-	GDataOutputStream *dict_data
-		= g_data_output_stream_new (G_OUTPUT_STREAM (dict_stream));
-	g_data_output_stream_set_byte_order
-		(dict_data, G_DATA_STREAM_BYTE_ORDER_BIG_ENDIAN);
-
-	GDataOutputStream *idx_data
-		= g_data_output_stream_new (G_OUTPUT_STREAM (idx_stream));
-	g_data_output_stream_set_byte_order
-		(idx_data, G_DATA_STREAM_BYTE_ORDER_BIG_ENDIAN);
-
-	gint i;
-	gsize written;
+	guint i;
 	for (i = 0; i < dictionary_size; i++)
 	{
 		TestEntry *te = &g_array_index (dict->data, TestEntry, i);
-		goffset offset = g_seekable_tell (G_SEEKABLE (dict_stream));
 
-		if (!g_data_output_stream_put_string (dict_data,
-			te->meaning, NULL, &error)
-		 || !g_data_output_stream_put_byte (dict_data, '\0', NULL, &error)
-		 || !g_output_stream_write_all (G_OUTPUT_STREAM (dict_stream),
-			te->data, te->data_size, &written, NULL, &error))
-			g_error ("Write to dictionary failed: %s", error->message);
+		generator_begin_entry (generator);
+		if (!generator_write_string (generator, te->meaning, TRUE, &error)
+		 || !generator_write_raw (generator,
+			te->data, te->data_size, FALSE, &error))
+			g_error ("Write to dictionary data failed: %s", error->message);
 
-		if (!g_data_output_stream_put_string (idx_data,
-			te->word, NULL, &error)
-		 || !g_data_output_stream_put_byte (idx_data, '\0', NULL, &error)
-		 || !g_data_output_stream_put_uint32 (idx_data, offset, NULL, &error)
-		 || !g_data_output_stream_put_uint32 (idx_data,
-			g_seekable_tell (G_SEEKABLE (dict_stream)) - offset, NULL, &error))
+		if (!generator_finish_entry (generator, te->word, &error))
 			g_error ("Write to index failed: %s", error->message);
 	}
 
-	gint index_size = g_seekable_tell (G_SEEKABLE (idx_stream));
-
-	if (!g_output_stream_close (G_OUTPUT_STREAM (dict_stream), NULL, &error))
-		g_error ("Failed to close the .dict file: %s", error->message);
-	if (!g_output_stream_close (G_OUTPUT_STREAM (idx_stream), NULL, &error))
-		g_error ("Failed to close the .idx file: %s", error->message);
-
-	g_object_unref (dict_data);
-	g_object_unref (idx_data);
-
-	g_object_unref (dict_stream);
-	g_object_unref (idx_stream);
-
-	gchar *ifo_contents = g_strdup_printf
-		("StarDict's dict ifo file\n"
-		"version=3.0.0\n"
-		"bookname=Test Book\n"
-		"wordcount=%d\n"
-		"idxfilesize=%d\n"
-		"idxoffsetbits=32\n"
-		"author=Lyra Heartstrings\n"
-		"email=lyra@equestria.net\n"
-		"website=http://equestria.net\n"
-		"description=Test dictionary\n"
-		"date=21.12.2012\n"
-		"sametypesequence=mX\n",
-		dictionary_size, index_size);
-
-	g_object_unref (dict_file);
-	g_object_unref (idx_file);
-
-	dict->ifo_file = g_file_get_child (dict->tmp_dir, "test.ifo");
-	if (!g_file_replace_contents (dict->ifo_file,
-		ifo_contents, strlen (ifo_contents),
-		NULL, FALSE, G_FILE_CREATE_NONE, NULL, NULL, &error))
-		g_error ("Failed to create the .ifo file: %s", error->message);
-	g_free (ifo_contents);
+	if (!generator_finish (generator, &error))
+		g_error ("Failed to finish the dictionary: %s", error->message);
 
 	g_message ("Successfully created a test dictionary in %s", tmp_dir_path);
-	g_free (tmp_dir_path);
 
+	generator_free (generator);
+	g_free (tmp_dir_path);
 	return dict;
 }
 

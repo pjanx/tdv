@@ -19,10 +19,10 @@ clean:
 sdcli: src/sdcli.o src/stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-add-pronunciation: src/add-pronunciation.o src/stardict.o
+add-pronunciation: src/add-pronunciation.o src/stardict.o src/generator.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-test-stardict: src/test-stardict.o src/stardict.o
+test-stardict: src/test-stardict.o src/stardict.o src/generator.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 test: $(tests)
