@@ -14,15 +14,15 @@ LDFLAGS = `pkg-config --libs $(pkgs)`
 all: $(targets)
 
 clean:
-	rm -f $(targets) *.o
+	rm -f $(targets) src/*.o
 
-sdcli: sdcli.o stardict.o
+sdcli: src/sdcli.o src/stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-add-pronunciation: add-pronunciation.o stardict.o
+add-pronunciation: src/add-pronunciation.o src/stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-test-stardict: test-stardict.o stardict.o
+test-stardict: src/test-stardict.o src/stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 test: $(tests)
