@@ -2,7 +2,7 @@ SHELL = /bin/sh
 
 pkgs = ncursesw glib-2.0 gio-2.0
 tests = test-stardict
-targets = sdcli $(tests)
+targets = sdcli add-pronunciation $(tests)
 
 CC = clang
 CFLAGS = -ggdb -std=gnu99 -Wall -Wextra -Wno-missing-field-initializers \
@@ -17,6 +17,9 @@ clean:
 	rm -f $(targets) *.o
 
 sdcli: sdcli.o stardict.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+add-pronunciation: add-pronunciation.o stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 test-stardict: test-stardict.o stardict.o
