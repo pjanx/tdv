@@ -412,8 +412,11 @@ int
 main (int argc, char *argv[])
 {
 	g_test_init (&argc, &argv, NULL);
+
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 	if (glib_check_version (2, 36, 0))
 		g_type_init ();
+G_GNUC_END_IGNORE_DEPRECATIONS
 
 	Dictionary *dict = dictionary_create ();
 
