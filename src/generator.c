@@ -114,6 +114,10 @@ generator_finish (Generator *self, GError **error)
 		}
 		else
 		{
+			if (self->info->version == SD_VERSION_2_4_2
+			 && !strcmp (key->name, "idxoffsetbits"))
+				continue;
+
 			gulong value = G_STRUCT_MEMBER (gulong,
 				self->info, key->offset);
 			if (value)
