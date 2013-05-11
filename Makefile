@@ -4,7 +4,6 @@ pkgs = ncursesw glib-2.0 gio-2.0
 tests = test-stardict
 targets = sdcli add-pronunciation $(tests)
 
-CC = clang
 CFLAGS = -ggdb -std=gnu99 -Wall -Wextra -Wno-missing-field-initializers \
 		 `pkg-config --cflags $(pkgs)`
 LDFLAGS = `pkg-config --libs $(pkgs)`
