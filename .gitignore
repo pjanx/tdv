@@ -1,15 +1,15 @@
 # Backup files
 *.*~
 # Compile output
-/sdcli
+/sdtui
 /add-pronunciation
 /test-stardict
 *.o
 # IDE project files
-/sdcli.creator*
-/sdcli.includes
-/sdcli.files
-/sdcli.config
+/sdtui.creator*
+/sdtui.includes
+/sdtui.files
+/sdtui.config
 # Blah
 /GNUmakefile
 /.clang_complete

@@ -1,5 +1,5 @@
 /*
- * StarDict console UI
+ * StarDict terminal UI
  *
  * Copyright (c) 2013, Přemysl Janouch <p.janouch@gmail.com>
  * All rights reserved.
@@ -214,11 +214,11 @@ main (int argc, char *argv[])
 		abort ();
 
 	GError *error = NULL;
-	GOptionContext *ctx = g_option_context_new ("- StarDict console UI");
+	GOptionContext *ctx = g_option_context_new ("- StarDict terminal UI");
 	g_option_context_add_main_entries (ctx, entries, NULL);
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
 	{
-		g_print ("option parsing failed: %s\n", error->message);
+		g_printerr ("Error: option parsing failed: %s\n", error->message);
 		exit (EXIT_FAILURE);
 	}
 

@@ -2,7 +2,7 @@ SHELL = /bin/sh
 
 pkgs = ncursesw glib-2.0 gio-2.0
 tests = test-stardict
-targets = sdcli add-pronunciation $(tests)
+targets = sdtui add-pronunciation $(tests)
 
 CFLAGS = -ggdb -std=gnu99 -Wall -Wextra -Wno-missing-field-initializers \
 		 `pkg-config --cflags $(pkgs)`
@@ -15,7 +15,7 @@ all: $(targets)
 clean:
 	rm -f $(targets) src/*.o
 
-sdcli: src/sdcli.o src/stardict.o
+sdtui: src/sdtui.o src/stardict.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 add-pronunciation: src/add-pronunciation.o src/stardict.o src/generator.o
