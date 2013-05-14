@@ -25,6 +25,7 @@
 #include <locale.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <string.h>
 
 #include <glib.h>
 #include <gio/gio.h>
@@ -129,13 +130,101 @@ install_winch_handler (void)
 
 // --- Application -------------------------------------------------------------
 
+/** Data relating to one entry within the dictionary. */
+typedef struct view_entry               ViewEntry;
+
+struct view_entry
+{
+	gchar   * word;                     //!< Word
+	gchar  ** definitions;              //!< Word definition entries
+	gsize     definitions_length;       //!< Length of the @a definitions array
+};
+
 StardictDict *g_dict;                   //!< The current dictionary
 
-guint32 g_top_position;                 //!< Index of the topmost entry
-guint g_selected;                       //!< Offset to the selected entry
+guint32 g_top_position;                 //!< Index of the topmost view entry
+guint g_top_offset;                     //!< Offset into the top entry
+guint g_selected;                       //!< Offset to the selected definition
+GPtrArray *g_entries;                   //!< ViewEntry's within the view
 
 GString *g_input;                       //!< The current search input
 guint g_input_pos;                      //!< Cursor position within input
+
+
+/** Decomposes a dictionary entry into the format we want. */
+static ViewEntry *
+view_entry_new (StardictIterator *iterator)
+{
+	g_return_val_if_fail (stardict_iterator_is_valid (iterator), NULL);
+
+	ViewEntry *ve = g_slice_alloc (sizeof *ve);
+	GString *word = g_string_new (stardict_iterator_get_word (iterator));
+
+	StardictEntry *entry = stardict_iterator_get_entry (iterator);
+	g_return_val_if_fail (entry != NULL, NULL);
+
+	GPtrArray *definitions = g_ptr_array_new ();
+	const GList *fields = stardict_entry_get_fields (entry);
+	while (fields)
+	{
+		const StardictEntryField *field = fields->data;
+		switch (field->type)
+		{
+		case STARDICT_FIELD_MEANING:
+		{
+			gchar **it, **tmp = g_strsplit (field->data, "\n", -1);
+			for (it = tmp; *it; it++)
+				if (**it)
+					g_ptr_array_add (definitions, g_strdup (*it));
+			g_strfreev (tmp);
+			break;
+		}
+		case STARDICT_FIELD_PHONETIC:
+			g_string_append_printf (word, " /%s/", (const gchar *) field->data);
+			break;
+		default:
+			// TODO support more of them
+			break;
+		}
+		fields = fields->next;
+	}
+	g_object_unref (entry);
+
+	ve->word = g_string_free (word, FALSE);
+	ve->definitions_length = definitions->len;
+	g_ptr_array_add (definitions, NULL);
+	ve->definitions = (gchar **) g_ptr_array_free (definitions, FALSE);
+	return ve;
+}
+
+/** Release resources associated with the view entry. */
+static void
+view_entry_free (ViewEntry *ve)
+{
+	g_free (ve->word);
+	g_strfreev (ve->definitions);
+	g_slice_free1 (sizeof *ve, ve);
+}
+
+/** Reload view items. */
+static void
+app_reload_view (void)
+{
+	if (g_entries->len != 0)
+		g_ptr_array_remove_range (g_entries, 0, g_entries->len);
+
+	g_selected = 0;
+	gint remains = LINES - 1;
+	StardictIterator *iterator = stardict_iterator_new (g_dict, g_top_position);
+	while (remains > 0 && stardict_iterator_is_valid (iterator))
+	{
+		ViewEntry *entry = view_entry_new (iterator);
+		remains -= entry->definitions_length;
+		g_ptr_array_add (g_entries, entry);
+		stardict_iterator_next (iterator);
+	}
+	g_object_unref (iterator);
+}
 
 /** Initialize the application core. */
 static void
@@ -150,17 +239,33 @@ app_init (const gchar *filename)
 	}
 
 	g_top_position = 0;
+	g_top_offset = 0;
 	g_selected = 0;
+	g_entries = g_ptr_array_new_with_free_func
+		((GDestroyNotify) view_entry_free);
 
 	g_input = g_string_new (NULL);
 	g_input_pos = 0;
+
+	app_reload_view ();
+}
+
+/** Free any resources used by the application. */
+static void
+app_destroy (void)
+{
+	g_object_unref (g_dict);
+	g_ptr_array_free (g_entries, TRUE);
+	g_string_free (g_input, TRUE);
 }
 
 /** Render the top bar. */
 static void
 app_redraw_top (void)
 {
-	mvprintw (0, 0, "%s: ", _("Search"));
+	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
+	attrset (A_UNDERLINE);
+	printw ("%s: ", _("Search"));
 
 	int y, x;
 	getyx (stdscr, y, x);
@@ -169,7 +274,6 @@ app_redraw_top (void)
 	g_return_if_fail (input != NULL);
 
 	addstr (input);
-	clrtoeol ();
 	g_free (input);
 
 	move (y, x + g_input_pos);
@@ -180,8 +284,164 @@ app_redraw_top (void)
 static void
 app_redraw_view (void)
 {
-	// TODO
+	move (1, 0);
+
+	guint i, k = g_top_offset, shown = 0;
+	for (i = 0; i < g_entries->len; i++)
+	{
+		ViewEntry *ve = g_ptr_array_index (g_entries, i);
+		for (; k < ve->definitions_length; k++)
+		{
+			int attrs = 0;
+			if (shown == g_selected)              attrs |= A_REVERSE;
+			if (k + 1 == ve->definitions_length)  attrs |= A_UNDERLINE;
+			attrset (attrs);
+
+			// FIXME assuming utf-8 for multibyte
+			//       aligning not perfectly working
+			int left = COLS / 2 +
+				(strlen (ve->word)
+				- g_utf8_strlen (ve->word, -1));
+			int right = COLS - (COLS / 2) - 1 +
+				(strlen (ve->definitions[k])
+				- g_utf8_strlen (ve->definitions[k], -1));
+			printw ("%-*.*s %-*.*s", left, left, ve->word,
+				right, right, ve->definitions[k]);
+			if ((gint) ++shown == LINES - 1)
+				goto done;
+		}
+
+		k = 0;
+	}
+
+done:
+	attrset (0);
+	clrtobot ();
 	refresh ();
+}
+
+/** Just prepends a new view entry into the entries array. */
+static ViewEntry *
+prepend_entry (guint32 position)
+{
+	StardictIterator *iterator = stardict_iterator_new (g_dict, position);
+	ViewEntry *ve = view_entry_new (iterator);
+	g_object_unref (iterator);
+
+	g_ptr_array_add (g_entries, NULL);
+	memmove (g_entries->pdata + 1, g_entries->pdata,
+		sizeof ve * (g_entries->len - 1));
+	return g_ptr_array_index (g_entries, 0) = ve;
+}
+
+/** Just appends a new view entry to the entries array. */
+static ViewEntry *
+append_entry (guint32 position)
+{
+	ViewEntry *ve = NULL;
+	StardictIterator *iterator = stardict_iterator_new
+		(g_dict, position);
+	if (stardict_iterator_is_valid (iterator))
+	{
+		ve = view_entry_new (iterator);
+		g_ptr_array_add (g_entries, ve);
+	}
+	g_object_unref (iterator);
+	return ve;
+}
+
+/** Counts the number of definitions available for seeing. */
+static guint
+count_view_items (void)
+{
+	guint i, n_definitions = 0;
+	for (i = 0; i < g_entries->len; i++)
+	{
+		ViewEntry *entry = g_ptr_array_index (g_entries, i);
+		n_definitions += entry->definitions_length;
+	}
+	return n_definitions;
+}
+
+/** Scroll up @a n entries. */
+static gboolean
+app_scroll_up (guint n)
+{
+	gboolean success = TRUE;
+	guint n_definitions = count_view_items ();
+	while (n--)
+	{
+		if (g_top_offset > 0)
+		{
+			g_top_offset--;
+			continue;
+		}
+
+		/* We've reached the top */
+		if (g_top_position == 0)
+		{
+			success = FALSE;
+			break;
+		}
+
+		ViewEntry *ve = prepend_entry (--g_top_position);
+		g_top_offset = ve->definitions_length - 1;
+		n_definitions += ve->definitions_length;
+
+		/* Remove the last entry if not shown */
+		ViewEntry *last_entry =
+			g_ptr_array_index (g_entries, g_entries->len - 1);
+		if ((gint) (n_definitions - g_top_offset
+			- last_entry->definitions_length) >= LINES - 1)
+		{
+			g_ptr_array_remove_index_fast
+				(g_entries, g_entries->len - 1);
+		}
+	}
+
+	app_redraw_view ();
+	return success;
+}
+
+/** Scroll down @a n entries. */
+static gboolean
+app_scroll_down (guint n)
+{
+	gboolean success = TRUE;
+	guint n_definitions = count_view_items ();
+	while (n--)
+	{
+		if (g_entries->len == 0)
+		{
+			success = FALSE;
+			break;
+		}
+
+		ViewEntry *first_entry = g_ptr_array_index (g_entries, 0);
+		if (g_top_offset < first_entry->definitions_length - 1)
+			g_top_offset++;
+		else
+		{
+			n_definitions -= first_entry->definitions_length;
+			g_ptr_array_remove_index (g_entries, 0);
+			g_top_position++;
+			g_top_offset = 0;
+		}
+
+		if ((gint) (n_definitions - g_top_offset) < LINES - 1)
+		{
+			ViewEntry *ve = append_entry (g_top_position + g_entries->len);
+			if (ve != NULL)
+				n_definitions += ve->definitions_length;
+		}
+	}
+
+	/* Fix cursor to not point below the view items */
+	if (g_selected >= n_definitions - g_top_offset)
+		g_selected  = n_definitions - g_top_offset - 1;
+
+	app_redraw_view ();
+	return success;
 }
 
 /** Redraw everything. */
@@ -190,6 +450,20 @@ app_redraw (void)
 {
 	app_redraw_view ();
 	app_redraw_top ();
+}
+
+/** Search for the current entry. */
+static void
+app_search_for_entry (void)
+{
+	StardictIterator *iterator = stardict_dict_search
+		(g_dict, g_input->str, NULL);
+	g_top_position = stardict_iterator_get_offset (iterator);
+	g_top_offset = 0;
+	g_object_unref (iterator);
+
+	app_reload_view ();
+	app_redraw_view ();
 }
 
 static gboolean
@@ -204,12 +478,51 @@ app_process_curses_event (CursesEvent *event)
 		{
 		case KEY_RESIZE:
 			// TODO adapt to the new window size, COLS, LINES
+			//      mind the position of the selection cursor
 			app_redraw ();
 			break;
 		case KEY_MOUSE:
 			// TODO move the item cursor, event->mouse.{x,y,bstate}
 			break;
 
+		case KEY_UP:
+			if (g_selected > 0)
+			{
+				g_selected--;
+				app_redraw_view ();
+			}
+			else
+				app_scroll_up (1);
+			app_redraw_top (); // FIXME just focus
+			break;
+		case KEY_DOWN:
+			if ((gint) g_selected < LINES - 2 &&
+				g_selected < count_view_items () - g_top_offset - 1)
+			{
+				g_selected++;
+				app_redraw_view ();
+			}
+			else
+				app_scroll_down (1);
+			app_redraw_top (); // FIXME just focus
+			break;
+		case KEY_PPAGE:
+			app_scroll_up (LINES - 1);
+			app_redraw_top (); // FIXME just focus, selection
+			break;
+		case KEY_NPAGE:
+			app_scroll_down (LINES - 1);
+			app_redraw_top (); // FIXME just focus, selection
+			break;
+
+		case KEY_HOME:
+			g_input_pos = 0;
+			app_redraw_top ();
+			break;
+		case KEY_END:
+			g_input_pos = g_utf8_strlen (g_input->str, -1);
+			app_redraw_top ();
+			break;
 		case KEY_LEFT:
 			if (g_input_pos > 0)
 			{
@@ -232,6 +545,7 @@ app_process_curses_event (CursesEvent *event)
 				gchar *prev = g_utf8_prev_char (current);
 				g_string_erase (g_input, prev - g_input->str, current - prev);
 				g_input_pos--;
+				app_search_for_entry ();
 				app_redraw_top ();
 			}
 			break;
@@ -242,6 +556,7 @@ app_process_curses_event (CursesEvent *event)
 					(g_input->str, g_input_pos);
 				g_string_erase (g_input, current - g_input->str,
 					g_utf8_next_char (current) - current);
+				app_search_for_entry ();
 				app_redraw_top ();
 			}
 			break;
@@ -255,6 +570,8 @@ app_process_curses_event (CursesEvent *event)
 		return FALSE;
 	case KEY_VT:  // Ctrl-K -- delete until the end of line
 		g_string_erase (g_input, utf8_offset (g_input->str, g_input_pos), -1);
+
+		app_search_for_entry ();
 		app_redraw_top ();
 		return TRUE;
 	case KEY_ETB: // Ctrl-W -- delete word before cursor
@@ -278,12 +595,15 @@ app_process_curses_event (CursesEvent *event)
 			g_input_pos = 0;
 		}
 
+		app_search_for_entry ();
 		app_redraw_top ();
 		return TRUE;
 	}
 	case KEY_NAK: // Ctrl-U -- delete everything before the cursor
 		g_string_erase (g_input, 0, utf8_offset (g_input->str, g_input_pos));
 		g_input_pos = 0;
+
+		app_search_for_entry ();
 		app_redraw_top ();
 		return TRUE;
 	}
@@ -299,19 +619,12 @@ app_process_curses_event (CursesEvent *event)
 			utf8_offset (g_input->str, g_input_pos), letter);
 		g_input_pos += g_utf8_strlen (letter, -1);
 
+		app_search_for_entry ();
 		app_redraw_top ();
 	}
 	g_free (letter);
 
 	return TRUE;
-}
-
-/** Free any resources used by the application. */
-static void
-app_destroy (void)
-{
-	g_string_free (g_input, TRUE);
-	g_object_unref (g_dict);
 }
 
 // --- Event handlers ----------------------------------------------------------
@@ -349,6 +662,11 @@ process_winch_input (int fd)
 int
 main (int argc, char *argv[])
 {
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+	if (glib_check_version (2, 36, 0))
+		g_type_init ();
+G_GNUC_END_IGNORE_DEPRECATIONS
+
 	static GOptionEntry entries[] =
 	{
 		{ NULL }
@@ -388,9 +706,7 @@ main (int argc, char *argv[])
 
 	keypad (stdscr, TRUE);                /* Enable character processing. */
 	nodelay (stdscr, TRUE);               /* Don't block on get_wch(). */
-	scrollok (stdscr, TRUE);              /* Also scrolling, pretty please. */
 
-	setscrreg (1, LINES - 1);             /* Create a scroll region. */
 	mousemask (ALL_MOUSE_EVENTS, NULL);   /* Register mouse events. */
 
 	if (pipe (g_winch_pipe) == -1)
