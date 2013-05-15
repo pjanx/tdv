@@ -1,6 +1,6 @@
 SHELL = /bin/sh
 
-pkgs = ncursesw glib-2.0 gio-2.0
+pkgs = ncursesw glib-2.0 gio-2.0 pango
 tests = test-stardict
 targets = sdtui add-pronunciation $(tests)
 

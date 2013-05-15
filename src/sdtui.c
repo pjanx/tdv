@@ -29,6 +29,7 @@
 
 #include <glib.h>
 #include <gio/gio.h>
+#include <pango/pango.h>
 #include <ncurses.h>
 
 #include <unistd.h>
@@ -99,6 +100,17 @@ struct application
 };
 
 
+/** Splits the entry and adds it to a pointer array. */
+static void
+view_entry_split_add (GPtrArray *out, const gchar *text)
+{
+	gchar **it, **tmp = g_strsplit (text, "\n", -1);
+	for (it = tmp; *it; it++)
+		if (**it)
+			g_ptr_array_add (out, g_strdup (*it));
+	g_strfreev (tmp);
+}
+
 /** Decomposes a dictionary entry into the format we want. */
 static ViewEntry *
 view_entry_new (StardictIterator *iterator)
@@ -113,18 +125,25 @@ view_entry_new (StardictIterator *iterator)
 
 	GPtrArray *definitions = g_ptr_array_new ();
 	const GList *fields = stardict_entry_get_fields (entry);
+	gboolean found_anything_displayable = FALSE;
 	while (fields)
 	{
 		const StardictEntryField *field = fields->data;
 		switch (field->type)
 		{
 		case STARDICT_FIELD_MEANING:
+			view_entry_split_add (definitions, field->data);
+			found_anything_displayable = TRUE;
+			break;
+		case STARDICT_FIELD_PANGO:
 		{
-			gchar **it, **tmp = g_strsplit (field->data, "\n", -1);
-			for (it = tmp; *it; it++)
-				if (**it)
-					g_ptr_array_add (definitions, g_strdup (*it));
-			g_strfreev (tmp);
+			char *text;
+			if (!pango_parse_markup (field->data, -1,
+				0, NULL, &text, NULL, NULL))
+				text = g_strdup_printf ("<%s>", _("error in entry"));
+			view_entry_split_add (definitions, text);
+			found_anything_displayable = TRUE;
+			g_free (text);
 			break;
 		}
 		case STARDICT_FIELD_PHONETIC:
@@ -137,6 +156,10 @@ view_entry_new (StardictIterator *iterator)
 		fields = fields->next;
 	}
 	g_object_unref (entry);
+
+	if (!found_anything_displayable)
+		g_ptr_array_add (definitions,
+			g_strdup_printf ("<%s>", _("no usable field found")));
 
 	ve->word = g_string_free (word, FALSE);
 	ve->definitions_length = definitions->len;
