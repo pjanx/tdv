@@ -398,6 +398,7 @@ app_scroll_up (guint n)
 		if ((gint) (n_definitions - g_top_offset
 			- last_entry->definitions_length) >= LINES - 1)
 		{
+			n_definitions -= last_entry->definitions_length;
 			g_ptr_array_remove_index_fast
 				(g_entries, g_entries->len - 1);
 		}
