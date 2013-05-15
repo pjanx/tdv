@@ -48,28 +48,6 @@
 
 // --- Utilities ---------------------------------------------------------------
 
-/* TODO use iconv() wchar_t -> utf-8 */
-static gchar *
-wchar_to_mb (wchar_t ch)
-{
-	/* Convert the character back to a multi-byte sequence. */
-	static gchar buffer[MB_LEN_MAX + 1];
-	size_t len = wcrtomb (buffer, ch, NULL);
-
-	/* This shouldn't happen.  It would mean that the user has
-	 * somehow managed to enter something inexpressable in the
-	 * current locale.  */
-	if (len == (size_t) -1)
-		abort ();
-
-	/* Here I hope the buffer doesn't overflow. Who uses
-	 * shift states nowadays, anyway? */
-	if (wcrtomb (buffer + len, L'\0', NULL) == (size_t) -1)
-		abort ();
-
-	return buffer;
-}
-
 static int
 poll_restart (struct pollfd *fds, nfds_t nfds, int timeout)
 {
@@ -139,6 +117,9 @@ struct view_entry
 	gchar  ** definitions;              //!< Word definition entries
 	gsize     definitions_length;       //!< Length of the @a definitions array
 };
+
+GIConv g_utf8_to_wchar;                 //!< utf-8 -> wchar_t conversion
+GIConv g_wchar_to_utf8;                 //!< wchar_t -> utf-8 conversion
 
 StardictDict *g_dict;                   //!< The current dictionary
 
@@ -247,6 +228,9 @@ app_init (const gchar *filename)
 	g_input = g_string_new (NULL);
 	g_input_pos = 0;
 
+	g_wchar_to_utf8 = g_iconv_open ("utf-8//translit", "wchar_t");
+	g_utf8_to_wchar = g_iconv_open ("wchar_t//translit", "utf-8");
+
 	app_reload_view ();
 }
 
@@ -257,6 +241,9 @@ app_destroy (void)
 	g_object_unref (g_dict);
 	g_ptr_array_free (g_entries, TRUE);
 	g_string_free (g_input, TRUE);
+
+	g_iconv_close (g_wchar_to_utf8);
+	g_iconv_close (g_utf8_to_wchar);
 }
 
 /** Render the top bar. */
@@ -280,6 +267,29 @@ app_redraw_top (void)
 	refresh ();
 }
 
+/** Write the given utf-8 string padded with spaces, max. @a n characters. */
+static void
+add_padded_string (const gchar *str, int n)
+{
+	wchar_t *wide_str = (wchar_t *) g_convert_with_iconv
+		(str, -1, g_utf8_to_wchar, NULL, NULL, NULL);
+	g_return_if_fail (wide_str != NULL);
+
+	ssize_t wide_len = wcslen (wide_str);
+	wchar_t padding = L' ';
+
+	gint i;
+	cchar_t cch;
+	for (i = 0; i < n; i++)
+	{
+		setcchar (&cch, (i < wide_len ? &wide_str[i] : &padding),
+			A_NORMAL, 0, NULL);
+		add_wch (&cch);
+	}
+
+	g_free (wide_str);
+}
+
 /** Redraw the dictionary view. */
 static void
 app_redraw_view (void)
@@ -297,16 +307,10 @@ app_redraw_view (void)
 			if (k + 1 == ve->definitions_length)  attrs |= A_UNDERLINE;
 			attrset (attrs);
 
-			// FIXME assuming utf-8 for multibyte
-			//       aligning not perfectly working
-			int left = COLS / 2 +
-				(strlen (ve->word)
-				- g_utf8_strlen (ve->word, -1));
-			int right = COLS - (COLS / 2) - 1 +
-				(strlen (ve->definitions[k])
-				- g_utf8_strlen (ve->definitions[k], -1));
-			printw ("%-*.*s %-*.*s", left, left, ve->word,
-				right, right, ve->definitions[k]);
+			add_padded_string (ve->word, COLS / 2);
+			addwstr (L" ");
+			add_padded_string (ve->definitions[k], COLS - COLS / 2 - 1);
+
 			if ((gint) ++shown == LINES - 1)
 				goto done;
 		}
@@ -608,9 +612,9 @@ app_process_curses_event (CursesEvent *event)
 		return TRUE;
 	}
 
-	/* What can you do... wchar_t, utf-8, locale encoding... */
-	gchar *letter = g_locale_to_utf8 (wchar_to_mb (event->code),
-		-1, NULL, NULL, NULL);
+	wchar_t code = event->code;
+	gchar *letter = g_convert_with_iconv ((gchar *) &code, sizeof code,
+		g_wchar_to_utf8, NULL, NULL, NULL);
 	g_return_val_if_fail (letter != NULL, FALSE);
 
 	if (g_unichar_isprint (g_utf8_get_char (letter)))
