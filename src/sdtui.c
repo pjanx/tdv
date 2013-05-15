@@ -483,10 +483,19 @@ app_process_curses_event (CursesEvent *event)
 		case KEY_RESIZE:
 			// TODO adapt to the new window size, COLS, LINES
 			//      mind the position of the selection cursor
+			app_reload_view ();
 			app_redraw ();
 			break;
 		case KEY_MOUSE:
-			// TODO move the item cursor, event->mouse.{x,y,bstate}
+			// TODO move the input entry cursor
+			if ((event->mouse.bstate & BUTTON1_PRESSED) &&
+				event->mouse.y > 0 &&
+				event->mouse.y <= (int) (count_view_items () - g_top_offset))
+			{
+				g_selected = event->mouse.y - 1;
+				app_redraw_view ();
+				app_redraw_top (); // FIXME just focus
+			}
 			break;
 
 		case KEY_UP:
@@ -712,6 +721,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	nodelay (stdscr, TRUE);               /* Don't block on get_wch(). */
 
 	mousemask (ALL_MOUSE_EVENTS, NULL);   /* Register mouse events. */
+	mouseinterval (0);
 
 	if (pipe (g_winch_pipe) == -1)
 		abort ();
