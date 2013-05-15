@@ -58,12 +58,6 @@ poll_restart (struct pollfd *fds, nfds_t nfds, int timeout)
 	return ret;
 }
 
-static gsize
-utf8_offset (const gchar *s, gsize offset)
-{
-	return g_utf8_offset_to_pointer (s, offset) - s;
-}
-
 /** Wrapper for curses event data. */
 typedef struct curses_event            CursesEvent;
 
@@ -100,7 +94,7 @@ struct application
 	guint selected;                     //!< Offset to the selected definition
 	GPtrArray *entries;                 //!< ViewEntry's within the view
 
-	GString *input;                     //!< The current search input
+	GArray *input;                      //!< The current search input
 	guint input_pos;                    //!< Cursor position within input
 };
 
@@ -199,7 +193,7 @@ app_init (Application *self, const gchar *filename)
 	self->entries = g_ptr_array_new_with_free_func
 		((GDestroyNotify) view_entry_free);
 
-	self->input = g_string_new (NULL);
+	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
 	self->input_pos = 0;
 
 	self->wchar_to_utf8 = g_iconv_open ("utf-8//translit", "wchar_t");
@@ -214,31 +208,10 @@ app_destroy (Application *self)
 {
 	g_object_unref (self->dict);
 	g_ptr_array_free (self->entries, TRUE);
-	g_string_free (self->input, TRUE);
+	g_array_free (self->input, TRUE);
 
 	g_iconv_close (self->wchar_to_utf8);
 	g_iconv_close (self->utf8_to_wchar);
-}
-
-/** Render the top bar. */
-static void
-app_redraw_top (Application *self)
-{
-	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
-	attrset (A_UNDERLINE);
-	printw ("%s: ", _("Search"));
-
-	int y, x;
-	getyx (stdscr, y, x);
-
-	gchar *input = g_locale_from_utf8 (self->input->str, -1, NULL, NULL, NULL);
-	g_return_if_fail (input != NULL);
-
-	addstr (input);
-	g_free (input);
-
-	move (y, x + self->input_pos);
-	refresh ();
 }
 
 /** Write the given utf-8 string padded with spaces, max. @a n characters. */
@@ -262,6 +235,28 @@ add_padded_string (Application *self, const gchar *str, int n)
 	}
 
 	g_free (wide_str);
+}
+
+/** Render the top bar. */
+static void
+app_redraw_top (Application *self)
+{
+	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
+	attrset (A_UNDERLINE);
+	printw ("%s: ", _("Search"));
+
+	int y, x;
+	getyx (stdscr, y, x);
+
+	gchar *input_utf8 = g_ucs4_to_utf8
+		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
+	g_return_if_fail (input_utf8 != NULL);
+
+	add_padded_string (self, input_utf8, COLS - x);
+	g_free (input_utf8);
+
+	move (y, x + self->input_pos);
+	refresh ();
 }
 
 /** Redraw the dictionary view. */
@@ -436,8 +431,14 @@ app_redraw (Application *self)
 static void
 app_search_for_entry (Application *self)
 {
-	StardictIterator *iterator = stardict_dict_search
-		(self->dict, self->input->str, NULL);
+	gchar *input_utf8 = g_ucs4_to_utf8
+		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
+	g_return_if_fail (input_utf8 != NULL);
+
+	StardictIterator *iterator =
+		stardict_dict_search (self->dict, input_utf8, NULL);
+	g_free (input_utf8);
+
 	self->top_position = stardict_iterator_get_offset (iterator);
 	self->top_offset = 0;
 	g_object_unref (iterator);
@@ -505,7 +506,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		app_redraw_top (self);
 		break;
 	case KEY_END:
-		self->input_pos = g_utf8_strlen (self->input->str, -1);
+		self->input_pos = self->input->len;
 		app_redraw_top (self);
 		break;
 	case KEY_LEFT:
@@ -516,7 +517,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		break;
 	case KEY_RIGHT:
-		if (self->input_pos < g_utf8_strlen (self->input->str, -1))
+		if (self->input_pos < self->input->len)
 		{
 			self->input_pos++;
 			app_redraw_top (self);
@@ -525,23 +526,15 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 	case KEY_BACKSPACE:
 		if (self->input_pos > 0)
 		{
-			gchar *current = g_utf8_offset_to_pointer
-				(self->input->str, self->input_pos);
-			gchar *prev = g_utf8_prev_char (current);
-			g_string_erase (self->input,
-				prev - self->input->str, current - prev);
-			self->input_pos--;
+			g_array_remove_index (self->input, --self->input_pos);
 			app_search_for_entry (self);
 			app_redraw_top (self);
 		}
 		break;
 	case KEY_DC:
-		if (self->input_pos < g_utf8_strlen (self->input->str, -1))
+		if (self->input_pos < self->input->len)
 		{
-			gchar *current = g_utf8_offset_to_pointer
-				(self->input->str, self->input_pos);
-			g_string_erase (self->input, current - self->input->str,
-				g_utf8_next_char (current) - current);
+			g_array_remove_index (self->input, self->input_pos);
 			app_search_for_entry (self);
 			app_redraw_top (self);
 		}
@@ -554,9 +547,6 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 static gboolean
 app_process_curses_event (Application *self, CursesEvent *event)
 {
-	/* g_utf8_offset_to_pointer() is too dumb to detect this */
-	g_assert (g_utf8_strlen (self->input->str, -1) >= self->input_pos);
-
 	if (!event->is_char)
 		return app_process_nonchar_code (self, event);
 
@@ -565,47 +555,44 @@ app_process_curses_event (Application *self, CursesEvent *event)
 	case KEY_ESCAPE:
 		return FALSE;
 	case KEY_VT:  // Ctrl-K -- delete until the end of line
-		g_string_erase (self->input,
-			utf8_offset (self->input->str, self->input_pos), -1);
-
-		app_search_for_entry (self);
-		app_redraw_top (self);
+		if (self->input_pos < self->input->len)
+		{
+			g_array_remove_range (self->input,
+				self->input_pos, self->input->len - self->input_pos);
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
 		return TRUE;
 	case KEY_ETB: // Ctrl-W -- delete word before cursor
 	{
-		if (!self->input_pos)
+		if (self->input_pos == 0)
 			return TRUE;
 
-		gchar *current = g_utf8_offset_to_pointer
-			(self->input->str, self->input_pos);
-		gchar *space = g_utf8_strrchr (self->input->str,
-			g_utf8_prev_char (current) - self->input->str, ' ');
+		gint i = self->input_pos;
+		while (i)
+			if (g_array_index (self->input, gunichar, --i) != L' ')
+				break;
+		while (i--)
+			if (g_array_index (self->input, gunichar,   i) == L' ')
+				break;
 
-		if (space)
-		{
-			space = g_utf8_next_char (space);
-			g_string_erase (self->input,
-				space - self->input->str, current - space);
-			self->input_pos = g_utf8_pointer_to_offset
-				(self->input->str, space);
-		}
-		else
-		{
-			g_string_erase (self->input, 0, current - self->input->str);
-			self->input_pos = 0;
-		}
+		i++;
+		g_array_remove_range (self->input, i, self->input_pos - i);
+		self->input_pos = i;
 
 		app_search_for_entry (self);
 		app_redraw_top (self);
 		return TRUE;
 	}
 	case KEY_NAK: // Ctrl-U -- delete everything before the cursor
-		g_string_erase (self->input, 0,
-			utf8_offset (self->input->str, self->input_pos));
-		self->input_pos = 0;
+		if (self->input->len != 0)
+		{
+			g_array_remove_range (self->input, 0, self->input_pos);
+			self->input_pos = 0;
 
-		app_search_for_entry (self);
-		app_redraw_top (self);
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
 		return TRUE;
 	}
 
@@ -614,12 +601,10 @@ app_process_curses_event (Application *self, CursesEvent *event)
 		self->wchar_to_utf8, NULL, NULL, NULL);
 	g_return_val_if_fail (letter != NULL, FALSE);
 
-	if (g_unichar_isprint (g_utf8_get_char (letter)))
+	gunichar c = g_utf8_get_char (letter);
+	if (g_unichar_isprint (c))
 	{
-		g_string_insert (self->input,
-			utf8_offset (self->input->str, self->input_pos), letter);
-		self->input_pos += g_utf8_strlen (letter, -1);
-
+		g_array_insert_val (self->input, self->input_pos++, c);
 		app_search_for_entry (self);
 		app_redraw_top (self);
 	}
