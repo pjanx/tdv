@@ -45,7 +45,21 @@
 #define KEY_VT      11                 /**< Ctrl-K */
 #define KEY_NAK     21                 /**< Ctrl-U */
 #define KEY_ETB     23                 /**< Ctrl-W */
-#define KEY_ESCAPE  27                 /**< Curses doesn't define this. */
+
+#define KEY_RETURN  13                 /**< Enter  */
+#define KEY_ESCAPE  27                 /**< Esc    */
+
+// These codes may or may not work, depending on the terminal
+// They lie above KEY_MAX, originally discovered on gnome-terminal
+#define KEY_CTRL_UP     565
+#define KEY_CTRL_DOWN   524
+#define KEY_CTRL_LEFT   544
+#define KEY_CTRL_RIGHT  559
+
+#define KEY_ALT_UP      563
+#define KEY_ALT_DOWN    522
+#define KEY_ALT_LEFT    542
+#define KEY_ALT_RIGHT   557
 
 #define _(x)  x                        /**< Fake gettext, for now. */
 
@@ -99,6 +113,9 @@ struct application
 
 	GArray *input;                      //!< The current search input
 	guint input_pos;                    //!< Cursor position within input
+	gboolean input_confirmed;           //!< Input has been confirmed
+
+	gfloat division;                    //!< Position of the division column
 };
 
 
@@ -220,6 +237,9 @@ app_init (Application *self, const gchar *filename)
 
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
 	self->input_pos = 0;
+	self->input_confirmed = FALSE;
+
+	self->division = 0.5;
 
 	self->wchar_to_utf8 = g_iconv_open ("utf-8//translit", "wchar_t");
 	self->utf8_to_wchar = g_iconv_open ("wchar_t//translit", "utf-8");
@@ -277,11 +297,25 @@ app_redraw_top (Application *self)
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
 	g_return_if_fail (input_utf8 != NULL);
 
+	if (self->input_confirmed)
+		attron (A_BOLD);
 	add_padded_string (self, input_utf8, COLS - x);
 	g_free (input_utf8);
 
 	move (y, x + self->input_pos);
 	refresh ();
+}
+
+/** Computes width for the left column. */
+static guint
+app_get_left_column_width (Application *self)
+{
+	gint width = COLS * self->division + 0.5;
+	if (width < 1)
+		width = 1;
+	else if (width > COLS - 2)
+		width = COLS - 2;
+	return width;
 }
 
 /** Redraw the dictionary view. */
@@ -301,9 +335,10 @@ app_redraw_view (Application *self)
 			if (k + 1 == ve->definitions_length)  attrs |= A_UNDERLINE;
 			attrset (attrs);
 
-			add_padded_string (self, ve->word, COLS / 2);
+			guint left_width = app_get_left_column_width (self);
+			add_padded_string (self, ve->word, left_width);
 			addwstr (L" ");
-			add_padded_string (self, ve->definitions[k], COLS - COLS / 2 - 1);
+			add_padded_string (self, ve->definitions[k], COLS - left_width - 1);
 
 			if ((gint) ++shown == LINES - 1)
 				goto done;
@@ -444,6 +479,69 @@ app_scroll_down (Application *self, guint n)
 	return success;
 }
 
+/** Moves the selection one entry up. */
+static gboolean
+app_one_entry_up (Application *self)
+{
+	if (self->selected == 0 && self->top_offset == 0)
+	{
+		if (self->top_position == 0)
+			return FALSE;
+		prepend_entry (self, --self->top_position);
+	}
+
+	// Find the last entry that starts above the selection
+	gint first = -self->top_offset;
+	guint i;
+	for (i = 0; i < self->entries->len; i++)
+	{
+		ViewEntry *ve = g_ptr_array_index (self->entries, i);
+		gint new_first = first + ve->definitions_length;
+		if (new_first >= (gint) self->selected)
+			break;
+		first = new_first;
+	}
+
+	if (first < 0)
+	{
+		self->selected = 0;
+		app_scroll_up (self, -first);
+	}
+	else
+	{
+		self->selected = first;
+		app_redraw_view (self);
+	}
+	return TRUE;
+}
+
+/** Moves the selection one entry down. */
+static void
+app_one_entry_down (Application *self)
+{
+	// Find the first entry that starts below the selection
+	gint first = -self->top_offset;
+	guint i;
+	for (i = 0; i < self->entries->len; i++)
+	{
+		ViewEntry *ve = g_ptr_array_index (self->entries, i);
+		first += ve->definitions_length;
+		if (first > (gint) self->selected)
+			break;
+	}
+
+	if (first > LINES - 2)
+	{
+		self->selected = LINES - 2;
+		app_scroll_down (self, first - (LINES - 2));
+	}
+	else
+	{
+		self->selected = first;
+		app_redraw_view (self);
+	}
+}
+
 /** Redraw everything. */
 static void
 app_redraw (Application *self)
@@ -496,6 +594,26 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		break;
 
+	case KEY_CTRL_UP:
+		app_one_entry_up (self);
+		app_redraw_top (self); // FIXME just focus
+		break;
+	case KEY_CTRL_DOWN:
+		app_one_entry_down (self);
+		app_redraw_top (self); // FIXME just focus
+		break;
+
+	case KEY_ALT_LEFT:
+		self->division = (app_get_left_column_width (self) - 1.) / COLS;
+		app_redraw_view (self);
+		app_redraw_top (self); // FIXME just focus
+		break;
+	case KEY_ALT_RIGHT:
+		self->division = (app_get_left_column_width (self) + 1.) / COLS;
+		app_redraw_view (self);
+		app_redraw_top (self); // FIXME just focus
+		break;
+
 	case KEY_UP:
 		if (self->selected > 0)
 		{
@@ -519,11 +637,11 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		break;
 	case KEY_PPAGE:
 		app_scroll_up (self, LINES - 1);
-		app_redraw_top (self); // FIXME just focus, selection
+		app_redraw_top (self); // FIXME just focus
 		break;
 	case KEY_NPAGE:
 		app_scroll_down (self, LINES - 1);
-		app_redraw_top (self); // FIXME just focus, selection
+		app_redraw_top (self); // FIXME just focus
 		break;
 
 	case KEY_HOME:
@@ -579,6 +697,11 @@ app_process_curses_event (Application *self, CursesEvent *event)
 	{
 	case KEY_ESCAPE:
 		return FALSE;
+	case KEY_RETURN:
+		self->input_confirmed = TRUE;
+		app_redraw_top (self);
+		break;
+
 	case KEY_SOH: // Ctrl-A -- move to the start of line
 		self->input_pos = 0;
 		app_redraw_top (self);
@@ -637,6 +760,14 @@ app_process_curses_event (Application *self, CursesEvent *event)
 	gunichar c = g_utf8_get_char (letter);
 	if (g_unichar_isprint (c))
 	{
+		if (self->input_confirmed)
+		{
+			if (self->input->len != 0)
+				g_array_remove_range (self->input, 0, self->input->len);
+			self->input_pos = 0;
+			self->input_confirmed = FALSE;
+		}
+
 		g_array_insert_val (self->input, self->input_pos++, c);
 		app_search_for_entry (self);
 		app_redraw_top (self);
