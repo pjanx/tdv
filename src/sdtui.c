@@ -40,10 +40,12 @@
 #include "stardict.h"
 
 
-#define KEY_ESCAPE  27                 /**< Curses doesn't define this. */
+#define KEY_SOH      1                 /**< Ctrl-A */
+#define KEY_ENQ      5                 /**< Ctrl-E */
 #define KEY_VT      11                 /**< Ctrl-K */
 #define KEY_NAK     21                 /**< Ctrl-U */
 #define KEY_ETB     23                 /**< Ctrl-W */
+#define KEY_ESCAPE  27                 /**< Curses doesn't define this. */
 
 #define _(x)  x                        /**< Fake gettext, for now. */
 
@@ -577,6 +579,14 @@ app_process_curses_event (Application *self, CursesEvent *event)
 	{
 	case KEY_ESCAPE:
 		return FALSE;
+	case KEY_SOH: // Ctrl-A -- move to the start of line
+		self->input_pos = 0;
+		app_redraw_top (self);
+		break;
+	case KEY_ENQ: // Ctrl-E -- move to the end of line
+		self->input_pos = self->input->len;
+		app_redraw_top (self);
+		break;
 	case KEY_VT:  // Ctrl-K -- delete until the end of line
 		if (self->input_pos < self->input->len)
 		{
