@@ -1,0 +1,17 @@
+StarDict terminal UI
+
+This program aims to provide an easy way of viewing translation and other kinds
+of dictionaries in your terminal.  The author wasn't successful in finding any
+free dictionary software of this type, GUI or not, and thus decided to write his
+own.
+
+The project is covered by a BSD-style license, unlike vast majority of other
+similar projects, and can serve as a base for implementing other dictionary
+software under a more permissive license than your usual GNU General Public
+License.  I'll buy you a beer for shouting obscenities at the address of RMS in
+public; I couldn't reuse _anything_.
+
+So far it has only been tested under Ubuntu Linux and some work has to be done
+yet until the software can be considered fit to be included in regular Linux and
+BSD distributions.  Help is much appreciated in this regard.
+
