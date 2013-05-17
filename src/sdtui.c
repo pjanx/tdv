@@ -112,6 +112,7 @@ struct application
 	guint selected;                     //!< Offset to the selected definition
 	GPtrArray *entries;                 //!< ViewEntry's within the view
 
+	gchar *search_label;                //!< Text of the "Search" label
 	GArray *input;                      //!< The current search input
 	guint input_pos;                    //!< Cursor position within input
 	gboolean input_confirmed;           //!< Input has been confirmed
@@ -236,6 +237,12 @@ app_init (Application *self, const gchar *filename)
 	self->entries = g_ptr_array_new_with_free_func
 		((GDestroyNotify) view_entry_free);
 
+	gchar *search_label = g_strdup_printf ("%s: ", _("Search"));
+	self->search_label = g_locale_to_utf8 (search_label, -1, NULL, NULL, NULL);
+	g_free (search_label);
+
+	g_assert (self->search_label != NULL);
+
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
 	self->input_pos = 0;
 	self->input_confirmed = FALSE;
@@ -254,22 +261,29 @@ app_destroy (Application *self)
 {
 	g_object_unref (self->dict);
 	g_ptr_array_free (self->entries, TRUE);
+	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
 
 	g_iconv_close (self->wchar_to_utf8);
 	g_iconv_close (self->utf8_to_wchar);
 }
 
-/** Write the given utf-8 string padded with spaces, max. @a n characters. */
-static void
-add_padded_string (Application *self, const gchar *str, int n)
+/** Write the given utf-8 string padded with spaces.
+ *  @param[in] n  The number of characters to write, or -1 for the whole string.
+ *  @return The number of wide characters written.
+ */
+static gsize
+add_utf8_string (Application *self, const gchar *str, int n)
 {
 	wchar_t *wide_str = (wchar_t *) g_convert_with_iconv
 		(str, -1, self->utf8_to_wchar, NULL, NULL, NULL);
-	g_return_if_fail (wide_str != NULL);
+	g_return_val_if_fail (wide_str != NULL, 0);
 
 	ssize_t wide_len = wcslen (wide_str);
 	wchar_t padding = L' ';
+
+	if (n < 0)
+		n = wide_len;
 
 	gint i;
 	cchar_t cch;
@@ -281,6 +295,7 @@ add_padded_string (Application *self, const gchar *str, int n)
 	}
 
 	g_free (wide_str);
+	return n;
 }
 
 /** Render the top bar. */
@@ -289,10 +304,7 @@ app_redraw_top (Application *self)
 {
 	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
 	attrset (A_UNDERLINE);
-	printw ("%s: ", _("Search"));
-
-	int y, x;
-	getyx (stdscr, y, x);
+	gsize indent = add_utf8_string (self, self->search_label, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
@@ -300,10 +312,10 @@ app_redraw_top (Application *self)
 
 	if (self->input_confirmed)
 		attron (A_BOLD);
-	add_padded_string (self, input_utf8, COLS - x);
+	add_utf8_string (self, input_utf8, COLS - indent);
 	g_free (input_utf8);
 
-	move (y, x + self->input_pos);
+	move (0, indent + self->input_pos);
 	refresh ();
 }
 
@@ -337,9 +349,9 @@ app_redraw_view (Application *self)
 			attrset (attrs);
 
 			guint left_width = app_get_left_column_width (self);
-			add_padded_string (self, ve->word, left_width);
+			add_utf8_string (self, ve->word, left_width);
 			addwstr (L" ");
-			add_padded_string (self, ve->definitions[k], COLS - left_width - 1);
+			add_utf8_string (self, ve->definitions[k], COLS - left_width - 1);
 
 			if ((gint) ++shown == LINES - 1)
 				goto done;
@@ -591,9 +603,21 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		app_redraw (self);
 		break;
 	case KEY_MOUSE:
-		// TODO move the input entry cursor
-		if ((event->mouse.bstate & BUTTON1_PRESSED) && event->mouse.y > 0 &&
-			event->mouse.y <= (int)
+		if (!(event->mouse.bstate & BUTTON1_PRESSED))
+			break;
+
+		if (event->mouse.y == 0)
+		{
+			gsize label_len = g_utf8_strlen (self->search_label, -1);
+			gint pos = event->mouse.x - label_len;
+			if (pos >= 0)
+			{
+				self->input_pos = MIN ((guint) pos, self->input->len);
+				move (0, label_len + self->input_pos);
+				refresh ();
+			}
+		}
+		else if (event->mouse.y <= (int)
 			(count_view_items (self) - self->top_offset))
 		{
 			self->selected = event->mouse.y - 1;
