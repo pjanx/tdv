@@ -37,6 +37,7 @@
 #include <errno.h>
 #include <signal.h>
 
+#include "config.h"
 #include "stardict.h"
 
 
@@ -849,8 +850,12 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		g_type_init ();
 G_GNUC_END_IGNORE_DEPRECATIONS
 
-	static GOptionEntry entries[] =
+	gboolean show_version = FALSE;
+	GOptionEntry entries[] =
 	{
+		{ "version", 0, G_OPTION_FLAG_IN_MAIN,
+		  G_OPTION_ARG_NONE, &show_version,
+		  "Output version information and exit", NULL },
 		{ NULL }
 	};
 
@@ -866,6 +871,12 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		g_printerr ("%s: %s: %s\n", _("Error"), _("option parsing failed"),
 			error->message);
 		exit (EXIT_FAILURE);
+	}
+
+	if (show_version)
+	{
+		g_print (PROJECT_NAME " " PROJECT_VERSION "\n");
+		exit (EXIT_SUCCESS);
 	}
 
 	if (argc != 2)
