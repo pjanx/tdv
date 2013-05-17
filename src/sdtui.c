@@ -575,6 +575,13 @@ app_search_for_entry (Application *self)
 static gboolean
 app_process_nonchar_code (Application *self, CursesEvent *event)
 {
+	int last_x, last_y;
+	getyx (stdscr, last_y, last_x);
+
+	#define RESTORE_CURSOR      \
+		move (last_y, last_x);  \
+		refresh ();
+
 	switch (event->code)
 	{
 	case KEY_RESIZE:
@@ -591,28 +598,28 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		{
 			self->selected = event->mouse.y - 1;
 			app_redraw_view (self);
-			app_redraw_top (self); // FIXME just focus
+			RESTORE_CURSOR
 		}
 		break;
 
 	case KEY_CTRL_UP:
 		app_one_entry_up (self);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 	case KEY_CTRL_DOWN:
 		app_one_entry_down (self);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 
 	case KEY_ALT_LEFT:
 		self->division = (app_get_left_column_width (self) - 1.) / COLS;
 		app_redraw_view (self);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 	case KEY_ALT_RIGHT:
 		self->division = (app_get_left_column_width (self) + 1.) / COLS;
 		app_redraw_view (self);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 
 	case KEY_UP:
@@ -623,7 +630,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		else
 			app_scroll_up (self, 1);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 	case KEY_DOWN:
 		if ((gint) self->selected < LINES - 2 &&
@@ -634,15 +641,17 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		else
 			app_scroll_down (self, 1);
-		app_redraw_top (self); // FIXME just focus
+		RESTORE_CURSOR
 		break;
 	case KEY_PPAGE:
 		app_scroll_up (self, LINES - 1);
-		app_redraw_top (self); // FIXME just focus
+		// FIXME selection
+		RESTORE_CURSOR
 		break;
 	case KEY_NPAGE:
 		app_scroll_down (self, LINES - 1);
-		app_redraw_top (self); // FIXME just focus
+		// FIXME selection
+		RESTORE_CURSOR
 		break;
 
 	case KEY_HOME:
