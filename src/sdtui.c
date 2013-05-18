@@ -272,8 +272,7 @@ app_reload_view (Application *self)
 	if (self->entries->len != 0)
 		g_ptr_array_remove_range (self->entries, 0, self->entries->len);
 
-	self->selected = 0;
-	gint remains = LINES - 1;
+	gint remains = LINES - 1 + self->top_offset;
 	StardictIterator *iterator =
 		stardict_iterator_new (self->dict, self->top_position);
 	while (remains > 0 && stardict_iterator_is_valid (iterator))
@@ -533,7 +532,7 @@ append_entry (Application *self, guint32 position)
 
 /** Counts the number of definitions available for seeing. */
 static guint
-count_view_items (Application *self)
+app_count_view_items (Application *self)
 {
 	guint i, n_definitions = 0;
 	for (i = 0; i < self->entries->len; i++)
@@ -549,7 +548,7 @@ static gboolean
 app_scroll_up (Application *self, guint n)
 {
 	gboolean success = TRUE;
-	guint n_definitions = count_view_items (self);
+	guint n_definitions = app_count_view_items (self);
 	while (n--)
 	{
 		if (self->top_offset > 0)
@@ -590,7 +589,7 @@ static gboolean
 app_scroll_down (Application *self, guint n)
 {
 	gboolean success = TRUE;
-	guint n_definitions = count_view_items (self);
+	guint n_definitions = app_count_view_items (self);
 	while (n--)
 	{
 		if (self->entries->len == 0)
@@ -712,6 +711,7 @@ app_search_for_entry (Application *self)
 
 	self->top_position = stardict_iterator_get_offset (iterator);
 	self->top_offset = 0;
+	self->selected = 0;
 	g_object_unref (iterator);
 
 	app_reload_view (self);
@@ -764,11 +764,22 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 	switch (event->code)
 	{
 	case KEY_RESIZE:
-		// TODO adapt to the new window size, COLS, LINES
-		//      mind the position of the selection cursor
+	{
 		app_reload_view (self);
+
+		guint n_visible = app_count_view_items (self) - self->top_offset;
+		if ((gint) n_visible > LINES - 1)
+			n_visible = LINES - 1;
+
+		if (self->selected >= n_visible)
+		{
+			app_scroll_down (self, self->selected - n_visible + 1);
+			self->selected = n_visible - 1;
+		}
+
 		app_redraw (self);
 		break;
+	}
 	case KEY_MOUSE:
 		if (!(event->mouse.bstate & BUTTON1_PRESSED))
 			break;
@@ -785,7 +796,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 			}
 		}
 		else if (event->mouse.y <= (int)
-			(count_view_items (self) - self->top_offset))
+			(app_count_view_items (self) - self->top_offset))
 		{
 			self->selected = event->mouse.y - 1;
 			app_redraw_view (self);
@@ -805,7 +816,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		break;
 	case KEY_DOWN:
 		if ((gint) self->selected < LINES - 2 &&
-			self->selected < count_view_items (self) - self->top_offset - 1)
+			self->selected < app_count_view_items (self) - self->top_offset - 1)
 		{
 			self->selected++;
 			app_redraw_view (self);
