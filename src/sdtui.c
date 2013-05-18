@@ -41,27 +41,39 @@
 #include "stardict.h"
 
 
-#define KEY_SOH      1                 /**< Ctrl-A */
-#define KEY_ENQ      5                 /**< Ctrl-E */
-#define KEY_VT      11                 /**< Ctrl-K */
-#define KEY_FF      12                 /**< Ctrl-L */
-#define KEY_NAK     21                 /**< Ctrl-U */
-#define KEY_ETB     23                 /**< Ctrl-W */
+#define KEY_SOH      1                 //!< Ctrl-A
+#define KEY_STX      2                 //!< Ctrl-B
+#define KEY_ENQ      5                 //!< Ctrl-E
+#define KEY_ACK      6                 //!< Ctrl-F
+#define KEY_VT      11                 //!< Ctrl-K
+#define KEY_FF      12                 //!< Ctrl-L
+#define KEY_SO      14                 //!< Ctrl-N
+#define KEY_DLE     16                 //!< Ctrl-P
+#define KEY_NAK     21                 //!< Ctrl-U
+#define KEY_ETB     23                 //!< Ctrl-W
 
-#define KEY_RETURN  13                 /**< Enter  */
-#define KEY_ESCAPE  27                 /**< Esc    */
+#define KEY_RETURN  13                 //!< Enter
+#define KEY_ESCAPE  27                 //!< Esc
 
-// These codes may or may not work, depending on the terminal
-// They lie above KEY_MAX, originally discovered on gnome-terminal
-#define KEY_CTRL_UP     565
-#define KEY_CTRL_DOWN   524
-#define KEY_CTRL_LEFT   544
-#define KEY_CTRL_RIGHT  559
+typedef enum {
+	TERMINAL_UNKNOWN,                  //!< No extra handling
+	TERMINAL_XTERM,                    //!< xterm and VTE extra keycodes
+	TERMINAL_RXVT                      //!< rxvt extra keycodes
+} TerminalType;                        //!< Type of the terminal
 
-#define KEY_ALT_UP      563
-#define KEY_ALT_DOWN    522
-#define KEY_ALT_LEFT    542
-#define KEY_ALT_RIGHT   557
+typedef enum {
+	KEY_NOT_RECOGNISED,                //!< Not recognised
+
+	KEY_CTRL_UP,                       //!< Ctrl + Up arrow
+	KEY_CTRL_DOWN,                     //!< Ctrl + Down arrow
+	KEY_CTRL_LEFT,                     //!< Ctrl + Left arrow
+	KEY_CTRL_RIGHT,                    //!< Ctrl + Right arrow
+
+	KEY_ALT_UP,                        //!< Alt + Up arrow
+	KEY_ALT_DOWN,                      //!< Alt + Down arrow
+	KEY_ALT_LEFT,                      //!< Alt + Left arrow
+	KEY_ALT_RIGHT                      //!< Alt + Right arrow
+} ExtraKeyCode;                        //!< Translated key codes above KEY_MAX
 
 #define _(x)  x                        /**< Fake gettext, for now. */
 
@@ -87,6 +99,58 @@ struct curses_event
 	MEVENT  mouse;
 };
 
+/** Translate key codes above KEY_MAX returned from ncurses into something
+ *  meaningful, based on the terminal type.  The values have been obtained
+ *  experimentally.  Some keycodes make ncurses return KEY_ESCAPE, even
+ *  depending on actual terminal settings, thus this is not reliable at all.
+ *  xterm/VTE seems to behave nicely, though.
+ */
+static guint
+translate_extra_keycode (wchar_t code, TerminalType terminal)
+{
+	switch (terminal)
+	{
+	case TERMINAL_XTERM:
+		switch (code)
+		{
+		case 565: return KEY_CTRL_UP;
+		case 524: return KEY_CTRL_DOWN;
+		case 544: return KEY_CTRL_LEFT;
+		case 559: return KEY_CTRL_RIGHT;
+
+		case 563: return KEY_ALT_UP;
+		case 522: return KEY_ALT_DOWN;
+		case 542: return KEY_ALT_LEFT;
+		case 557: return KEY_ALT_RIGHT;
+		}
+		break;
+	case TERMINAL_RXVT:
+		switch (code)
+		{
+		case 521: return KEY_CTRL_UP;
+		case 514: return KEY_CTRL_DOWN;
+		}
+		break;
+	case TERMINAL_UNKNOWN:
+		break;
+	}
+	return KEY_NOT_RECOGNISED;
+}
+
+/** Get the type of the terminal based on the TERM environment variable. */
+static TerminalType
+get_terminal_type (void)
+{
+	const gchar *term = g_getenv ("TERM");
+	if (!term)  return TERMINAL_UNKNOWN;
+
+	gchar term_copy[strcspn (term, "-") + 1];
+	g_strlcpy (term_copy, term, sizeof term_copy);
+	if (!strcmp (term_copy, "xterm"))  return TERMINAL_XTERM;
+	if (!strcmp (term_copy, "rxvt"))   return TERMINAL_RXVT;
+	return TERMINAL_UNKNOWN;
+}
+
 // --- Application -------------------------------------------------------------
 
 /** Data relating to one entry within the dictionary. */
@@ -103,22 +167,23 @@ struct view_entry
 
 struct application
 {
-	GIConv utf8_to_wchar;               //!< utf-8 -> wchar_t conversion
-	GIConv wchar_to_utf8;               //!< wchar_t -> utf-8 conversion
+	TerminalType    terminal_type;      //!< Type of the terminal
+	GIConv          utf8_to_wchar;      //!< utf-8 -> wchar_t conversion
+	GIConv          wchar_to_utf8;      //!< wchar_t -> utf-8 conversion
 
-	StardictDict *dict;                 //!< The current dictionary
+	StardictDict  * dict;               //!< The current dictionary
 
-	guint32 top_position;               //!< Index of the topmost dict. entry
-	guint top_offset;                   //!< Offset into the top entry
-	guint selected;                     //!< Offset to the selected definition
-	GPtrArray *entries;                 //!< ViewEntry's within the view
+	guint32         top_position;       //!< Index of the topmost dict. entry
+	guint           top_offset;         //!< Offset into the top entry
+	guint           selected;           //!< Offset to the selected definition
+	GPtrArray     * entries;            //!< ViewEntry's within the view
 
-	gchar *search_label;                //!< Text of the "Search" label
-	GArray *input;                      //!< The current search input
-	guint input_pos;                    //!< Cursor position within input
-	gboolean input_confirmed;           //!< Input has been confirmed
+	gchar         * search_label;       //!< Text of the "Search" label
+	GArray        * input;              //!< The current search input
+	guint           input_pos;          //!< Cursor position within input
+	gboolean        input_confirmed;    //!< Input has been confirmed
 
-	gfloat division;                    //!< Position of the division column
+	gfloat          division;           //!< Position of the division column
 };
 
 
@@ -231,6 +296,8 @@ app_init (Application *self, const gchar *filename)
 		g_printerr ("Error loading dictionary: %s\n", error->message);
 		exit (EXIT_FAILURE);
 	}
+
+	self->terminal_type = get_terminal_type ();
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -584,17 +651,49 @@ app_search_for_entry (Application *self)
 	app_redraw_view (self);
 }
 
+#define SAVE_CURSOR                 \
+	int last_x, last_y;             \
+	getyx (stdscr, last_y, last_x);
+
+#define RESTORE_CURSOR              \
+	move (last_y, last_x);          \
+	refresh ();
+
+/** Process input above KEY_MAX. */
+static gboolean
+app_process_extra_code (Application *self, CursesEvent *event)
+{
+	SAVE_CURSOR
+	switch (translate_extra_keycode (event->code, self->terminal_type))
+	{
+	case KEY_CTRL_UP:
+		app_one_entry_up (self);
+		RESTORE_CURSOR
+		break;
+	case KEY_CTRL_DOWN:
+		app_one_entry_down (self);
+		RESTORE_CURSOR
+		break;
+
+	case KEY_ALT_LEFT:
+		self->division = (app_get_left_column_width (self) - 1.) / COLS;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+		break;
+	case KEY_ALT_RIGHT:
+		self->division = (app_get_left_column_width (self) + 1.) / COLS;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+		break;
+	}
+	return TRUE;
+}
+
 /** Process input that's not a character. */
 static gboolean
 app_process_nonchar_code (Application *self, CursesEvent *event)
 {
-	int last_x, last_y;
-	getyx (stdscr, last_y, last_x);
-
-	#define RESTORE_CURSOR      \
-		move (last_y, last_x);  \
-		refresh ();
-
+	SAVE_CURSOR
 	switch (event->code)
 	{
 	case KEY_RESIZE:
@@ -625,26 +724,6 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 			app_redraw_view (self);
 			RESTORE_CURSOR
 		}
-		break;
-
-	case KEY_CTRL_UP:
-		app_one_entry_up (self);
-		RESTORE_CURSOR
-		break;
-	case KEY_CTRL_DOWN:
-		app_one_entry_down (self);
-		RESTORE_CURSOR
-		break;
-
-	case KEY_ALT_LEFT:
-		self->division = (app_get_left_column_width (self) - 1.) / COLS;
-		app_redraw_view (self);
-		RESTORE_CURSOR
-		break;
-	case KEY_ALT_RIGHT:
-		self->division = (app_get_left_column_width (self) + 1.) / COLS;
-		app_redraw_view (self);
-		RESTORE_CURSOR
 		break;
 
 	case KEY_UP:
@@ -717,6 +796,9 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 			app_redraw_top (self);
 		}
 		break;
+
+	default:
+		return app_process_extra_code (self, event);
 	}
 	return TRUE;
 }
@@ -741,6 +823,14 @@ app_process_curses_event (Application *self, CursesEvent *event)
 		clear ();
 		app_redraw (self);
 		break;
+
+	case KEY_STX: // Ctrl-B -- back
+	case KEY_ACK: // Ctrl-F -- forward
+	case KEY_DLE: // Ctrl-P -- previous
+	case KEY_SO:  // Ctrl-N -- next
+		// TODO map this to something useful
+		break;
+
 	case KEY_SOH: // Ctrl-A -- move to the start of line
 		self->input_pos = 0;
 		app_redraw_top (self);
