@@ -350,7 +350,7 @@ app_add_utf8_string (Application *self, const gchar *str, int n)
 	g_return_val_if_fail (wide_str != NULL, 0);
 
 	ssize_t wide_len = wcslen (wide_str);
-	wchar_t padding = L' ';
+	wchar_t padding = L' ', error = L'?';
 
 	if (n < 0)
 		n = wide_len;
@@ -359,8 +359,9 @@ app_add_utf8_string (Application *self, const gchar *str, int n)
 	cchar_t cch;
 	for (i = 0; i < n; i++)
 	{
-		setcchar (&cch, (i < wide_len ? &wide_str[i] : &padding),
-			A_NORMAL, 0, NULL);
+		if (setcchar (&cch, (i < wide_len ? &wide_str[i] : &padding),
+			A_NORMAL, 0, NULL) == ERR)
+			setcchar (&cch, &error, A_NORMAL, 0, NULL);
 		add_wch (&cch);
 	}
 
