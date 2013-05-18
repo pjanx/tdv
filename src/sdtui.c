@@ -172,6 +172,7 @@ struct application
 	GIConv          wchar_to_utf8;      //!< wchar_t -> utf-8 conversion
 
 	StardictDict  * dict;               //!< The current dictionary
+	guint           show_help : 1;      //!< Whether help can be shown
 
 	guint32         top_position;       //!< Index of the topmost dict. entry
 	guint           top_offset;         //!< Offset into the top entry
@@ -298,6 +299,7 @@ app_init (Application *self, const gchar *filename)
 	}
 
 	self->terminal_type = get_terminal_type ();
+	self->show_help = TRUE;
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -341,7 +343,7 @@ app_destroy (Application *self)
  *  @return The number of wide characters written.
  */
 static gsize
-add_utf8_string (Application *self, const gchar *str, int n)
+app_add_utf8_string (Application *self, const gchar *str, int n)
 {
 	wchar_t *wide_str = (wchar_t *) g_convert_with_iconv
 		(str, -1, self->utf8_to_wchar, NULL, NULL, NULL);
@@ -372,7 +374,7 @@ app_redraw_top (Application *self)
 {
 	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
 	attrset (A_UNDERLINE);
-	gsize indent = add_utf8_string (self, self->search_label, -1);
+	gsize indent = app_add_utf8_string (self, self->search_label, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
@@ -380,7 +382,7 @@ app_redraw_top (Application *self)
 
 	if (self->input_confirmed)
 		attron (A_BOLD);
-	add_utf8_string (self, input_utf8, COLS - indent);
+	app_add_utf8_string (self, input_utf8, COLS - indent);
 	g_free (input_utf8);
 
 	move (0, indent + self->input_pos);
@@ -399,10 +401,73 @@ app_get_left_column_width (Application *self)
 	return width;
 }
 
+/** Display a message in the view area. */
+static void
+app_show_message (Application *self, const gchar *lines[], gsize len)
+{
+	gint top = (LINES - 1 - len) / 2;
+
+	gint i;
+	for (i = 0; i < top; i++)
+	{
+		move (1 + i, 0);
+		clrtoeol ();
+	}
+
+	attrset (0);
+	while (len-- && i < LINES - 1)
+	{
+		move (1 + i, 0);
+		clrtoeol ();
+
+		gint x = (COLS - g_utf8_strlen (*lines, -1)) / 2;
+		if (x < 0)
+			x = 0;
+
+		move (1 + i, x);
+		app_add_utf8_string (self, *lines, COLS - x);
+
+		lines++;
+		i++;
+	}
+
+	clrtobot ();
+	refresh ();
+}
+
+/** Show some information about the program. */
+static void
+app_show_help (Application *self)
+{
+	gchar *description = g_locale_to_utf8
+		(_("Terminal UI for StarDict dictionaries"), -1, NULL, NULL, NULL);
+	gchar *type_to_search = g_locale_to_utf8
+		(_("Type to search"), -1, NULL, NULL, NULL);
+
+	const gchar *lines[] =
+	{
+		PROJECT_NAME " " PROJECT_VERSION,
+		description,
+		"Copyright (c) 2013, Přemysl Janouch",
+		"",
+		type_to_search
+	};
+
+	app_show_message (self, lines, G_N_ELEMENTS (lines));
+	g_free (description);
+	g_free (type_to_search);
+}
+
 /** Redraw the dictionary view. */
 static void
 app_redraw_view (Application *self)
 {
+	if (self->show_help)
+	{
+		app_show_help (self);
+		return;
+	}
+
 	move (1, 0);
 
 	guint i, k = self->top_offset, shown = 0;
@@ -417,9 +482,10 @@ app_redraw_view (Application *self)
 			attrset (attrs);
 
 			guint left_width = app_get_left_column_width (self);
-			add_utf8_string (self, ve->word, left_width);
+			app_add_utf8_string (self, ve->word, left_width);
 			addwstr (L" ");
-			add_utf8_string (self, ve->definitions[k], COLS - left_width - 1);
+			app_add_utf8_string (self,
+				ve->definitions[k], COLS - left_width - 1);
 
 			if ((gint) ++shown == LINES - 1)
 				goto done;
@@ -889,6 +955,8 @@ app_process_curses_event (Application *self, CursesEvent *event)
 	gunichar c = g_utf8_get_char (letter);
 	if (g_unichar_isprint (c))
 	{
+		self->show_help = FALSE;
+
 		if (self->input_confirmed)
 		{
 			if (self->input->len != 0)
