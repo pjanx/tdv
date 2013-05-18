@@ -44,6 +44,7 @@
 #define KEY_SOH      1                 /**< Ctrl-A */
 #define KEY_ENQ      5                 /**< Ctrl-E */
 #define KEY_VT      11                 /**< Ctrl-K */
+#define KEY_FF      12                 /**< Ctrl-L */
 #define KEY_NAK     21                 /**< Ctrl-U */
 #define KEY_ETB     23                 /**< Ctrl-W */
 
@@ -736,6 +737,10 @@ app_process_curses_event (Application *self, CursesEvent *event)
 		app_redraw_top (self);
 		break;
 
+	case KEY_FF:  // Ctrl-L -- redraw everything
+		clear ();
+		app_redraw (self);
+		break;
 	case KEY_SOH: // Ctrl-A -- move to the start of line
 		self->input_pos = 0;
 		app_redraw_top (self);
