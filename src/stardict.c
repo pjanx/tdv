@@ -74,8 +74,7 @@ stream_read_string (GDataInputStream *dis, GError **error)
 static inline gint
 stardict_strcmp (const gchar *s1, const gchar *s2)
 {
-	gint a;
-	a = g_ascii_strcasecmp (s1, s2);
+	gint a = g_ascii_strcasecmp (s1, s2);
 	return a ? a : strcmp (s1, s2);
 }
 
@@ -727,11 +726,11 @@ error:
 gchar **
 stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 {
-	BINARY_SEARCH_BEGIN (sd->synonyms->len - 1, stardict_strcmp (word,
+	BINARY_SEARCH_BEGIN (sd->synonyms->len - 1, g_ascii_strcasecmp (word,
 			g_array_index (sd->synonyms, StardictSynonymEntry, imid).word))
 
 	// Back off to the first matching entry
-	while (imid > 0 && !stardict_strcmp (word,
+	while (imid > 0 && !g_ascii_strcasecmp (word,
 		g_array_index (sd->synonyms, StardictSynonymEntry, --imid).word));
 
 	GPtrArray *array = g_ptr_array_new ();
@@ -759,8 +758,13 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 StardictIterator *
 stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 {
-	BINARY_SEARCH_BEGIN (sd->index->len - 1, stardict_strcmp (word,
+	BINARY_SEARCH_BEGIN (sd->index->len - 1, g_ascii_strcasecmp (word,
 		g_array_index (sd->index, StardictIndexEntry, imid).name))
+
+	// Back off to the first matching entry
+	while (imid > 0 && !g_ascii_strcasecmp (word,
+		g_array_index (sd->index, StardictIndexEntry, imid - 1).name))
+		imid--;
 
 	if (success) *success = TRUE;
 	return stardict_iterator_new (sd, imid);
