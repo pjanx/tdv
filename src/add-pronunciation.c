@@ -103,7 +103,7 @@ writer_acronym_cb (const GMatchInfo *info, GString *res,
 static gpointer
 worker_writer (WorkerData *data)
 {
-	GError *error;
+	GError *error = NULL;
 	GMatchInfo *match_info;
 	while (stardict_iterator_get_offset (data->iterator) != data->end_entry)
 	{
@@ -167,7 +167,7 @@ get_void_entry (gchar *cmdline[])
 	gchar *output;
 	gint exit_status;
 
-	GError *error;
+	GError *error = NULL;
 	if (!g_spawn_sync (NULL, cmdline, NULL,
 		G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
 		&output, NULL, &exit_status, &error))
@@ -190,7 +190,7 @@ static gpointer
 worker (WorkerData *data)
 {
 	/* Spawn eSpeak */
-	GError *error;
+	GError *error = NULL;
 	gint child_in, child_out;
 	if (!g_spawn_async_with_pipes (NULL, data->cmdline, NULL,
 		G_SPAWN_SEARCH_PATH, NULL, NULL,

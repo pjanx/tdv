@@ -288,7 +288,7 @@ app_reload_view (Application *self)
 static void
 app_init (Application *self, const gchar *filename)
 {
-	GError *error;
+	GError *error = NULL;
 	self->dict = stardict_dict_new (filename, &error);
 	if (!self->dict)
 	{

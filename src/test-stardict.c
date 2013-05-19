@@ -178,7 +178,7 @@ generate_dictionary_data (gsize length)
 static Dictionary *
 dictionary_create (void)
 {
-	GError *error;
+	GError *error = NULL;
 	gchar *tmp_dir_path = g_dir_make_tmp ("stardict-test-XXXXXX", &error);
 	if (!tmp_dir_path)
 		g_error ("Failed to create a directory for the test dictionary: %s",
@@ -234,7 +234,7 @@ dictionary_create (void)
 static void
 dictionary_destroy (Dictionary *dict)
 {
-	GError *error;
+	GError *error = NULL;
 	if (!remove_recursive (dict->tmp_dir, &error))
 		g_error ("Failed to delete the temporary directory: %s",
 			error->message);
