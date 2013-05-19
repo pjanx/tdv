@@ -1,0 +1,110 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2013 Přemysl Janouch
+# This file is distributed under the same license as the sdtui package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: sdtui 0.1.0\n"
+"Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
+"POT-Creation-Date: 2013-05-19 03:29+0200\n"
+"PO-Revision-Date: 2013-05-19 04:43+0100\n"
+"Last-Translator: Přemysl Janouch <p.janouch@gmail.com>\n"
+"Language-Team: Czech <translation-team-cs@lists.sourceforge.net>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 1.5.4\n"
+"Language: cs\n"
+
+#: po/../src/sdtui.c:230
+msgid "error in entry"
+msgstr "chyba v záznamu"
+
+#: po/../src/sdtui.c:249
+msgid "no usable field found"
+msgstr "nenalezeno žádné použitelné pole"
+
+#: po/../src/sdtui.c:295
+msgid "Error loading dictionary"
+msgstr "Chyba při načítání slovníku"
+
+#: po/../src/sdtui.c:308
+msgid "Search"
+msgstr "Hledat"
+
+#: po/../src/sdtui.c:440
+msgid "Terminal UI for StarDict dictionaries"
+msgstr "Terminálové UI pro stardictové slovníky"
+
+#: po/../src/sdtui.c:443
+msgid "Type to search"
+msgstr "Zadejte vyhledávaný výraz"
+
+#: po/../src/sdtui.c:1054
+msgid "Output version information and exit"
+msgstr "Vypíše informace o verzi a ukončí se"
+
+#: po/../src/sdtui.c:1067
+msgid "dictionary.ifo - StarDict terminal UI"
+msgstr "slovník.ifo - terminálové UI pro StarDict"
+
+#: po/../src/sdtui.c:1072
+msgid "Error"
+msgstr "Chyba"
+
+#: po/../src/sdtui.c:1072
+msgid "option parsing failed"
+msgstr "zpracování přepínačů selhalo"
+
+#: po/../src/stardict.c:136
+msgid "invalid header format"
+msgstr "neplatný formát hlavičky"
+
+#: po/../src/stardict.c:268
+msgid "version not specified"
+msgstr "nebyla určena verze"
+
+#: po/../src/stardict.c:279
+msgid "invalid version"
+msgstr "neplatná verze"
+
+#: po/../src/stardict.c:294
+msgid "unknown key, ignoring"
+msgstr "neznámý klíč, ignoruji"
+
+#: po/../src/stardict.c:311
+msgid "invalid integer"
+msgstr "neplatné číslo"
+
+#: po/../src/stardict.c:321
+msgid "option format error"
+msgstr "chyba v zápisu volby"
+
+#: po/../src/stardict.c:331
+msgid "no book name specified"
+msgstr "nebyl určen název knihy"
+
+#: po/../src/stardict.c:337
+msgid "word count not specified"
+msgstr "nebyl určen počet slov"
+
+#: po/../src/stardict.c:343
+msgid "index file size not specified"
+msgstr "nebyla určena velikost rejstříku"
+
+#: po/../src/stardict.c:352
+msgid "invalid index offset bits"
+msgstr "neplatný počet bitů pro offset v rejstříku"
+
+#: po/../src/stardict.c:679
+msgid "cannot find .idx file"
+msgstr "nemohu najít .idx soubor"
+
+#: po/../src/stardict.c:702
+msgid "cannot find .dict file"
+msgstr "nemohu najít .dict soubor"
+
+#: po/../src/stardict.c:861 po/../src/stardict.c:886
+msgid "invalid data entry"
+msgstr "neplatná datová položka"
