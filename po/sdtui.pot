@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sdtui 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
-"POT-Creation-Date: 2013-05-19 04:58+0200\n"
+"POT-Creation-Date: 2013-05-19 08:02+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -43,6 +43,14 @@ msgstr ""
 
 #: ../src/sdtui.c:1054
 msgid "Output version information and exit"
+msgstr ""
+
+#: ../src/sdtui.c:1059
+msgid "Warning"
+msgstr ""
+
+#: ../src/sdtui.c:1059
+msgid "failed to set the locale"
 msgstr ""
 
 #: ../src/sdtui.c:1067
