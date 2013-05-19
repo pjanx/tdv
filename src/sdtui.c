@@ -1056,7 +1056,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	};
 
 	if (!setlocale (LC_ALL, ""))
-		abort ();
+		g_printerr ("%s: %s\n", _("Warning"), _("failed to set the locale"));
 
 	bindtextdomain (GETTEXT_PACKAGE, GETTEXT_DIRNAME);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
