@@ -1,5 +1,5 @@
 project (sdtui C)
-cmake_minimum_required (VERSION 2.8.0)
+cmake_minimum_required (VERSION 2.8.4)
 
 # Moar warnings
 if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
@@ -29,6 +29,31 @@ file (GLOB project_PO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/po/*.po)
 GETTEXT_CREATE_TRANSLATIONS (
 	${CMAKE_CURRENT_SOURCE_DIR}/po/${CMAKE_PROJECT_NAME}.pot
 	ALL ${project_PO_FILES})
+
+# Documentation
+find_program (XSLTPROC_EXECUTABLE xsltproc)
+if (NOT XSLTPROC_EXECUTABLE)
+	message (FATAL_ERROR "xsltproc not found")
+endif (NOT XSLTPROC_EXECUTABLE)
+
+set (project_MAN_PAGES "${CMAKE_PROJECT_NAME}.1")
+foreach (page ${project_MAN_PAGES})
+	set (page_output "${CMAKE_CURRENT_BINARY_DIR}/${page}")
+	list (APPEND project_MAN_PAGES_OUTPUT "${page_output}")
+	add_custom_command (OUTPUT ${page_output}
+		COMMAND ${XSLTPROC_EXECUTABLE}
+			--nonet
+			--param make.year.ranges 1
+			--param make.single.year.ranges 1
+			--param man.charmap.use.subset 0
+			--param man.authors.section.enabled 0
+			http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
+			"${CMAKE_CURRENT_SOURCE_DIR}/docs/${page}.xml"
+		DEPENDS "docs/${page}.xml"
+		COMMENT "Generating man page for ${page}" VERBATIM)
+endforeach (page)
+
+add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES_OUTPUT})
 
 # Project source files
 set (project_common_sources
@@ -80,8 +105,15 @@ add_executable (add-pronunciation
 target_link_libraries (add-pronunciation ${project_common_libraries})
 
 # The files to be installed
-install (TARGETS ${CMAKE_PROJECT_NAME} DESTINATION bin)
-install (FILES LICENSE DESTINATION share/doc/${CMAKE_PROJECT_NAME})
+include (GNUInstallDirs)
+install (TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+
+foreach (page ${project_MAN_PAGES_OUTPUT})
+	string (REGEX MATCH "\\.([0-9])" manpage_suffix "${page}")
+	install (FILES "${page}"
+		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
+endforeach (page)
 
 # Do some unit tests
 option (BUILD_TESTING "Build tests" OFF)
