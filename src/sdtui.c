@@ -98,6 +98,13 @@ struct curses_event
 	MEVENT  mouse;
 };
 
+static gboolean
+is_character_in_locale (wchar_t c)
+{
+	cchar_t cch;
+	return setcchar (&cch, &c, A_NORMAL, 0, NULL) != ERR;
+}
+
 /** Translate key codes above KEY_MAX returned from ncurses into something
  *  meaningful, based on the terminal type.  The values have been obtained
  *  experimentally.  Some keycodes make ncurses return KEY_ESCAPE, even
@@ -344,10 +351,22 @@ app_add_utf8_string (Application *self, const gchar *str, int n)
 	g_return_val_if_fail (wide_str != NULL, 0);
 
 	ssize_t wide_len = wcslen (wide_str);
-	wchar_t padding = L' ', error = L'?';
+	wchar_t padding = L' ', error = L'?', ellipsis = L'…';
 
 	if (n < 0)
 		n = wide_len;
+
+	if (wide_len > n)
+	{
+		if (is_character_in_locale (ellipsis) && n > 0)
+			wide_str[n - 1] = ellipsis;
+		else if (n >= 3)
+		{
+			wide_str[n - 1] = L'.';
+			wide_str[n - 2] = L'.';
+			wide_str[n - 3] = L'.';
+		}
+	}
 
 	gint i;
 	cchar_t cch;
