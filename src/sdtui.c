@@ -1139,7 +1139,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	while (TRUE)
 	{
-		if (poll_restart (pollfd, 3, -1) == -1)
+		if (poll_restart (pollfd, 2, -1) == -1)
 			abort ();
 
 		if ((pollfd[0].revents & POLLIN)
