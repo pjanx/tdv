@@ -101,8 +101,8 @@ struct curses_event
 static gboolean
 is_character_in_locale (wchar_t c)
 {
-	cchar_t cch;
-	return setcchar (&cch, &c, A_NORMAL, 0, NULL) != ERR;
+	wchar_t s[] = { c, 0 };
+	return wcstombs (NULL, s, 0) != (size_t) -1;
 }
 
 /** Translate key codes above KEY_MAX returned from ncurses into something
