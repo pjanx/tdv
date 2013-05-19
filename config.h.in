@@ -5,5 +5,8 @@
 #define PROJECT_VERSION "${project_VERSION}"
 #define PROJECT_URL "${project_URL}"
 
+#define GETTEXT_PACKAGE PROJECT_NAME
+#define GETTEXT_DIRNAME "${CMAKE_INSTALL_PREFIX}/share/locale"
+
 #endif /* ! CONFIG_H */
 

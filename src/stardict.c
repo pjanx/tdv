@@ -25,6 +25,7 @@
 
 #include <glib.h>
 #include <gio/gio.h>
+#include <glib/gi18n.h>
 
 #include "stardict.h"
 #include "stardict-private.h"
@@ -132,7 +133,7 @@ ifo_reader_init (IfoReader *ir, const gchar *path, GError **error)
 	 || strncmp (contents, first_line, sizeof first_line - 1))
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: invalid header format", path);
+			"%s: %s", path, _("invalid header format"));
 		return FALSE;
 	}
 
@@ -264,7 +265,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 	if (ifo_reader_read (&ir) != 1 || strcmp (ir.key, "version"))
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: version not specified", path);
+			"%s: %s", path, _("version not specified"));
 		goto error;
 	}
 
@@ -275,7 +276,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 	else
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: invalid version: %s", path, ir.value);
+			"%s: %s: %s", path, _("invalid version"), ir.value);
 		goto error;
 	}
 
@@ -290,7 +291,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		if (i == _stardict_ifo_keys_length)
 		{
 			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-				"%s: unknown key, ignoring: %s", path, ir.key);
+				"%s: %s: %s", path, _("unknown key, ignoring"), ir.key);
 			continue;
 		}
 
@@ -307,7 +308,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		if (*end)
 		{
 			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-				"%s: invalid integer", path);
+				"%s: %s", path, _("invalid integer"));
 			goto error;
 		}
 
@@ -317,7 +318,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 	if (ret == -1)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: option format error", path);
+			"%s: %s", path, _("option format error"));
 		goto error;
 	}
 
@@ -327,19 +328,19 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 	if (!sti->book_name || !*sti->book_name)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: no book name specified\n", path);
+			"%s: %s", path, _("no book name specified"));
 		ret_val = FALSE;
 	}
 	if (!sti->word_count)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: word count not specified\n", path);
+			"%s: %s", path, _("word count not specified"));
 		ret_val = FALSE;
 	}
 	if (!sti->idx_filesize)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: .idx file size not specified\n", path);
+			"%s: %s", path, _("index file size not specified"));
 		ret_val = FALSE;
 	}
 
@@ -348,7 +349,8 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 	else if (sti->idx_offset_bits != 32 && sti->idx_offset_bits != 64)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-			"%s: wrong index offset bits: %lu\n", path, sti->idx_offset_bits);
+			"%s: %s: %lu", path, _("invalid index offset bits"),
+			sti->idx_offset_bits);
 		ret_val = FALSE;
 	}
 
@@ -674,7 +676,7 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 		else
 		{
 			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_FILE_NOT_FOUND,
-				"%s: cannot find index file", sdi->path);
+				"%s: %s", sdi->path, _("cannot find .idx file"));
 		}
 	}
 	g_free (base_idx);
@@ -697,7 +699,7 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 		else
 		{
 			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_FILE_NOT_FOUND,
-				"%s: cannot find dict file", sdi->path);
+				"%s: %s", sdi->path, _("cannot find .dict file"));
 		}
 	}
 	g_free (base_dict);
@@ -856,7 +858,7 @@ read_entries (const gchar *entry, gsize entry_size, GError **error)
 
 error:
 	g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-		"invalid data entry");
+		_("invalid data entry"));
 	g_list_free_full (result, (GDestroyNotify) stardict_entry_field_free);
 	return NULL;
 }
@@ -881,7 +883,7 @@ read_entries_sts (const gchar *entry, gsize entry_size,
 
 error:
 	g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-		"invalid data entry");
+		_("invalid data entry"));
 	g_list_free_full (result, (GDestroyNotify) stardict_entry_field_free);
 	return NULL;
 }

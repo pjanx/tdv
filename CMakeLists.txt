@@ -23,6 +23,13 @@ pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)
 
 include_directories (${dependencies_INCLUDE_DIRS})
 
+# Localization
+find_package (Gettext REQUIRED)
+file (GLOB project_PO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/po/*.po)
+GETTEXT_CREATE_TRANSLATIONS (
+	${CMAKE_CURRENT_SOURCE_DIR}/po/${CMAKE_PROJECT_NAME}.pot
+	ALL ${project_PO_FILES})
+
 # Project source files
 set (project_common_sources
 	src/generator.c

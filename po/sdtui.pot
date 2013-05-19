@@ -1,0 +1,110 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2013 Přemysl Janouch
+# This file is distributed under the same license as the sdtui package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: sdtui 0.1.0\n"
+"Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
+"POT-Creation-Date: 2013-05-19 04:58+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../src/sdtui.c:230
+msgid "error in entry"
+msgstr ""
+
+#: ../src/sdtui.c:249
+msgid "no usable field found"
+msgstr ""
+
+#: ../src/sdtui.c:295
+msgid "Error loading dictionary"
+msgstr ""
+
+#: ../src/sdtui.c:308
+msgid "Search"
+msgstr ""
+
+#: ../src/sdtui.c:440
+msgid "Terminal UI for StarDict dictionaries"
+msgstr ""
+
+#: ../src/sdtui.c:443
+msgid "Type to search"
+msgstr ""
+
+#: ../src/sdtui.c:1054
+msgid "Output version information and exit"
+msgstr ""
+
+#: ../src/sdtui.c:1067
+msgid "dictionary.ifo - StarDict terminal UI"
+msgstr ""
+
+#: ../src/sdtui.c:1072
+msgid "Error"
+msgstr ""
+
+#: ../src/sdtui.c:1072
+msgid "option parsing failed"
+msgstr ""
+
+#: ../src/stardict.c:136
+msgid "invalid header format"
+msgstr ""
+
+#: ../src/stardict.c:268
+msgid "version not specified"
+msgstr ""
+
+#: ../src/stardict.c:279
+msgid "invalid version"
+msgstr ""
+
+#: ../src/stardict.c:294
+msgid "unknown key, ignoring"
+msgstr ""
+
+#: ../src/stardict.c:311
+msgid "invalid integer"
+msgstr ""
+
+#: ../src/stardict.c:321
+msgid "option format error"
+msgstr ""
+
+#: ../src/stardict.c:331
+msgid "no book name specified"
+msgstr ""
+
+#: ../src/stardict.c:337
+msgid "word count not specified"
+msgstr ""
+
+#: ../src/stardict.c:343
+msgid "index file size not specified"
+msgstr ""
+
+#: ../src/stardict.c:352
+msgid "invalid index offset bits"
+msgstr ""
+
+#: ../src/stardict.c:679
+msgid "cannot find .idx file"
+msgstr ""
+
+#: ../src/stardict.c:702
+msgid "cannot find .dict file"
+msgstr ""
+
+#: ../src/stardict.c:861 ../src/stardict.c:886
+msgid "invalid data entry"
+msgstr ""

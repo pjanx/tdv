@@ -31,6 +31,7 @@
 #include <gio/gio.h>
 #include <pango/pango.h>
 #include <ncurses.h>
+#include <glib/gi18n.h>
 
 #include <unistd.h>
 #include <poll.h>
@@ -74,8 +75,6 @@ typedef enum {
 	KEY_ALT_LEFT,                      //!< Alt + Left arrow
 	KEY_ALT_RIGHT                      //!< Alt + Right arrow
 } ExtraKeyCode;                        //!< Translated key codes above KEY_MAX
-
-#define _(x)  x                        /**< Fake gettext, for now. */
 
 // --- Utilities ---------------------------------------------------------------
 
@@ -293,7 +292,7 @@ app_init (Application *self, const gchar *filename)
 	self->dict = stardict_dict_new (filename, &error);
 	if (!self->dict)
 	{
-		g_printerr ("Error loading dictionary: %s\n", error->message);
+		g_printerr ("%s: %s\n", _("Error loading dictionary"), error->message);
 		exit (EXIT_FAILURE);
 	}
 
@@ -306,11 +305,7 @@ app_init (Application *self, const gchar *filename)
 	self->entries = g_ptr_array_new_with_free_func
 		((GDestroyNotify) view_entry_free);
 
-	gchar *search_label = g_strdup_printf ("%s: ", _("Search"));
-	self->search_label = g_locale_to_utf8 (search_label, -1, NULL, NULL, NULL);
-	g_free (search_label);
-
-	g_assert (self->search_label != NULL);
+	self->search_label = g_strdup_printf ("%s: ", _("Search"));
 
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
 	self->input_pos = 0;
@@ -439,23 +434,16 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 static void
 app_show_help (Application *self)
 {
-	gchar *description = g_locale_to_utf8
-		(_("Terminal UI for StarDict dictionaries"), -1, NULL, NULL, NULL);
-	gchar *type_to_search = g_locale_to_utf8
-		(_("Type to search"), -1, NULL, NULL, NULL);
-
 	const gchar *lines[] =
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
-		description,
+		_("Terminal UI for StarDict dictionaries"),
 		"Copyright (c) 2013, Přemysl Janouch",
 		"",
-		type_to_search
+		_("Type to search")
 	};
 
 	app_show_message (self, lines, G_N_ELEMENTS (lines));
-	g_free (description);
-	g_free (type_to_search);
 }
 
 /** Redraw the dictionary view. */
@@ -1063,17 +1051,22 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	{
 		{ "version", 0, G_OPTION_FLAG_IN_MAIN,
 		  G_OPTION_ARG_NONE, &show_version,
-		  "Output version information and exit", NULL },
+		  N_("Output version information and exit"), NULL },
 		{ NULL }
 	};
 
 	if (!setlocale (LC_ALL, ""))
 		abort ();
 
+	bindtextdomain (GETTEXT_PACKAGE, GETTEXT_DIRNAME);
+	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+	textdomain (GETTEXT_PACKAGE);
+
 	GError *error = NULL;
 	GOptionContext *ctx = g_option_context_new
-		("dictionary.ifo - StarDict terminal UI");
-	g_option_context_add_main_entries (ctx, entries, NULL);
+		(N_("dictionary.ifo - StarDict terminal UI"));
+	g_option_context_add_main_entries (ctx, entries, GETTEXT_PACKAGE);
+	g_option_context_set_translation_domain (ctx, GETTEXT_PACKAGE);
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
 	{
 		g_printerr ("%s: %s: %s\n", _("Error"), _("option parsing failed"),
