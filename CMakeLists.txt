@@ -17,6 +17,10 @@ set (project_VERSION "${project_VERSION_MAJOR}")
 set (project_VERSION "${project_VERSION}.${project_VERSION_MINOR}")
 set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 
+# Configuration
+include (CheckFunctionExists)
+CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
+
 # Dependecies
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)

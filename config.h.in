@@ -8,5 +8,7 @@
 #define GETTEXT_PACKAGE PROJECT_NAME
 #define GETTEXT_DIRNAME "${CMAKE_INSTALL_PREFIX}/share/locale"
 
+#cmakedefine HAVE_WCWIDTH
+
 #endif /* ! CONFIG_H */
 

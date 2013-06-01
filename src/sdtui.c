@@ -18,7 +18,8 @@
  *
  */
 
-#define _XOPEN_SOURCE_EXTENDED         /**< Yes, we want ncursesw. */
+#define _XOPEN_SOURCE  500             //!< wcwidth
+#define _XOPEN_SOURCE_EXTENDED         //!< Yes, we want ncursesw.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,6 +98,18 @@ struct curses_event
 	guint   is_char : 1;
 	MEVENT  mouse;
 };
+
+static size_t
+unichar_width (gunichar ch)
+{
+	if (g_unichar_iszerowidth (ch))
+		return 0;
+	return 1 + g_unichar_iswide (ch);
+}
+
+#ifndef HAVE_WCWIDTH
+#define wcwidth(x)  1
+#endif // ! HAVE_WCWIDTH
 
 static gboolean
 is_character_in_locale (wchar_t c)
@@ -353,30 +366,67 @@ app_add_utf8_string (Application *self, const gchar *str, int n)
 	ssize_t wide_len = wcslen (wide_str);
 	wchar_t padding = L' ', error = L'?', ellipsis = L'…';
 
-	if (n < 0)
-		n = wide_len;
+	if (!n)
+		return 0;
 
-	if (wide_len > n)
+	// Compute how many wide characters fit in the limit
+	gint cols, i;
+	for (cols = i = 0; i < wide_len; i++)
 	{
-		if (is_character_in_locale (ellipsis) && n > 0)
-			wide_str[n - 1] = ellipsis;
-		else if (n >= 3)
+		if (!is_character_in_locale (wide_str[i]))
+			wide_str[i] = error;
+
+		gint width = wcwidth (wide_str[i]);
+		if (n >= 0 && cols + width > n)
+			break;
+		cols += width;
+	}
+
+	if (n < 0)
+		n = cols;
+
+	// Append ellipsis if the whole string didn't fit
+	gint len = i;
+	if (len != wide_len)
+	{
+		if (is_character_in_locale (ellipsis))
 		{
-			wide_str[n - 1] = L'.';
-			wide_str[n - 2] = L'.';
-			wide_str[n - 3] = L'.';
+			if (cols + wcwidth (ellipsis) > n)
+				cols -= wcwidth (wide_str[len - 1]);
+			else
+				len++;
+
+			wide_str[len - 1] = ellipsis;
+			cols += wcwidth (ellipsis);
+		}
+		else if (n >= 3 && len >= 3)
+		{
+			// With zero-width characters this overflows
+			// It's just a fallback anyway
+			cols -= wcwidth (wide_str[len - 1]);
+			cols -= wcwidth (wide_str[len - 2]);
+			cols -= wcwidth (wide_str[len - 3]);
+			cols += 3;
+
+			wide_str[len - 1] = L'.';
+			wide_str[len - 2] = L'.';
+			wide_str[len - 3] = L'.';
 		}
 	}
 
-	gint i;
 	cchar_t cch;
-	for (i = 0; i < n; i++)
+	for (i = 0; i < len; i++)
 	{
-		if (setcchar (&cch, (i < wide_len ? &wide_str[i] : &padding),
-			A_NORMAL, 0, NULL) == ERR)
-			setcchar (&cch, &error, A_NORMAL, 0, NULL);
-		add_wch (&cch);
+		if (setcchar (&cch, &wide_str[i], A_NORMAL, 0, NULL) == OK)
+			add_wch (&cch);
+		else
+			// This shouldn't happen
+			cols -= wcwidth (wide_str[i]);
 	}
+
+	setcchar (&cch, &padding, A_NORMAL, 0, NULL);
+	while (cols++ < n)
+		add_wch (&cch);
 
 	g_free (wide_str);
 	return n;
@@ -399,7 +449,12 @@ app_redraw_top (Application *self)
 	app_add_utf8_string (self, input_utf8, COLS - indent);
 	g_free (input_utf8);
 
-	move (0, indent + self->input_pos);
+	guint offset, i;
+	for (offset = i = 0; i < self->input_pos; i++)
+		// This may be inconsistent with the output of app_add_utf8_string()
+		offset += unichar_width (g_array_index (self->input, gunichar, i));
+
+	move (0, indent + offset);
 	refresh ();
 }
 
