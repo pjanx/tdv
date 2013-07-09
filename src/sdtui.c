@@ -43,16 +43,19 @@
 #include "stardict.h"
 
 
-#define KEY_SOH      1                 //!< Ctrl-A
-#define KEY_STX      2                 //!< Ctrl-B
-#define KEY_ENQ      5                 //!< Ctrl-E
-#define KEY_ACK      6                 //!< Ctrl-F
-#define KEY_VT      11                 //!< Ctrl-K
-#define KEY_FF      12                 //!< Ctrl-L
-#define KEY_SO      14                 //!< Ctrl-N
-#define KEY_DLE     16                 //!< Ctrl-P
-#define KEY_NAK     21                 //!< Ctrl-U
-#define KEY_ETB     23                 //!< Ctrl-W
+#define CTRL_KEY(x)  ((x) - 'A' + 1)
+
+#define KEY_SOH     CTRL_KEY ('A')     //!< Ctrl-A
+#define KEY_STX     CTRL_KEY ('B')     //!< Ctrl-B
+#define KEY_ENQ     CTRL_KEY ('E')     //!< Ctrl-E
+#define KEY_ACK     CTRL_KEY ('F')     //!< Ctrl-F
+#define KEY_VT      CTRL_KEY ('K')     //!< Ctrl-K
+#define KEY_FF      CTRL_KEY ('L')     //!< Ctrl-L
+#define KEY_SO      CTRL_KEY ('N')     //!< Ctrl-N
+#define KEY_DLE     CTRL_KEY ('P')     //!< Ctrl-P
+#define KEY_DC4     CTRL_KEY ('T')     //!< Ctrl-T
+#define KEY_NAK     CTRL_KEY ('U')     //!< Ctrl-U
+#define KEY_ETB     CTRL_KEY ('W')     //!< Ctrl-W
 
 #define KEY_RETURN  13                 //!< Enter
 #define KEY_ESCAPE  27                 //!< Esc
@@ -1019,6 +1022,27 @@ app_process_curses_event (Application *self, CursesEvent *event)
 			app_redraw_top (self);
 		}
 		return TRUE;
+	case KEY_DC4: // Ctrl-T -- transposition
+	{
+		if (!self->input_pos || self->input->len < 2)
+			break;
+
+		guint start = self->input_pos - 1;
+		if (self->input_pos >= self->input->len)
+			start--;
+
+		gunichar tmp = g_array_index (self->input, gunichar, start);
+		g_array_index (self->input, gunichar, start)
+			= g_array_index (self->input, gunichar, start + 1);
+		g_array_index (self->input, gunichar, start + 1) = tmp;
+
+		if (self->input_pos < self->input->len)
+			self->input_pos++;
+
+		app_search_for_entry (self);
+		app_redraw_top (self);
+		return TRUE;
+	}
 	}
 
 	wchar_t code = event->code;
