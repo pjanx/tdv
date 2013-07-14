@@ -22,10 +22,12 @@ include (CheckFunctionExists)
 CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
 
 # Dependecies
+find_package (ZLIB REQUIRED)
+
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)
 
-include_directories (${dependencies_INCLUDE_DIRS})
+include_directories (${ZLIB_INCLUDE_DIRS} ${dependencies_INCLUDE_DIRS})
 
 # Localization
 find_package (Gettext REQUIRED)
@@ -61,16 +63,20 @@ add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES_OUTPUT})
 
 # Project source files
 set (project_common_sources
+	src/dictzip-input-stream.c
 	src/generator.c
-	src/stardict.c)
+	src/stardict.c
+	src/utils.c)
 set (project_common_headers
 	${CMAKE_CURRENT_BINARY_DIR}/config.h
+	src/dictzip-input-stream.h
 	src/stardict.h
 	src/stardict-private.h
-	src/generator.h)
+	src/generator.h
+	src/utils.h)
 
 # Project libraries
-set (project_common_libraries ${dependencies_LIBRARIES})
+set (project_common_libraries ${ZLIB_LIBRARIES} ${dependencies_LIBRARIES})
 
 # Create a common project library so that source files are only compiled once
 if (${CMAKE_VERSION} VERSION_GREATER "2.8.7")

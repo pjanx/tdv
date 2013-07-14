@@ -29,47 +29,10 @@
 
 #include "stardict.h"
 #include "stardict-private.h"
+#include "utils.h"
 
 
 // --- Utilities ---------------------------------------------------------------
-
-/** Read the whole stream into a byte array. */
-static gboolean
-stream_read_all (GByteArray *ba, GInputStream *is, GError **error)
-{
-	guint8 buffer[1024 * 64];
-	gsize bytes_read;
-
-	while (g_input_stream_read_all (is, buffer, sizeof buffer,
-		&bytes_read, NULL, error))
-	{
-		g_byte_array_append (ba, buffer, bytes_read);
-		if (bytes_read < sizeof buffer)
-			return TRUE;
-	}
-	return FALSE;
-}
-
-/** Read a null-terminated string from a data input stream. */
-static gchar *
-stream_read_string (GDataInputStream *dis, GError **error)
-{
-	gsize length;
-	gchar *s = g_data_input_stream_read_upto (dis, "", 1, &length, NULL, error);
-	if (!s)
-		return NULL;
-
-	GError *err = NULL;
-	g_data_input_stream_read_byte (dis, NULL, &err);
-	if (err)
-	{
-		g_free (s);
-		g_propagate_error (error, err);
-		return NULL;
-	}
-
-	return s;
-}
 
 /** String compare function used for StarDict indexes. */
 static inline gint
@@ -78,23 +41,6 @@ stardict_strcmp (const gchar *s1, const gchar *s2)
 	gint a = g_ascii_strcasecmp (s1, s2);
 	return a ? a : strcmp (s1, s2);
 }
-
-/** After this statement, the element has been found and its index is stored
- *  in the variable "imid". */
-#define BINARY_SEARCH_BEGIN(max, compare)                                     \
-	gint imin = 0, imax = max, imid;                                          \
-	while (imin <= imax) {                                                    \
-		imid = imin + (imax - imin) / 2;                                      \
-		gint cmp = compare;                                                   \
-		if      (cmp > 0) imin = imid + 1;                                    \
-		else if (cmp < 0) imax = imid - 1;                                    \
-		else {
-
-/** After this statement, the binary search has failed and "imin" stores
- *  the position where the element can be inserted. */
-#define BINARY_SEARCH_END                                                     \
-		}                                                                     \
-	}
 
 // --- Errors ------------------------------------------------------------------
 
