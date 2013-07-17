@@ -378,7 +378,9 @@ stardict_dict_finalize (GObject *self)
 {
 	StardictDictPrivate *priv = STARDICT_DICT (self)->priv;
 
-	stardict_info_free (priv->info);
+	if (priv->info)
+		stardict_info_free (priv->info);
+
 	g_array_free (priv->index, TRUE);
 	g_array_free (priv->synonyms, TRUE);
 
@@ -705,8 +707,8 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 	return sd;
 
 error:
-	g_array_free (priv->index, TRUE);
 	g_free (base);
+	priv->info = NULL;
 	g_object_unref (sd);
 	return NULL;
 }
