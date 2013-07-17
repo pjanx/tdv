@@ -351,21 +351,31 @@ stardict_list_dictionaries (const gchar *path)
 
 // --- StardictDict ------------------------------------------------------------
 
+struct stardict_dict_private
+{
+	StardictInfo  * info;               //!< General information about the dict
+	GArray        * index;              //!< Word index
+	GArray        * synonyms;           //!< Synonyms
+	gpointer        dict;               //!< Dictionary data
+	gsize           dict_length;        //!< Length of the dict data in bytes
+	GMappedFile   * mapped_dict;        //!< Memory map handle
+};
+
 G_DEFINE_TYPE (StardictDict, stardict_dict, G_TYPE_OBJECT)
 
 static void
 stardict_dict_finalize (GObject *self)
 {
-	StardictDict *sd = STARDICT_DICT (self);
+	StardictDictPrivate *priv = STARDICT_DICT (self)->priv;
 
-	stardict_info_free (sd->info);
-	g_array_free (sd->index, TRUE);
-	g_array_free (sd->synonyms, TRUE);
+	stardict_info_free (priv->info);
+	g_array_free (priv->index, TRUE);
+	g_array_free (priv->synonyms, TRUE);
 
-	if (sd->mapped_dict)
-		g_mapped_file_unref (sd->mapped_dict);
+	if (priv->mapped_dict)
+		g_mapped_file_unref (priv->mapped_dict);
 	else
-		g_free (sd->dict);
+		g_free (priv->dict);
 
 	G_OBJECT_CLASS (stardict_dict_parent_class)->finalize (self);
 }
@@ -373,12 +383,15 @@ stardict_dict_finalize (GObject *self)
 static void
 stardict_dict_class_init (StardictDictClass *klass)
 {
+	g_type_class_add_private (klass, sizeof (StardictDictPrivate));
 	G_OBJECT_CLASS (klass)->finalize = stardict_dict_finalize;
 }
 
 static void
-stardict_dict_init (G_GNUC_UNUSED StardictDict *sd)
+stardict_dict_init (StardictDict *self)
 {
+	self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+		STARDICT_TYPE_DICT, StardictDictPrivate);
 }
 
 /** Load a StarDict dictionary.
@@ -404,13 +417,14 @@ StardictInfo *
 stardict_dict_get_info (StardictDict *sd)
 {
 	g_return_val_if_fail (STARDICT_IS_DICT (sd), NULL);
-	return sd->info;
+	return sd->priv->info;
 }
 
 /** Load a StarDict index from a GIO input stream. */
 static gboolean
 load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 {
+	StardictDictPrivate *priv = sd->priv;
 	GDataInputStream *dis = g_data_input_stream_new (G_INPUT_STREAM (is));
 	g_data_input_stream_set_byte_order (dis,
 		G_DATA_STREAM_BYTE_ORDER_BIG_ENDIAN);
@@ -420,7 +434,7 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 	// Ignoring "wordcount", just reading as long as we can
 	while ((entry.name = stream_read_string (dis, &err)))
 	{
-		if (sd->info->idx_offset_bits == 32)
+		if (priv->info->idx_offset_bits == 32)
 			entry.data_offset
 				= g_data_input_stream_read_uint32 (dis, NULL, &err);
 		else
@@ -433,7 +447,7 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 		if (err)
 			goto error;
 
-		g_array_append_val (sd->index, entry);
+		g_array_append_val (priv->index, entry);
 	}
 
 	if (err != NULL)
@@ -505,7 +519,7 @@ load_syn (StardictDict *sd, const gchar *filename, GError **error)
 		if (err)
 			break;
 
-		g_array_append_val (sd->synonyms, entry);
+		g_array_append_val (sd->priv->synonyms, entry);
 	}
 
 	if (err != NULL)
@@ -544,6 +558,8 @@ static gboolean
 load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 	GError **error)
 {
+	StardictDictPrivate *priv = sd->priv;
+
 	if (gzipped)
 	{
 		gboolean ret_val = FALSE;
@@ -567,8 +583,8 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 
 		if (ret_val)
 		{
-			sd->dict_length = ba->len;
-			sd->dict = g_byte_array_free (ba, FALSE);
+			priv->dict_length = ba->len;
+			priv->dict = g_byte_array_free (ba, FALSE);
 		}
 		else
 			g_byte_array_free (ba, TRUE);
@@ -579,12 +595,12 @@ cannot_open:
 		return ret_val;
 	}
 
-	sd->mapped_dict = g_mapped_file_new (filename, FALSE, error);
-	if (!sd->mapped_dict)
+	priv->mapped_dict = g_mapped_file_new (filename, FALSE, error);
+	if (!priv->mapped_dict)
 		return FALSE;
 
-	sd->dict_length = g_mapped_file_get_length (sd->mapped_dict);
-	sd->dict = g_mapped_file_get_contents (sd->mapped_dict);
+	priv->dict_length = g_mapped_file_get_length (priv->mapped_dict);
+	priv->dict = g_mapped_file_get_contents (priv->mapped_dict);
 	return TRUE;
 }
 
@@ -597,11 +613,12 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 	g_return_val_if_fail (sdi != NULL, NULL);
 
 	StardictDict *sd = g_object_new (STARDICT_TYPE_DICT, NULL);
-	sd->info = sdi;
-	sd->index = g_array_new (FALSE, FALSE, sizeof (StardictIndexEntry));
-	g_array_set_clear_func (sd->index, index_destroy_cb);
-	sd->synonyms = g_array_new (FALSE, FALSE, sizeof (StardictSynonymEntry));
-	g_array_set_clear_func (sd->synonyms, syn_destroy_cb);
+	StardictDictPrivate *priv = sd->priv;
+	priv->info = sdi;
+	priv->index = g_array_new (FALSE, FALSE, sizeof (StardictIndexEntry));
+	g_array_set_clear_func (priv->index, index_destroy_cb);
+	priv->synonyms = g_array_new (FALSE, FALSE, sizeof (StardictSynonymEntry));
+	g_array_set_clear_func (priv->synonyms, syn_destroy_cb);
 
 	const gchar *dot = strrchr (sdi->path, '.');
 	gchar *base = dot ? g_strndup (sdi->path, dot - sdi->path)
@@ -662,7 +679,7 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 	return sd;
 
 error:
-	g_array_free (sd->index, TRUE);
+	g_array_free (priv->index, TRUE);
 	g_free (base);
 	g_object_unref (sd);
 	return NULL;
@@ -674,22 +691,25 @@ error:
 gchar **
 stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 {
-	BINARY_SEARCH_BEGIN (sd->synonyms->len - 1, g_ascii_strcasecmp (word,
-			g_array_index (sd->synonyms, StardictSynonymEntry, imid).word))
+	GArray *synonyms = sd->priv->synonyms;
+	GArray *index = sd->priv->index;
+
+	BINARY_SEARCH_BEGIN (synonyms->len - 1, g_ascii_strcasecmp (word,
+			g_array_index (synonyms, StardictSynonymEntry, imid).word))
 
 	// Back off to the first matching entry
 	while (imid > 0 && !g_ascii_strcasecmp (word,
-		g_array_index (sd->synonyms, StardictSynonymEntry, --imid).word));
+		g_array_index (synonyms, StardictSynonymEntry, --imid).word));
 
 	GPtrArray *array = g_ptr_array_new ();
 
 	// And add all matching entries from that position on to the array
 	do
 		g_ptr_array_add (array, g_strdup (g_array_index
-			(sd->index, StardictIndexEntry, g_array_index
-			(sd->synonyms, StardictSynonymEntry, ++imid).original_word).name));
-	while ((guint) imid < sd->synonyms->len - 1 && !stardict_strcmp (word,
-		g_array_index (sd->synonyms, StardictSynonymEntry, imid + 1).word));
+			(index, StardictIndexEntry, g_array_index
+			(synonyms, StardictSynonymEntry, ++imid).original_word).name));
+	while ((guint) imid < synonyms->len - 1 && !stardict_strcmp (word,
+		g_array_index (synonyms, StardictSynonymEntry, imid + 1).word));
 
 	return (gchar **) g_ptr_array_free (array, FALSE);
 
@@ -706,12 +726,14 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 StardictIterator *
 stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 {
-	BINARY_SEARCH_BEGIN (sd->index->len - 1, g_ascii_strcasecmp (word,
-		g_array_index (sd->index, StardictIndexEntry, imid).name))
+	GArray *index = sd->priv->index;
+
+	BINARY_SEARCH_BEGIN (index->len - 1, g_ascii_strcasecmp (word,
+		g_array_index (index, StardictIndexEntry, imid).name))
 
 	// Back off to the first matching entry
 	while (imid > 0 && !g_ascii_strcasecmp (word,
-		g_array_index (sd->index, StardictIndexEntry, imid - 1).name))
+		g_array_index (index, StardictIndexEntry, imid - 1).name))
 		imid--;
 
 	if (success) *success = TRUE;
@@ -838,19 +860,21 @@ error:
 static StardictEntry *
 stardict_dict_get_entry (StardictDict *sd, guint32 offset)
 {
+	StardictDictPrivate *priv = sd->priv;
+
 	// TODO cache the entries
-	StardictIndexEntry *sie = &g_array_index (sd->index,
+	StardictIndexEntry *sie = &g_array_index (priv->index,
 		StardictIndexEntry, offset);
 
 	g_return_val_if_fail (sie->data_offset + sie->data_size
-		<= sd->dict_length, NULL);
+		<= priv->dict_length, NULL);
 
 	GList *entries;
-	if (sd->info->same_type_sequence)
-		entries = read_entries_sts (sd->dict + sie->data_offset,
-			sie->data_size, sd->info->same_type_sequence, NULL);
+	if (priv->info->same_type_sequence)
+		entries = read_entries_sts (priv->dict + sie->data_offset,
+			sie->data_size, priv->info->same_type_sequence, NULL);
 	else
-		entries = read_entries (sd->dict + sie->data_offset,
+		entries = read_entries (priv->dict + sie->data_offset,
 			sie->data_size, NULL);
 
 	if (!entries)
@@ -940,7 +964,7 @@ stardict_iterator_get_word (StardictIterator *sdi)
 	g_return_val_if_fail (STARDICT_IS_ITERATOR (sdi), NULL);
 	if (!stardict_iterator_is_valid (sdi))
 		return NULL;
-	return g_array_index (sdi->owner->index,
+	return g_array_index (sdi->owner->priv->index,
 		StardictIndexEntry, sdi->offset).name;
 }
 
@@ -959,7 +983,7 @@ gboolean
 stardict_iterator_is_valid (StardictIterator *sdi)
 {
 	g_return_val_if_fail (STARDICT_IS_ITERATOR (sdi), FALSE);
-	return sdi->offset >= 0 && sdi->offset < sdi->owner->index->len;
+	return sdi->offset >= 0 && sdi->offset < sdi->owner->priv->index->len;
 }
 
 /** Return the offset of the iterator within the dictionary index. */

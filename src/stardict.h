@@ -28,6 +28,7 @@
 /** An object intended for interacting with a dictionary. */
 typedef struct stardict_dict            StardictDict;
 typedef struct stardict_dict_class      StardictDictClass;
+typedef struct stardict_dict_private    StardictDictPrivate;
 
 /** Overall information about a particular dictionary. */
 typedef struct stardict_info            StardictInfo;
@@ -120,18 +121,13 @@ GList *stardict_list_dictionaries (const gchar *path);
 
 struct stardict_dict
 {
-	GObject         parent_instance;
-	StardictInfo  * info;               //!< General information about the dict
-	GArray        * index;              //!< Word index
-	GArray        * synonyms;           //!< Synonyms
-	gpointer        dict;               //!< Dictionary data
-	gsize           dict_length;        //!< Length of the dict data in bytes
-	GMappedFile   * mapped_dict;        //!< Memory map handle
+	GObject                parent_instance;
+	StardictDictPrivate  * priv;
 };
 
 struct stardict_dict_class
 {
-	GObjectClass    parent_class;
+	GObjectClass           parent_class;
 };
 
 GType stardict_dict_get_type (void);
