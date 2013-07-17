@@ -29,6 +29,7 @@
 
 #include "stardict.h"
 #include "stardict-private.h"
+#include "dictzip-input-stream.h"
 #include "utils.h"
 
 
@@ -356,9 +357,18 @@ struct stardict_dict_private
 	StardictInfo  * info;               //!< General information about the dict
 	GArray        * index;              //!< Word index
 	GArray        * synonyms;           //!< Synonyms
+
+	/* There are currently three ways the dictionary data can be read:
+	 * through mmap(), from a seekable GInputStream, or from a preallocated
+	 * chunk of memory that the whole dictionary has been decompressed into.
+	 *
+	 * It wouldn't be unreasonable to drop the support for regular gzip files.
+	 */
+
+	GInputStream  * dict_stream;        //!< Dictionary input stream handle
+	GMappedFile   * mapped_dict;        //!< Dictionary memory map handle
 	gpointer        dict;               //!< Dictionary data
 	gsize           dict_length;        //!< Length of the dict data in bytes
-	GMappedFile   * mapped_dict;        //!< Memory map handle
 };
 
 G_DEFINE_TYPE (StardictDict, stardict_dict, G_TYPE_OBJECT)
@@ -374,6 +384,8 @@ stardict_dict_finalize (GObject *self)
 
 	if (priv->mapped_dict)
 		g_mapped_file_unref (priv->mapped_dict);
+	else if (priv->dict_stream)
+		g_object_unref (priv->dict_stream);
 	else
 		g_free (priv->dict);
 
@@ -569,7 +581,20 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 		if (!fis)
 			goto cannot_open;
 
-		// Just read it all, as it is, into memory
+		// Try opening it as a dictzip file first
+		DictzipInputStream *dzis =
+			dictzip_input_stream_new (G_INPUT_STREAM (fis), NULL);
+		if (dzis)
+		{
+			priv->dict_stream = G_INPUT_STREAM (dzis);
+			ret_val = TRUE;
+			goto done;
+		}
+
+		// If unsuccessful, just read it all, as it is, into memory
+		if (!g_seekable_seek (G_SEEKABLE (fis), 0, G_SEEK_SET, NULL, error))
+			goto done;
+
 		GByteArray *ba = g_byte_array_new ();
 		GZlibDecompressor *zd
 			= g_zlib_decompressor_new (G_ZLIB_COMPRESSOR_FORMAT_GZIP);
@@ -589,6 +614,7 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 		else
 			g_byte_array_free (ba, TRUE);
 
+done:
 		g_object_unref (fis);
 cannot_open:
 		g_object_unref (file);
@@ -856,27 +882,84 @@ error:
 	return NULL;
 }
 
+/** Read entry data from GInputStream. */
+static gchar *
+read_entry_data_from_stream
+	(GInputStream *stream, guint32 offset, StardictIndexEntry *sie)
+{
+	GError *error = NULL;
+	if (!g_seekable_seek (G_SEEKABLE (stream), sie->data_offset,
+		G_SEEK_SET, NULL, &error))
+	{
+		g_debug ("problem seeking to entry #%"
+			G_GUINT32_FORMAT ": %s", offset, error->message);
+		g_error_free (error);
+		return NULL;
+	}
+
+	gchar *data = g_malloc (sie->data_size);
+	gssize read = g_input_stream_read (stream,
+		data, sie->data_size, NULL, &error);
+	if (read < sie->data_size)
+	{
+		if (error)
+		{
+			g_debug ("problem reading entry #%"
+				G_GUINT32_FORMAT ": %s", offset, error->message);
+			g_error_free (error);
+		}
+		else
+			g_debug ("probably overflowing entry #%"
+				G_GUINT32_FORMAT, offset);
+
+		g_free (data);
+		return NULL;
+	}
+	return data;
+}
+
 /** Return the data for the specified offset in the index.  Unsafe. */
 static StardictEntry *
 stardict_dict_get_entry (StardictDict *sd, guint32 offset)
 {
+	// TODO maybe cache the entries, maybe don't hide the errors (also above)
 	StardictDictPrivate *priv = sd->priv;
-
-	// TODO cache the entries
 	StardictIndexEntry *sie = &g_array_index (priv->index,
 		StardictIndexEntry, offset);
+	GError *error = NULL;
 
-	g_return_val_if_fail (sie->data_offset + sie->data_size
-		<= priv->dict_length, NULL);
+	gchar *data;
+	if (priv->dict_stream)
+	{
+		data = read_entry_data_from_stream (priv->dict_stream, offset, sie);
+		if (!data)
+			return NULL;
+	}
+	else
+	{
+		if (sie->data_offset + sie->data_size > priv->dict_length)
+		{
+			g_debug ("overflowing entry #%" G_GUINT32_FORMAT, offset);
+			return NULL;
+		}
+		data = priv->dict + sie->data_offset;
+	}
 
 	GList *entries;
 	if (priv->info->same_type_sequence)
-		entries = read_entries_sts (priv->dict + sie->data_offset,
-			sie->data_size, priv->info->same_type_sequence, NULL);
+		entries = read_entries_sts (data, sie->data_size,
+			priv->info->same_type_sequence, &error);
 	else
-		entries = read_entries (priv->dict + sie->data_offset,
-			sie->data_size, NULL);
+		entries = read_entries (data, sie->data_size, &error);
 
+	if (error)
+	{
+		g_debug ("problem processing entry #%"
+			G_GUINT32_FORMAT ": %s", offset, error->message);
+		g_error_free (error);
+	}
+	if (priv->dict_stream)
+		g_free (data);
 	if (!entries)
 		return NULL;
 
