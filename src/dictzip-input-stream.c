@@ -335,7 +335,9 @@ static void
 dictzip_input_stream_finalize (GObject *gobject)
 {
 	DictzipInputStreamPrivate *priv = DICTZIP_INPUT_STREAM (gobject)->priv;
-	g_object_unref (priv->file_info);
+
+	if (priv->file_info)
+		g_object_unref (priv->file_info);
 	g_free (priv->chunks);
 	g_free (priv->input_buffer);
 	inflateEnd (&priv->zs);
