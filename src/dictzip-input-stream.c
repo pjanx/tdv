@@ -229,7 +229,7 @@ read_random_access_field (const gz_header *gzh,
 		}
 
 		*chunk_length = f[6] | (f[7] << 8);
-		if (chunk_length == 0)
+		if (*chunk_length == 0)
 		{
 			g_set_error (error, DICTZIP_ERROR, DICTZIP_ERROR_INVALID_HEADER,
 				"invalid RA chunk length");
