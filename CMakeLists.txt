@@ -110,9 +110,15 @@ add_executable (${CMAKE_PROJECT_NAME}
 target_link_libraries (${CMAKE_PROJECT_NAME} ${project_common_libraries})
 
 # Tools
-add_executable (add-pronunciation
+add_executable (query-tool EXCLUDE_FROM_ALL
+	src/query-tool.c ${project_common_sources})
+target_link_libraries (query-tool ${project_common_libraries})
+
+add_executable (add-pronunciation EXCLUDE_FROM_ALL
 	src/add-pronunciation.c ${project_common_sources})
 target_link_libraries (add-pronunciation ${project_common_libraries})
+
+add_custom_target (tools DEPENDS add-pronunciation query-tool)
 
 # The files to be installed
 include (GNUInstallDirs)
