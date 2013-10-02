@@ -585,6 +585,12 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 		if (!fis)
 			goto cannot_open;
 
+	// As a simple workaround for GLib < 2.33.1 and the lack of support for
+	// the GSeekable interface in GDataInputStream, disable dictzip.
+	//
+	// http://lists.gnu.org/archive/html/qemu-devel/2013-06/msg04690.html
+	if (!glib_check_version (2, 33, 1))
+	{
 		// Try opening it as a dictzip file first
 		DictzipInputStream *dzis =
 			dictzip_input_stream_new (G_INPUT_STREAM (fis), NULL);
@@ -598,6 +604,7 @@ load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 		// If unsuccessful, just read it all, as it is, into memory
 		if (!g_seekable_seek (G_SEEKABLE (fis), 0, G_SEEK_SET, NULL, error))
 			goto done;
+	}
 
 		GByteArray *ba = g_byte_array_new ();
 		GZlibDecompressor *zd
