@@ -426,7 +426,9 @@ stardict_dict_new (const gchar *filename, GError **error)
 	return sd;
 }
 
-/** Return information about a loaded dictionary. */
+/** Return information about a loaded dictionary.  The returned reference is
+ *  only valid for the lifetime of the dictionary object.
+ */
 StardictInfo *
 stardict_dict_get_info (StardictDict *sd)
 {
@@ -633,7 +635,7 @@ cannot_open:
 }
 
 /** Load a StarDict dictionary.
- *  @param[in] sdi  Parsed .ifo data.
+ *  @param[in] sdi  Parsed .ifo data.  The dictionary assumes ownership.
  */
 StardictDict *
 stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
@@ -746,7 +748,7 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 	return NULL;
 }
 
-/** Search for a word.
+/** Search for a word.  The search is ASCII-case-insensitive.
  *  @param[in] word  The word in utf-8 encoding
  *  @param[out] success  TRUE if found
  *  @return An iterator object pointing to the word, or where it would be
