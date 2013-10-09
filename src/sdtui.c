@@ -357,10 +357,12 @@ app_destroy (Application *self)
 
 /** Write the given utf-8 string padded with spaces.
  *  @param[in] n  The number of characters to write, or -1 for the whole string.
+ *  @param[in] attrs  Text attributes for the text, without padding.
+ *                    To change the attributes of all output, use attrset().
  *  @return The number of wide characters written.
  */
 static gsize
-app_add_utf8_string (Application *self, const gchar *str, int n)
+app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 {
 	wchar_t *wide_str = (wchar_t *) g_convert_with_iconv
 		(str, -1, self->utf8_to_wchar, NULL, NULL, NULL);
@@ -420,7 +422,7 @@ app_add_utf8_string (Application *self, const gchar *str, int n)
 	cchar_t cch;
 	for (i = 0; i < len; i++)
 	{
-		if (setcchar (&cch, &wide_str[i], A_NORMAL, 0, NULL) == OK)
+		if (setcchar (&cch, &wide_str[i], attrs, 0, NULL) == OK)
 			add_wch (&cch);
 		else
 			// This shouldn't happen
@@ -441,15 +443,16 @@ app_redraw_top (Application *self)
 {
 	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
 	attrset (A_UNDERLINE);
-	gsize indent = app_add_utf8_string (self, self->search_label, -1);
+	gsize indent = app_add_utf8_string (self, self->search_label, 0, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
 	g_return_if_fail (input_utf8 != NULL);
 
+	int word_attrs = 0;
 	if (self->input_confirmed)
-		attron (A_BOLD);
-	app_add_utf8_string (self, input_utf8, COLS - indent);
+		word_attrs |= A_BOLD;
+	app_add_utf8_string (self, input_utf8, word_attrs, COLS - indent);
 	g_free (input_utf8);
 
 	guint offset, i;
@@ -497,7 +500,7 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 			x = 0;
 
 		move (1 + i, x);
-		app_add_utf8_string (self, *lines, COLS - x);
+		app_add_utf8_string (self, *lines, 0, COLS - x);
 
 		lines++;
 		i++;
@@ -547,10 +550,10 @@ app_redraw_view (Application *self)
 			attrset (attrs);
 
 			guint left_width = app_get_left_column_width (self);
-			app_add_utf8_string (self, ve->word, left_width);
+			app_add_utf8_string (self, ve->word, 0, left_width);
 			addwstr (L" ");
 			app_add_utf8_string (self,
-				ve->definitions[k], COLS - left_width - 1);
+				ve->definitions[k], 0, COLS - left_width - 1);
 
 			if ((gint) ++shown == LINES - 1)
 				goto done;
