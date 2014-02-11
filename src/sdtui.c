@@ -45,17 +45,18 @@
 
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
-#define KEY_SOH     CTRL_KEY ('A')     //!< Ctrl-A
-#define KEY_STX     CTRL_KEY ('B')     //!< Ctrl-B
-#define KEY_ENQ     CTRL_KEY ('E')     //!< Ctrl-E
-#define KEY_ACK     CTRL_KEY ('F')     //!< Ctrl-F
-#define KEY_VT      CTRL_KEY ('K')     //!< Ctrl-K
-#define KEY_FF      CTRL_KEY ('L')     //!< Ctrl-L
-#define KEY_SO      CTRL_KEY ('N')     //!< Ctrl-N
-#define KEY_DLE     CTRL_KEY ('P')     //!< Ctrl-P
-#define KEY_DC4     CTRL_KEY ('T')     //!< Ctrl-T
-#define KEY_NAK     CTRL_KEY ('U')     //!< Ctrl-U
-#define KEY_ETB     CTRL_KEY ('W')     //!< Ctrl-W
+#define KEY_CTRL_A  CTRL_KEY ('A')     //!< Ctrl-A (SOH)
+#define KEY_CTRL_B  CTRL_KEY ('B')     //!< Ctrl-B (STX)
+#define KEY_CTRL_E  CTRL_KEY ('E')     //!< Ctrl-E (ENQ)
+#define KEY_CTRL_F  CTRL_KEY ('F')     //!< Ctrl-F (ACK)
+#define KEY_CTRL_H  CTRL_KEY ('H')     //!< Ctrl-H (BS)
+#define KEY_CTRL_K  CTRL_KEY ('K')     //!< Ctrl-K (VT)
+#define KEY_CTRL_L  CTRL_KEY ('L')     //!< Ctrl-L (FF)
+#define KEY_CTRL_N  CTRL_KEY ('N')     //!< Ctrl-N (SO)
+#define KEY_CTRL_P  CTRL_KEY ('P')     //!< Ctrl-P (DLE)
+#define KEY_CTRL_T  CTRL_KEY ('T')     //!< Ctrl-T (DC4)
+#define KEY_CTRL_U  CTRL_KEY ('U')     //!< Ctrl-U (NAK)
+#define KEY_CTRL_W  CTRL_KEY ('W')     //!< Ctrl-W (ETB)
 
 #define KEY_RETURN  13                 //!< Enter
 #define KEY_ESCAPE  27                 //!< Esc
@@ -824,7 +825,7 @@ app_process_extra_code (Application *self, CursesEvent *event)
 	return TRUE;
 }
 
-/** Process input that's not a character. */
+/** Process input that's not a character or is a control code. */
 static gboolean
 app_process_nonchar_code (Application *self, CursesEvent *event)
 {
@@ -872,7 +873,20 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		break;
 
+	case KEY_ESCAPE:
+		return FALSE;
+	case KEY_RETURN:
+		self->input_confirmed = TRUE;
+		app_redraw_top (self);
+		break;
+
+	case KEY_CTRL_L:  // redraw everything
+		clear ();
+		app_redraw (self);
+		break;
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	case KEY_UP:
+	case KEY_CTRL_P:  // previous
 		if (self->selected > 0)
 		{
 			self->selected--;
@@ -883,6 +897,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		RESTORE_CURSOR
 		break;
 	case KEY_DOWN:
+	case KEY_CTRL_N:  // next
 		if ((gint) self->selected < LINES - 2 &&
 			self->selected < app_count_view_items (self) - self->top_offset - 1)
 		{
@@ -894,21 +909,25 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		RESTORE_CURSOR
 		break;
 	case KEY_PPAGE:
+	case KEY_CTRL_B:  // back
 		app_scroll_up (self, LINES - 1);
 		// FIXME selection
 		RESTORE_CURSOR
 		break;
 	case KEY_NPAGE:
+	case KEY_CTRL_F:  // forward
 		app_scroll_down (self, LINES - 1);
 		// FIXME selection
 		RESTORE_CURSOR
 		break;
-
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	case KEY_HOME:
+	case KEY_CTRL_A:
 		self->input_pos = 0;
 		app_redraw_top (self);
 		break;
 	case KEY_END:
+	case KEY_CTRL_E:
 		self->input_pos = self->input->len;
 		app_redraw_top (self);
 		break;
@@ -927,6 +946,7 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		}
 		break;
 	case KEY_BACKSPACE:
+	case KEY_CTRL_H:
 		if (self->input_pos > 0)
 		{
 			g_array_remove_index (self->input, --self->input_pos);
@@ -942,50 +962,8 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 			app_redraw_top (self);
 		}
 		break;
-
-	default:
-		return app_process_extra_code (self, event);
-	}
-	return TRUE;
-}
-
-/** Process input events from ncurses. */
-static gboolean
-app_process_curses_event (Application *self, CursesEvent *event)
-{
-	if (!event->is_char)
-		return app_process_nonchar_code (self, event);
-
-	switch (event->code)
-	{
-	case KEY_ESCAPE:
-		return FALSE;
-	case KEY_RETURN:
-		self->input_confirmed = TRUE;
-		app_redraw_top (self);
-		break;
-
-	case KEY_FF:  // Ctrl-L -- redraw everything
-		clear ();
-		app_redraw (self);
-		break;
-
-	case KEY_STX: // Ctrl-B -- back
-	case KEY_ACK: // Ctrl-F -- forward
-	case KEY_DLE: // Ctrl-P -- previous
-	case KEY_SO:  // Ctrl-N -- next
-		// TODO map this to something useful
-		break;
-
-	case KEY_SOH: // Ctrl-A -- move to the start of line
-		self->input_pos = 0;
-		app_redraw_top (self);
-		break;
-	case KEY_ENQ: // Ctrl-E -- move to the end of line
-		self->input_pos = self->input->len;
-		app_redraw_top (self);
-		break;
-	case KEY_VT:  // Ctrl-K -- delete until the end of line
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	case KEY_CTRL_K:  // delete until the end of line
 		if (self->input_pos < self->input->len)
 		{
 			g_array_remove_range (self->input,
@@ -994,7 +972,7 @@ app_process_curses_event (Application *self, CursesEvent *event)
 			app_redraw_top (self);
 		}
 		return TRUE;
-	case KEY_ETB: // Ctrl-W -- delete word before cursor
+	case KEY_CTRL_W:  // delete word before cursor
 	{
 		if (self->input_pos == 0)
 			return TRUE;
@@ -1015,7 +993,7 @@ app_process_curses_event (Application *self, CursesEvent *event)
 		app_redraw_top (self);
 		return TRUE;
 	}
-	case KEY_NAK: // Ctrl-U -- delete everything before the cursor
+	case KEY_CTRL_U:  // delete everything before the cursor
 		if (self->input->len != 0)
 		{
 			g_array_remove_range (self->input, 0, self->input_pos);
@@ -1025,7 +1003,7 @@ app_process_curses_event (Application *self, CursesEvent *event)
 			app_redraw_top (self);
 		}
 		return TRUE;
-	case KEY_DC4: // Ctrl-T -- transposition
+	case KEY_CTRL_T:  // transposition
 	{
 		if (!self->input_pos || self->input->len < 2)
 			break;
@@ -1046,7 +1024,20 @@ app_process_curses_event (Application *self, CursesEvent *event)
 		app_redraw_top (self);
 		return TRUE;
 	}
+
+	default:
+		return app_process_extra_code (self, event);
 	}
+	return TRUE;
+}
+
+/** Process input events from ncurses. */
+static gboolean
+app_process_curses_event (Application *self, CursesEvent *event)
+{
+	// Characters below the space are ASCII control codes
+	if (!event->is_char || event->code < L' ')
+		return app_process_nonchar_code (self, event);
 
 	wchar_t code = event->code;
 	gchar *letter = g_convert_with_iconv ((gchar *) &code, sizeof code,
