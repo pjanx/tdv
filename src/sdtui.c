@@ -31,7 +31,6 @@
 #include <glib.h>
 #include <gio/gio.h>
 #include <pango/pango.h>
-#include <ncurses.h>
 #include <glib/gi18n.h>
 
 #include <unistd.h>
@@ -39,69 +38,15 @@
 #include <errno.h>
 #include <signal.h>
 
+#include <termo.h> // input
+#include <ncurses.h> // output
+
 #include "config.h"
 #include "stardict.h"
 
-
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
-#define KEY_CTRL_A  CTRL_KEY ('A')     //!< Ctrl-A (SOH)
-#define KEY_CTRL_B  CTRL_KEY ('B')     //!< Ctrl-B (STX)
-#define KEY_CTRL_E  CTRL_KEY ('E')     //!< Ctrl-E (ENQ)
-#define KEY_CTRL_F  CTRL_KEY ('F')     //!< Ctrl-F (ACK)
-#define KEY_CTRL_H  CTRL_KEY ('H')     //!< Ctrl-H (BS)
-#define KEY_CTRL_K  CTRL_KEY ('K')     //!< Ctrl-K (VT)
-#define KEY_CTRL_L  CTRL_KEY ('L')     //!< Ctrl-L (FF)
-#define KEY_CTRL_N  CTRL_KEY ('N')     //!< Ctrl-N (SO)
-#define KEY_CTRL_P  CTRL_KEY ('P')     //!< Ctrl-P (DLE)
-#define KEY_CTRL_T  CTRL_KEY ('T')     //!< Ctrl-T (DC4)
-#define KEY_CTRL_U  CTRL_KEY ('U')     //!< Ctrl-U (NAK)
-#define KEY_CTRL_W  CTRL_KEY ('W')     //!< Ctrl-W (ETB)
-
-#define KEY_RETURN  13                 //!< Enter
-#define KEY_ESCAPE  27                 //!< Esc
-
-typedef enum {
-	TERMINAL_UNKNOWN,                  //!< No extra handling
-	TERMINAL_XTERM,                    //!< xterm and VTE extra keycodes
-	TERMINAL_RXVT                      //!< rxvt extra keycodes
-} TerminalType;                        //!< Type of the terminal
-
-typedef enum {
-	KEY_NOT_RECOGNISED,                //!< Not recognised
-
-	KEY_CTRL_UP,                       //!< Ctrl + Up arrow
-	KEY_CTRL_DOWN,                     //!< Ctrl + Down arrow
-	KEY_CTRL_LEFT,                     //!< Ctrl + Left arrow
-	KEY_CTRL_RIGHT,                    //!< Ctrl + Right arrow
-
-	KEY_ALT_UP,                        //!< Alt + Up arrow
-	KEY_ALT_DOWN,                      //!< Alt + Down arrow
-	KEY_ALT_LEFT,                      //!< Alt + Left arrow
-	KEY_ALT_RIGHT                      //!< Alt + Right arrow
-} ExtraKeyCode;                        //!< Translated key codes above KEY_MAX
-
 // --- Utilities ---------------------------------------------------------------
-
-static int
-poll_restart (struct pollfd *fds, nfds_t nfds, int timeout)
-{
-	int ret;
-	do
-		ret = poll (fds, nfds, timeout);
-	while (ret == -1 && errno == EINTR);
-	return ret;
-}
-
-/** Wrapper for curses event data. */
-typedef struct curses_event            CursesEvent;
-
-struct curses_event
-{
-	wint_t  code;
-	guint   is_char : 1;
-	MEVENT  mouse;
-};
 
 static size_t
 unichar_width (gunichar ch)
@@ -122,58 +67,6 @@ is_character_in_locale (wchar_t c)
 	return wcstombs (NULL, s, 0) != (size_t) -1;
 }
 
-/** Translate key codes above KEY_MAX returned from ncurses into something
- *  meaningful, based on the terminal type.  The values have been obtained
- *  experimentally.  Some keycodes make ncurses return KEY_ESCAPE, even
- *  depending on actual terminal settings, thus this is not reliable at all.
- *  xterm/VTE seems to behave nicely, though.
- */
-static guint
-translate_extra_keycode (wchar_t code, TerminalType terminal)
-{
-	switch (terminal)
-	{
-	case TERMINAL_XTERM:
-		switch (code)
-		{
-		case 565: return KEY_CTRL_UP;
-		case 524: return KEY_CTRL_DOWN;
-		case 544: return KEY_CTRL_LEFT;
-		case 559: return KEY_CTRL_RIGHT;
-
-		case 563: return KEY_ALT_UP;
-		case 522: return KEY_ALT_DOWN;
-		case 542: return KEY_ALT_LEFT;
-		case 557: return KEY_ALT_RIGHT;
-		}
-		break;
-	case TERMINAL_RXVT:
-		switch (code)
-		{
-		case 521: return KEY_CTRL_UP;
-		case 514: return KEY_CTRL_DOWN;
-		}
-		break;
-	case TERMINAL_UNKNOWN:
-		break;
-	}
-	return KEY_NOT_RECOGNISED;
-}
-
-/** Get the type of the terminal based on the TERM environment variable. */
-static TerminalType
-get_terminal_type (void)
-{
-	const gchar *term = g_getenv ("TERM");
-	if (!term)  return TERMINAL_UNKNOWN;
-
-	gchar term_copy[strcspn (term, "-") + 1];
-	g_strlcpy (term_copy, term, sizeof term_copy);
-	if (!strcmp (term_copy, "xterm"))  return TERMINAL_XTERM;
-	if (!strcmp (term_copy, "rxvt"))   return TERMINAL_RXVT;
-	return TERMINAL_UNKNOWN;
-}
-
 // --- Application -------------------------------------------------------------
 
 /** Data relating to one entry within the dictionary. */
@@ -190,9 +83,10 @@ struct view_entry
 
 struct application
 {
-	TerminalType    terminal_type;      //!< Type of the terminal
+	GMainLoop     * loop;               //!< Main loop
+	termo_t       * tk;                 //!< termo handle
+	guint           tk_timeout;         //!< termo timeout
 	GIConv          utf8_to_wchar;      //!< utf-8 -> wchar_t conversion
-	GIConv          wchar_to_utf8;      //!< wchar_t -> utf-8 conversion
 
 	StardictDict  * dict;               //!< The current dictionary
 	guint           show_help : 1;      //!< Whether help can be shown
@@ -312,6 +206,10 @@ app_reload_view (Application *self)
 static void
 app_init (Application *self, const gchar *filename)
 {
+	self->loop = g_main_loop_new (NULL, FALSE);
+	self->tk = NULL;
+	self->tk_timeout = 0;
+
 	GError *error = NULL;
 	self->dict = stardict_dict_new (filename, &error);
 	if (!self->dict)
@@ -320,7 +218,6 @@ app_init (Application *self, const gchar *filename)
 		exit (EXIT_FAILURE);
 	}
 
-	self->terminal_type = get_terminal_type ();
 	self->show_help = TRUE;
 
 	self->top_position = 0;
@@ -337,7 +234,6 @@ app_init (Application *self, const gchar *filename)
 
 	self->division = 0.5;
 
-	self->wchar_to_utf8 = g_iconv_open ("utf-8//translit", "wchar_t");
 	self->utf8_to_wchar = g_iconv_open ("wchar_t//translit", "utf-8");
 
 	app_reload_view (self);
@@ -347,12 +243,17 @@ app_init (Application *self, const gchar *filename)
 static void
 app_destroy (Application *self)
 {
+	g_main_loop_unref (self->loop);
+	if (self->tk)
+		termo_destroy (self->tk);
+	if (self->tk_timeout)
+		g_source_remove (self->tk_timeout);
+
 	g_object_unref (self->dict);
 	g_ptr_array_free (self->entries, TRUE);
 	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
 
-	g_iconv_close (self->wchar_to_utf8);
 	g_iconv_close (self->utf8_to_wchar);
 }
 
@@ -519,7 +420,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013, Přemysl Janouch",
+		"Copyright (c) 2013 - 2014, Přemysl Janouch",
 		"",
 		_("Type to search")
 	};
@@ -795,98 +696,126 @@ app_search_for_entry (Application *self)
 	move (last_y, last_x);          \
 	refresh ();
 
-/** Process input above KEY_MAX. */
+/** The terminal has been resized, make appropriate changes. */
 static gboolean
-app_process_extra_code (Application *self, CursesEvent *event)
+app_process_resize (Application *self)
 {
-	SAVE_CURSOR
-	switch (translate_extra_keycode (event->code, self->terminal_type))
-	{
-	case KEY_CTRL_UP:
-		app_one_entry_up (self);
-		RESTORE_CURSOR
-		break;
-	case KEY_CTRL_DOWN:
-		app_one_entry_down (self);
-		RESTORE_CURSOR
-		break;
+	app_reload_view (self);
 
-	case KEY_ALT_LEFT:
-		self->division = (app_get_left_column_width (self) - 1.) / COLS;
+	guint n_visible = app_count_view_items (self) - self->top_offset;
+	if ((gint) n_visible > LINES - 1)
+		n_visible = LINES - 1;
+
+	if (self->selected >= n_visible)
+	{
+		app_scroll_down (self, self->selected - n_visible + 1);
+		self->selected = n_visible - 1;
+	}
+
+	app_redraw (self);
+	return TRUE;
+}
+
+/** Process mouse input. */
+static gboolean
+app_process_mouse (Application *self, termo_key_t *event)
+{
+	int line, column, button;
+	termo_mouse_event_t type;
+	termo_interpret_mouse (self->tk, event, &type, &button, &line, &column);
+
+	if (type != TERMO_MOUSE_PRESS || button != 1)
+		return TRUE;
+
+	SAVE_CURSOR
+	if (line == 0)
+	{
+		gsize label_len = g_utf8_strlen (self->search_label, -1);
+		gint pos = column - label_len;
+		if (pos >= 0)
+		{
+			self->input_pos = MIN ((guint) pos, self->input->len);
+			move (0, label_len + self->input_pos);
+			refresh ();
+		}
+	}
+	else if (line <= (int) (app_count_view_items (self) - self->top_offset))
+	{
+		self->selected = line - 1;
 		app_redraw_view (self);
 		RESTORE_CURSOR
-		break;
-	case KEY_ALT_RIGHT:
-		self->division = (app_get_left_column_width (self) + 1.) / COLS;
-		app_redraw_view (self);
-		RESTORE_CURSOR
-		break;
 	}
 	return TRUE;
 }
 
-/** Process input that's not a character or is a control code. */
+// --- User input handling -----------------------------------------------------
+
+/** All the actions that can be performed by the user. */
+typedef enum user_action                UserAction;
+
+enum user_action
+{
+	USER_ACTION_NONE,
+
+	USER_ACTION_QUIT,
+	USER_ACTION_REDRAW,
+
+	USER_ACTION_MOVE_SPLITTER_LEFT,
+	USER_ACTION_MOVE_SPLITTER_RIGHT,
+
+	USER_ACTION_GOTO_ENTRY_PREVIOUS,
+	USER_ACTION_GOTO_ENTRY_NEXT,
+	USER_ACTION_GOTO_DEFINITION_PREVIOUS,
+	USER_ACTION_GOTO_DEFINITION_NEXT,
+	USER_ACTION_GOTO_PAGE_PREVIOUS,
+	USER_ACTION_GOTO_PAGE_NEXT,
+
+	USER_ACTION_INPUT_CONFIRM,
+	USER_ACTION_INPUT_HOME,
+	USER_ACTION_INPUT_END,
+	USER_ACTION_INPUT_LEFT,
+	USER_ACTION_INPUT_RIGHT,
+	USER_ACTION_INPUT_DELETE_PREVIOUS,
+	USER_ACTION_INPUT_DELETE_NEXT,
+	USER_ACTION_INPUT_DELETE_TO_HOME,
+	USER_ACTION_INPUT_DELETE_TO_END,
+	USER_ACTION_INPUT_DELETE_PREVIOUS_WORD,
+	USER_ACTION_INPUT_TRANSPOSE,
+
+	USER_ACTION_COUNT
+};
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 static gboolean
-app_process_nonchar_code (Application *self, CursesEvent *event)
+app_process_user_action (Application *self, UserAction action)
 {
 	SAVE_CURSOR
-	switch (event->code)
+	switch (action)
 	{
-	case KEY_RESIZE:
-	{
-		app_reload_view (self);
-
-		guint n_visible = app_count_view_items (self) - self->top_offset;
-		if ((gint) n_visible > LINES - 1)
-			n_visible = LINES - 1;
-
-		if (self->selected >= n_visible)
-		{
-			app_scroll_down (self, self->selected - n_visible + 1);
-			self->selected = n_visible - 1;
-		}
-
-		app_redraw (self);
-		break;
-	}
-	case KEY_MOUSE:
-		if (!(event->mouse.bstate & BUTTON1_PRESSED))
-			break;
-
-		if (event->mouse.y == 0)
-		{
-			gsize label_len = g_utf8_strlen (self->search_label, -1);
-			gint pos = event->mouse.x - label_len;
-			if (pos >= 0)
-			{
-				self->input_pos = MIN ((guint) pos, self->input->len);
-				move (0, label_len + self->input_pos);
-				refresh ();
-			}
-		}
-		else if (event->mouse.y <= (int)
-			(app_count_view_items (self) - self->top_offset))
-		{
-			self->selected = event->mouse.y - 1;
-			app_redraw_view (self);
-			RESTORE_CURSOR
-		}
-		break;
-
-	case KEY_ESCAPE:
+	case USER_ACTION_QUIT:
 		return FALSE;
-	case KEY_RETURN:
-		self->input_confirmed = TRUE;
-		app_redraw_top (self);
-		break;
-
-	case KEY_CTRL_L:  // redraw everything
+	case USER_ACTION_REDRAW:
 		clear ();
 		app_redraw (self);
-		break;
+		return TRUE;
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	case KEY_UP:
-	case KEY_CTRL_P:  // previous
+
+	case USER_ACTION_MOVE_SPLITTER_LEFT:
+		self->division = (app_get_left_column_width (self) - 1.) / COLS;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+		return TRUE;
+	case USER_ACTION_MOVE_SPLITTER_RIGHT:
+		self->division = (app_get_left_column_width (self) + 1.) / COLS;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+		return TRUE;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	case USER_ACTION_GOTO_DEFINITION_PREVIOUS:
 		if (self->selected > 0)
 		{
 			self->selected--;
@@ -895,9 +824,8 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		else
 			app_scroll_up (self, 1);
 		RESTORE_CURSOR
-		break;
-	case KEY_DOWN:
-	case KEY_CTRL_N:  // next
+		return TRUE;
+	case USER_ACTION_GOTO_DEFINITION_NEXT:
 		if ((gint) self->selected < LINES - 2 &&
 			self->selected < app_count_view_items (self) - self->top_offset - 1)
 		{
@@ -907,103 +835,61 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		else
 			app_scroll_down (self, 1);
 		RESTORE_CURSOR
-		break;
-	case KEY_PPAGE:
-	case KEY_CTRL_B:  // back
+		return TRUE;
+
+	case USER_ACTION_GOTO_ENTRY_PREVIOUS:
+		app_one_entry_up (self);
+		RESTORE_CURSOR
+		return TRUE;
+	case USER_ACTION_GOTO_ENTRY_NEXT:
+		app_one_entry_down (self);
+		RESTORE_CURSOR
+		return TRUE;
+
+	case USER_ACTION_GOTO_PAGE_PREVIOUS:
 		app_scroll_up (self, LINES - 1);
-		// FIXME selection
+		// FIXME: selection
 		RESTORE_CURSOR
-		break;
-	case KEY_NPAGE:
-	case KEY_CTRL_F:  // forward
+		return TRUE;
+	case USER_ACTION_GOTO_PAGE_NEXT:
 		app_scroll_down (self, LINES - 1);
-		// FIXME selection
+		// FIXME: selection
 		RESTORE_CURSOR
-		break;
+		return TRUE;
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	case KEY_HOME:
-	case KEY_CTRL_A:
+
+	case USER_ACTION_INPUT_HOME:
 		self->input_pos = 0;
 		app_redraw_top (self);
-		break;
-	case KEY_END:
-	case KEY_CTRL_E:
+		return TRUE;
+	case USER_ACTION_INPUT_END:
 		self->input_pos = self->input->len;
 		app_redraw_top (self);
-		break;
-	case KEY_LEFT:
+		return TRUE;
+	case USER_ACTION_INPUT_LEFT:
 		if (self->input_pos > 0)
 		{
 			self->input_pos--;
 			app_redraw_top (self);
 		}
-		break;
-	case KEY_RIGHT:
+		return TRUE;
+	case USER_ACTION_INPUT_RIGHT:
 		if (self->input_pos < self->input->len)
 		{
 			self->input_pos++;
 			app_redraw_top (self);
 		}
-		break;
-	case KEY_BACKSPACE:
-	case KEY_CTRL_H:
-		if (self->input_pos > 0)
-		{
-			g_array_remove_index (self->input, --self->input_pos);
-			app_search_for_entry (self);
-			app_redraw_top (self);
-		}
-		break;
-	case KEY_DC:
-		if (self->input_pos < self->input->len)
-		{
-			g_array_remove_index (self->input, self->input_pos);
-			app_search_for_entry (self);
-			app_redraw_top (self);
-		}
-		break;
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	case KEY_CTRL_K:  // delete until the end of line
-		if (self->input_pos < self->input->len)
-		{
-			g_array_remove_range (self->input,
-				self->input_pos, self->input->len - self->input_pos);
-			app_search_for_entry (self);
-			app_redraw_top (self);
-		}
 		return TRUE;
-	case KEY_CTRL_W:  // delete word before cursor
-	{
-		if (self->input_pos == 0)
-			return TRUE;
 
-		gint i = self->input_pos;
-		while (i)
-			if (g_array_index (self->input, gunichar, --i) != L' ')
-				break;
-		while (i--)
-			if (g_array_index (self->input, gunichar,   i) == L' ')
-				break;
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-		i++;
-		g_array_remove_range (self->input, i, self->input_pos - i);
-		self->input_pos = i;
-
-		app_search_for_entry (self);
+	case USER_ACTION_INPUT_CONFIRM:
+		self->input_confirmed = TRUE;
 		app_redraw_top (self);
 		return TRUE;
-	}
-	case KEY_CTRL_U:  // delete everything before the cursor
-		if (self->input->len != 0)
-		{
-			g_array_remove_range (self->input, 0, self->input_pos);
-			self->input_pos = 0;
 
-			app_search_for_entry (self);
-			app_redraw_top (self);
-		}
-		return TRUE;
-	case KEY_CTRL_T:  // transposition
+	case USER_ACTION_INPUT_TRANSPOSE:
 	{
 		if (!self->input_pos || self->input->len < 2)
 			break;
@@ -1025,60 +911,209 @@ app_process_nonchar_code (Application *self, CursesEvent *event)
 		return TRUE;
 	}
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	case USER_ACTION_INPUT_DELETE_PREVIOUS:
+		if (self->input_pos > 0)
+		{
+			g_array_remove_index (self->input, --self->input_pos);
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
+		return TRUE;
+	case USER_ACTION_INPUT_DELETE_NEXT:
+		if (self->input_pos < self->input->len)
+		{
+			g_array_remove_index (self->input, self->input_pos);
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
+		return TRUE;
+	case USER_ACTION_INPUT_DELETE_TO_HOME:
+		if (self->input->len != 0)
+		{
+			g_array_remove_range (self->input, 0, self->input_pos);
+			self->input_pos = 0;
+
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
+		return TRUE;
+	case USER_ACTION_INPUT_DELETE_TO_END:
+		if (self->input_pos < self->input->len)
+		{
+			g_array_remove_range (self->input,
+				self->input_pos, self->input->len - self->input_pos);
+			app_search_for_entry (self);
+			app_redraw_top (self);
+		}
+		return TRUE;
+	case USER_ACTION_INPUT_DELETE_PREVIOUS_WORD:
+	{
+		if (self->input_pos == 0)
+			return TRUE;
+
+		gint i = self->input_pos;
+		while (i)
+			if (g_array_index (self->input, gunichar, --i) != L' ')
+				break;
+		while (i--)
+			if (g_array_index (self->input, gunichar,   i) == L' ')
+				break;
+
+		i++;
+		g_array_remove_range (self->input, i, self->input_pos - i);
+		self->input_pos = i;
+
+		app_search_for_entry (self);
+		app_redraw_top (self);
+		return TRUE;
+	}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	case USER_ACTION_NONE:
+		return TRUE;
 	default:
-		return app_process_extra_code (self, event);
+		g_assert_not_reached ();
 	}
 	return TRUE;
 }
 
-/** Process input events from ncurses. */
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 static gboolean
-app_process_curses_event (Application *self, CursesEvent *event)
+app_process_keysym (Application *self, termo_key_t *event)
 {
-	// Characters below the space are ASCII control codes
-	if (!event->is_char || event->code < L' ')
-		return app_process_nonchar_code (self, event);
+	UserAction action = USER_ACTION_NONE;
+	typedef const UserAction ActionMap[TERMO_N_SYMS];
 
-	wchar_t code = event->code;
-	gchar *letter = g_convert_with_iconv ((gchar *) &code, sizeof code,
-		self->wchar_to_utf8, NULL, NULL, NULL);
-	g_return_val_if_fail (letter != NULL, FALSE);
-
-	gunichar c = g_utf8_get_char (letter);
-	if (g_unichar_isprint (c))
+	static ActionMap actions =
 	{
-		self->show_help = FALSE;
+		[TERMO_SYM_ESCAPE]    = USER_ACTION_QUIT,
 
-		if (self->input_confirmed)
-		{
-			if (self->input->len != 0)
-				g_array_remove_range (self->input, 0, self->input->len);
-			self->input_pos = 0;
-			self->input_confirmed = FALSE;
-		}
+		[TERMO_SYM_UP]        = USER_ACTION_GOTO_DEFINITION_PREVIOUS,
+		[TERMO_SYM_DOWN]      = USER_ACTION_GOTO_DEFINITION_NEXT,
+		[TERMO_SYM_PAGEUP]    = USER_ACTION_GOTO_PAGE_PREVIOUS,
+		[TERMO_SYM_PAGEDOWN]  = USER_ACTION_GOTO_PAGE_NEXT,
 
-		g_array_insert_val (self->input, self->input_pos++, c);
-		app_search_for_entry (self);
-		app_redraw_top (self);
-	}
-	g_free (letter);
+		[TERMO_SYM_ENTER]     = USER_ACTION_INPUT_CONFIRM,
+
+		[TERMO_SYM_HOME]      = USER_ACTION_INPUT_HOME,
+		[TERMO_SYM_END]       = USER_ACTION_INPUT_END,
+		[TERMO_SYM_LEFT]      = USER_ACTION_INPUT_LEFT,
+		[TERMO_SYM_RIGHT]     = USER_ACTION_INPUT_RIGHT,
+
+		[TERMO_SYM_BACKSPACE] = USER_ACTION_INPUT_DELETE_PREVIOUS,
+		// XXX: what's the difference?
+		[TERMO_SYM_DELETE]    = USER_ACTION_INPUT_DELETE_NEXT,
+		[TERMO_SYM_DEL]       = USER_ACTION_INPUT_DELETE_NEXT,
+	};
+	static ActionMap actions_alt =
+	{
+		[TERMO_SYM_LEFT]      = USER_ACTION_MOVE_SPLITTER_LEFT,
+		[TERMO_SYM_RIGHT]     = USER_ACTION_MOVE_SPLITTER_RIGHT,
+	};
+	static ActionMap actions_ctrl =
+	{
+		[TERMO_SYM_UP]        = USER_ACTION_GOTO_ENTRY_PREVIOUS,
+		[TERMO_SYM_DOWN]      = USER_ACTION_GOTO_ENTRY_NEXT,
+	};
+
+	if (!event->modifiers)
+		action = actions[event->code.sym];
+	else if (event->modifiers == TERMO_KEYMOD_ALT)
+		action = actions_alt[event->code.sym];
+	else if (event->modifiers == TERMO_KEYMOD_CTRL)
+		action = actions_ctrl[event->code.sym];
+
+	return app_process_user_action (self, action);
+}
+
+static gboolean
+app_process_ctrl_key (Application *self, termo_key_t *event)
+{
+	static const UserAction actions[32] =
+	{
+		[CTRL_KEY ('L')]      = USER_ACTION_REDRAW,
+
+		[CTRL_KEY ('P')]      = USER_ACTION_GOTO_DEFINITION_PREVIOUS,
+		[CTRL_KEY ('N')]      = USER_ACTION_GOTO_DEFINITION_NEXT,
+		[CTRL_KEY ('B')]      = USER_ACTION_GOTO_PAGE_PREVIOUS,
+		[CTRL_KEY ('F')]      = USER_ACTION_GOTO_PAGE_NEXT,
+
+		[CTRL_KEY ('A')]      = USER_ACTION_INPUT_HOME,
+		[CTRL_KEY ('E')]      = USER_ACTION_INPUT_END,
+
+		[CTRL_KEY ('H')]      = USER_ACTION_INPUT_DELETE_PREVIOUS,
+		[CTRL_KEY ('K')]      = USER_ACTION_INPUT_DELETE_TO_END,
+		[CTRL_KEY ('W')]      = USER_ACTION_INPUT_DELETE_PREVIOUS_WORD,
+		[CTRL_KEY ('U')]      = USER_ACTION_INPUT_DELETE_TO_HOME,
+		[CTRL_KEY ('T')]      = USER_ACTION_INPUT_TRANSPOSE,
+	};
+
+	gint64 i = (gint64) event->code.codepoint - 'a' + 1;
+	if (i > 0 && i < (gint64) G_N_ELEMENTS (actions))
+		return app_process_user_action (self, actions[i]);
 
 	return TRUE;
+}
+
+static gboolean
+app_process_key (Application *self, termo_key_t *event)
+{
+	if (event->modifiers == TERMO_KEYMOD_CTRL)
+		return app_process_ctrl_key (self, event);
+	if (event->modifiers)
+		return TRUE;
+
+	gunichar c = event->code.codepoint;
+	if (!g_unichar_isprint (c))
+	{
+		beep ();
+		return TRUE;
+	}
+
+	self->show_help = FALSE;
+	if (self->input_confirmed)
+	{
+		if (self->input->len != 0)
+			g_array_remove_range (self->input, 0, self->input->len);
+		self->input_pos = 0;
+		self->input_confirmed = FALSE;
+	}
+
+	g_array_insert_val (self->input, self->input_pos++, c);
+	app_search_for_entry (self);
+	app_redraw_top (self);
+	return TRUE;
+}
+
+/** Process input events from the terminal. */
+static gboolean
+app_process_termo_event (Application *self, termo_key_t *event)
+{
+	switch (event->type)
+	{
+	case TERMO_TYPE_MOUSE:
+		return app_process_mouse (self, event);
+	case TERMO_TYPE_KEY:
+		return app_process_key (self, event);
+	case TERMO_TYPE_KEYSYM:
+		return app_process_keysym (self, event);
+	default:
+		return TRUE;
+	}
 }
 
 // --- SIGWINCH ----------------------------------------------------------------
 
 static int g_winch_pipe[2];            /**< SIGWINCH signalling pipe. */
-static void (*g_old_winch_handler) (int);
 
 static void
 winch_handler (int signum)
 {
-	/* Call the ncurses handler. */
-	if (g_old_winch_handler)
-		g_old_winch_handler (signum);
-
-	/* And wake up the poll() call. */
+	(void) signum;
 	write (g_winch_pipe[1], "x", 1);
 }
 
@@ -1091,43 +1126,73 @@ install_winch_handler (void)
 	act.sa_flags = SA_RESTART;
 	sigemptyset (&act.sa_mask);
 	sigaction (SIGWINCH, &act, &oldact);
-
-	/* Save the ncurses handler. */
-	if (oldact.sa_handler != SIG_DFL
-	 && oldact.sa_handler != SIG_IGN)
-		g_old_winch_handler = oldact.sa_handler;
 }
 
 // --- Initialisation, event handling ------------------------------------------
 
-Application g_application;
+static gboolean process_stdin_input_timeout (gpointer data);
 
 static gboolean
-process_stdin_input (void)
+process_stdin_input (G_GNUC_UNUSED GIOChannel *source,
+	G_GNUC_UNUSED GIOCondition condition, gpointer data)
 {
-	CursesEvent event;
-	int sta;
-
-	while ((sta = get_wch (&event.code)) != ERR)
+	Application *app = data;
+	if (app->tk_timeout)
 	{
-		event.is_char = (sta == OK);
-		if (sta == KEY_CODE_YES && event.code == KEY_MOUSE
-			&& getmouse (&event.mouse) == ERR)
-			abort ();
-		if (!app_process_curses_event (&g_application, &event))
-			return FALSE;
+		g_source_remove (app->tk_timeout);
+		app->tk_timeout = 0;
 	}
 
+	termo_advisereadable (app->tk);
+
+	termo_key_t event;
+	termo_result_t res;
+	while ((res = termo_getkey (app->tk, &event)) == TERMO_RES_KEY)
+		if (!app_process_termo_event (app, &event))
+			goto quit;
+
+	if (res == TERMO_RES_AGAIN)
+		app->tk_timeout = g_timeout_add (termo_get_waittime (app->tk),
+			process_stdin_input_timeout, app);
+	else if (res == TERMO_RES_ERROR || res == TERMO_RES_EOF)
+		goto quit;
+
 	return TRUE;
+
+quit:
+	g_main_loop_quit (app->loop);
+	return false;
 }
 
 static gboolean
-process_winch_input (int fd)
+process_stdin_input_timeout (gpointer data)
 {
-	char c;
+	Application *app = data;
+	termo_key_t event;
+	if (termo_getkey_force (app->tk, &event) == TERMO_RES_KEY)
+		if (!app_process_termo_event (app, &event))
+			g_main_loop_quit (app->loop);
 
-	read (fd, &c, 1);
-	return process_stdin_input ();
+	app->tk_timeout = 0;
+	return FALSE;
+}
+
+static gboolean
+process_winch_input (GIOChannel *source,
+	G_GNUC_UNUSED GIOCondition condition, gpointer data)
+{
+	Application *app = data;
+
+	char c;
+	read (g_io_channel_unix_get_fd (source), &c, 1);
+
+	// TODO: look for resizeterm() and use it if available for flicker-free
+	//   resize; endwin() escapes curses mode.
+	endwin ();
+	refresh ();
+
+	app_process_resize (app);
+	return TRUE;
 }
 
 int
@@ -1182,49 +1247,34 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	g_option_context_free (ctx);
 
-	app_init (&g_application, argv[1]);
+	Application app;
+	app_init (&app, argv[1]);
+
+	TERMO_CHECK_VERSION;
+	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
+		abort ();
 
 	if (!initscr ()
-	 || cbreak () == ERR
 	 || noecho () == ERR
 	 || nonl () == ERR)
 		abort ();
 
-	keypad (stdscr, TRUE);                /* Enable character processing. */
-	nodelay (stdscr, TRUE);               /* Don't block on get_wch(). */
-
-	mousemask (ALL_MOUSE_EVENTS, NULL);   /* Register mouse events. */
-	mouseinterval (0);
-
+	// TODO: catch SIGINT as well
 	if (pipe (g_winch_pipe) == -1)
 		abort ();
 	install_winch_handler ();
 
-	app_redraw (&g_application);
+	app_redraw (&app);
 
 	/* Message loop. */
-	struct pollfd pollfd[2];
-
-	pollfd[0].fd = fileno (stdin);
-	pollfd[0].events = POLLIN;
-	pollfd[1].fd = g_winch_pipe[0];
-	pollfd[1].events = POLLIN;
-
-	while (TRUE)
-	{
-		if (poll_restart (pollfd, 2, -1) == -1)
-			abort ();
-
-		if ((pollfd[0].revents & POLLIN)
-		 && !process_stdin_input ())
-			break;
-		if ((pollfd[1].revents & POLLIN)
-		 && !process_winch_input (pollfd[1].fd))
-			break;
-	}
+	g_io_add_watch (g_io_channel_unix_new (STDIN_FILENO),
+		G_IO_IN, process_stdin_input, &app);
+	g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
+		G_IO_IN, process_winch_input, &app);
+	g_main_loop_run (app.loop);
 
 	endwin ();
-	app_destroy (&g_application);
+	app_destroy (&app);
 
 	if (close (g_winch_pipe[0]) == -1
 	 || close (g_winch_pipe[1]) == -1)

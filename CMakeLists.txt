@@ -8,6 +8,9 @@ if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
 		"${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -Wno-missing-field-initializers")
 endif ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
 
+# Build options
+option (USE_SYSTEM_TERMO "Don't compile our own termo, use the system one" OFF)
+
 # Version
 set (project_VERSION_MAJOR "0")
 set (project_VERSION_MINOR "1")
@@ -21,13 +24,27 @@ set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 include (CheckFunctionExists)
 CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
 
-# Dependecies
+# Dependencies
 find_package (ZLIB REQUIRED)
-
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)
 
-include_directories (${ZLIB_INCLUDE_DIRS} ${dependencies_INCLUDE_DIRS})
+if (USE_SYSTEM_TERMO)
+	find_package (Termo REQUIRED)
+else (USE_SYSTEM_TERMO)
+	add_subdirectory (termo EXCLUDE_FROM_ALL)
+	# We don't have many good choices when we don't want to install it and want
+	# to support older versions of CMake; this is a relatively clean approach
+	# (other possibilities: setting a variable in the parent scope, using a
+	# cache variable, writing a special config file with build paths in it and
+	# including it here, or setting a custom property on the targets).
+	get_directory_property (Termo_INCLUDE_DIRS
+		DIRECTORY termo INCLUDE_DIRECTORIES)
+	set (Termo_LIBRARIES termo-static)
+endif (USE_SYSTEM_TERMO)
+
+include_directories (${ZLIB_INCLUDE_DIRS}
+	${dependencies_INCLUDE_DIRS} ${Termo_INCLUDE_DIRS})
 
 # Localization
 find_package (Gettext REQUIRED)
@@ -76,7 +93,8 @@ set (project_common_headers
 	src/utils.h)
 
 # Project libraries
-set (project_common_libraries ${ZLIB_LIBRARIES} ${dependencies_LIBRARIES})
+set (project_common_libraries
+	${ZLIB_LIBRARIES} ${dependencies_LIBRARIES} termo-static)
 
 # Create a common project library so that source files are only compiled once
 if (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
