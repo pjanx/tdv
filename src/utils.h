@@ -40,5 +40,6 @@
 
 gboolean stream_read_all (GByteArray *ba, GInputStream *is, GError **error);
 gchar *stream_read_string (GDataInputStream *dis, GError **error);
+void update_curses_terminal_size (void);
 
 #endif /* ! UTILS_H */

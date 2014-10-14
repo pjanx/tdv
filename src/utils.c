@@ -20,7 +20,16 @@
 
 #include <glib.h>
 #include <gio/gio.h>
+#include <stdlib.h>
+#include <errno.h>
 
+#include <curses.h>
+#include <termios.h>
+#ifndef TIOCGWINSZ
+#include <sys/ioctl.h>
+#endif  // ! TIOCGWINSZ
+
+#include "config.h"
 #include "utils.h"
 
 
@@ -60,4 +69,35 @@ stream_read_string (GDataInputStream *dis, GError **error)
 	}
 
 	return s;
+}
+
+static bool
+xstrtoul (unsigned long *out, const char *s, int base)
+{
+	char *end;
+	errno = 0;
+	*out = strtoul (s, &end, base);
+	return errno == 0 && !*end && end != s;
+}
+
+// Didn't want to have this ugly piece of code in the main source file;
+// the standard endwin/refresh sequence makes the terminal flicker.
+void
+update_curses_terminal_size (void)
+{
+#if defined (HAVE_RESIZE_TERM) && defined (TIOCGWINSZ)
+	struct winsize size;
+	if (!ioctl (STDOUT_FILENO, TIOCGWINSZ, (char *) &size))
+	{
+		char *row = getenv ("LINES");
+		char *col = getenv ("COLUMNS");
+		unsigned long tmp;
+		resize_term (
+			(row && xstrtoul (&tmp, row, 10)) ? tmp : size.ws_row,
+			(col && xstrtoul (&tmp, col, 10)) ? tmp : size.ws_col);
+	}
+#else  // HAVE_RESIZE_TERM && TIOCGWINSZ
+	endwin ();
+	refresh ();
+#endif  // HAVE_RESIZE_TERM && TIOCGWINSZ
 }

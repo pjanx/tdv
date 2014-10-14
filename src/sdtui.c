@@ -43,6 +43,7 @@
 
 #include "config.h"
 #include "stardict.h"
+#include "utils.h"
 
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
@@ -1186,11 +1187,7 @@ process_winch_input (GIOChannel *source,
 	char c;
 	read (g_io_channel_unix_get_fd (source), &c, 1);
 
-	// TODO: look for resizeterm() and use it if available for flicker-free
-	//   resize; endwin() escapes curses mode.
-	endwin ();
-	refresh ();
-
+	update_curses_terminal_size ();
 	app_process_resize (app);
 	return TRUE;
 }

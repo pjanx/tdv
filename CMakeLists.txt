@@ -20,10 +20,6 @@ set (project_VERSION "${project_VERSION_MAJOR}")
 set (project_VERSION "${project_VERSION}.${project_VERSION_MINOR}")
 set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 
-# Configuration
-include (CheckFunctionExists)
-CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
-
 # Dependencies
 find_package (ZLIB REQUIRED)
 find_package (PkgConfig REQUIRED)
@@ -45,6 +41,13 @@ endif (USE_SYSTEM_TERMO)
 
 include_directories (${ZLIB_INCLUDE_DIRS}
 	${dependencies_INCLUDE_DIRS} ${Termo_INCLUDE_DIRS})
+
+# Configuration
+include (CheckFunctionExists)
+CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
+
+set (CMAKE_REQUIRED_LIBRARIES ${dependencies_LIBRARIES})
+CHECK_FUNCTION_EXISTS ("resize_term" HAVE_RESIZE_TERM)
 
 # Localization
 find_package (Gettext REQUIRED)
