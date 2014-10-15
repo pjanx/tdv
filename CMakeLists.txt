@@ -44,8 +44,6 @@ include_directories (${ZLIB_INCLUDE_DIRS}
 
 # Configuration
 include (CheckFunctionExists)
-CHECK_FUNCTION_EXISTS ("wcwidth" HAVE_WCWIDTH)
-
 set (CMAKE_REQUIRED_LIBRARIES ${dependencies_LIBRARIES})
 CHECK_FUNCTION_EXISTS ("resize_term" HAVE_RESIZE_TERM)
 

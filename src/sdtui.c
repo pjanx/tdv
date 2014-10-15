@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013, Přemysl Janouch <p.janouch@gmail.com>
+ * Copyright (c) 2013 - 2014, Přemysl Janouch <p.janouch@gmail.com>
  * All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -17,9 +17,6 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
-#define _XOPEN_SOURCE  500             //!< wcwidth
-#define _XOPEN_SOURCE_EXTENDED         //!< Yes, we want ncursesw.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,17 +54,6 @@ unichar_width (gunichar ch)
 	return 1 + g_unichar_iswide (ch);
 }
 
-#ifndef HAVE_WCWIDTH
-#define wcwidth(x)  1
-#endif // ! HAVE_WCWIDTH
-
-static gboolean
-is_character_in_locale (wchar_t c)
-{
-	wchar_t s[] = { c, 0 };
-	return wcstombs (NULL, s, 0) != (size_t) -1;
-}
-
 // --- Application -------------------------------------------------------------
 
 /** Data relating to one entry within the dictionary. */
@@ -87,7 +73,7 @@ struct application
 	GMainLoop     * loop;               //!< Main loop
 	termo_t       * tk;                 //!< termo handle
 	guint           tk_timeout;         //!< termo timeout
-	GIConv          utf8_to_wchar;      //!< utf-8 -> wchar_t conversion
+	GIConv          ucs4_to_locale;     //!< UTF-32 -> locale conversion
 
 	StardictDict  * dict;               //!< The current dictionary
 	guint           show_help : 1;      //!< Whether help can be shown
@@ -235,7 +221,9 @@ app_init (Application *self, const gchar *filename)
 
 	self->division = 0.5;
 
-	self->utf8_to_wchar = g_iconv_open ("wchar_t//translit", "utf-8");
+	const char *charset;
+	(void) g_get_charset (&charset);
+	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32");
 
 	app_reload_view (self);
 }
@@ -255,36 +243,44 @@ app_destroy (Application *self)
 	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
 
-	g_iconv_close (self->utf8_to_wchar);
+	g_iconv_close (self->ucs4_to_locale);
 }
 
-/** Write the given utf-8 string padded with spaces.
+/** Returns if the Unicode character is representable in the current locale. */
+static gboolean
+app_is_character_in_locale (Application *self, gunichar ch)
+{
+	gchar *tmp = g_convert_with_iconv ((const gchar *) &ch, sizeof ch,
+		self->ucs4_to_locale, NULL, NULL, NULL);
+	if (!tmp)
+		return FALSE;
+	g_free (tmp);
+	return TRUE;
+}
+
+/** Write the given UTF-8 string padded with spaces.
  *  @param[in] n  The number of characters to write, or -1 for the whole string.
  *  @param[in] attrs  Text attributes for the text, without padding.
  *                    To change the attributes of all output, use attrset().
- *  @return The number of wide characters written.
+ *  @return The number of characters output.
  */
 static gsize
 app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 {
-	wchar_t *wide_str = (wchar_t *) g_convert_with_iconv
-		(str, -1, self->utf8_to_wchar, NULL, NULL, NULL);
-	g_return_val_if_fail (wide_str != NULL, 0);
-
-	ssize_t wide_len = wcslen (wide_str);
-	wchar_t padding = L' ', error = L'?', ellipsis = L'…';
-
 	if (!n)
 		return 0;
 
-	// Compute how many wide characters fit in the limit
-	gint cols, i;
-	for (cols = i = 0; i < wide_len; i++)
-	{
-		if (!is_character_in_locale (wide_str[i]))
-			wide_str[i] = error;
+	glong ucs4_len;
+	gunichar *ucs4 = g_utf8_to_ucs4_fast (str, -1, &ucs4_len);
 
-		gint width = wcwidth (wide_str[i]);
+	// Replace invalid chars and compute how many characters fit in the limit
+	gint cols, i;
+	for (cols = i = 0; i < ucs4_len; i++)
+	{
+		if (!app_is_character_in_locale (self, ucs4[i]))
+			ucs4[i] = '?';
+
+		gint width = unichar_width (ucs4[i]);
 		if (n >= 0 && cols + width > n)
 			break;
 		cols += width;
@@ -294,49 +290,46 @@ app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 		n = cols;
 
 	// Append ellipsis if the whole string didn't fit
+	gunichar ellipsis = L'…';
+	gint ellipsis_width = unichar_width (ellipsis);
+
 	gint len = i;
-	if (len != wide_len)
+	if (len != ucs4_len)
 	{
-		if (is_character_in_locale (ellipsis))
+		if (app_is_character_in_locale (self, ellipsis))
 		{
-			if (cols + wcwidth (ellipsis) > n)
-				cols -= wcwidth (wide_str[len - 1]);
+			if (cols + ellipsis_width > n)
+				cols -= unichar_width (ucs4[len - 1]);
 			else
 				len++;
 
-			wide_str[len - 1] = ellipsis;
-			cols += wcwidth (ellipsis);
+			ucs4[len - 1] = ellipsis;
+			cols += ellipsis_width;
 		}
 		else if (n >= 3 && len >= 3)
 		{
 			// With zero-width characters this overflows
 			// It's just a fallback anyway
-			cols -= wcwidth (wide_str[len - 1]);
-			cols -= wcwidth (wide_str[len - 2]);
-			cols -= wcwidth (wide_str[len - 3]);
+			cols -= unichar_width (ucs4[len - 1]); ucs4[len - 1] = '.';
+			cols -= unichar_width (ucs4[len - 2]); ucs4[len - 2] = '.';
+			cols -= unichar_width (ucs4[len - 3]); ucs4[len - 3] = '.';
 			cols += 3;
-
-			wide_str[len - 1] = L'.';
-			wide_str[len - 2] = L'.';
-			wide_str[len - 3] = L'.';
 		}
 	}
 
-	cchar_t cch;
-	for (i = 0; i < len; i++)
-	{
-		if (setcchar (&cch, &wide_str[i], attrs, 0, NULL) == OK)
-			add_wch (&cch);
-		else
-			// This shouldn't happen
-			cols -= wcwidth (wide_str[i]);
-	}
+	guchar *locale_str;
+	gsize locale_str_len;
+	locale_str = (guchar *) g_convert_with_iconv ((const gchar *) ucs4,
+		len * sizeof *ucs4, self->ucs4_to_locale, NULL, &locale_str_len, NULL);
+	g_return_val_if_fail (locale_str != NULL, 0);
 
-	setcchar (&cch, &padding, A_NORMAL, 0, NULL);
+	for (gsize i = 0; i < locale_str_len; i++)
+		addch (locale_str[i] | attrs);
 	while (cols++ < n)
-		add_wch (&cch);
+		addch (' ');
 
-	g_free (wide_str);
+	g_free (locale_str);
+	g_free (ucs4);
 	return n;
 }
 
@@ -454,7 +447,7 @@ app_redraw_view (Application *self)
 
 			guint left_width = app_get_left_column_width (self);
 			app_add_utf8_string (self, ve->word, 0, left_width);
-			addwstr (L" ");
+			addstr (" ");
 			app_add_utf8_string (self,
 				ve->definitions[k], 0, COLS - left_width - 1);
 
