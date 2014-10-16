@@ -74,6 +74,7 @@ struct application
 	termo_t       * tk;                 //!< termo handle
 	guint           tk_timeout;         //!< termo timeout
 	GIConv          ucs4_to_locale;     //!< UTF-32 -> locale conversion
+	gboolean        locale_is_utf8;     //!< The locale is Unicode
 
 	StardictDict  * dict;               //!< The current dictionary
 	guint           show_help : 1;      //!< Whether help can be shown
@@ -222,7 +223,7 @@ app_init (Application *self, const gchar *filename)
 	self->division = 0.5;
 
 	const char *charset;
-	(void) g_get_charset (&charset);
+	self->locale_is_utf8 = g_get_charset (&charset);
 	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32");
 
 	app_reload_view (self);
@@ -250,6 +251,10 @@ app_destroy (Application *self)
 static gboolean
 app_is_character_in_locale (Application *self, gunichar ch)
 {
+	// Avoid the overhead joined with calling iconv() for all characters
+	if (self->locale_is_utf8)
+		return TRUE;
+
 	gchar *tmp = g_convert_with_iconv ((const gchar *) &ch, sizeof ch,
 		self->ucs4_to_locale, NULL, NULL, NULL);
 	if (!tmp)
