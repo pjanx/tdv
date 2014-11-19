@@ -1249,12 +1249,10 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
 		abort ();
 
-	if (!initscr ()
-	 || noecho () == ERR
-	 || nonl () == ERR)
+	if (!initscr () || nonl () == ERR)
 		abort ();
 
-	// TODO: catch SIGINT as well
+	// TODO: catch SIGINT and SIGTERM as well
 	if (pipe (g_winch_pipe) == -1)
 		abort ();
 	install_winch_handler ();
