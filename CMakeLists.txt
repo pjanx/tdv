@@ -45,7 +45,7 @@ include_directories (${ZLIB_INCLUDE_DIRS}
 # Configuration
 include (CheckFunctionExists)
 set (CMAKE_REQUIRED_LIBRARIES ${dependencies_LIBRARIES})
-CHECK_FUNCTION_EXISTS ("resize_term" HAVE_RESIZE_TERM)
+CHECK_FUNCTION_EXISTS ("resizeterm" HAVE_RESIZETERM)
 
 # Localization
 find_package (Gettext REQUIRED)

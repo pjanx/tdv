@@ -85,19 +85,19 @@ xstrtoul (unsigned long *out, const char *s, int base)
 void
 update_curses_terminal_size (void)
 {
-#if defined (HAVE_RESIZE_TERM) && defined (TIOCGWINSZ)
+#if defined (HAVE_RESIZETERM) && defined (TIOCGWINSZ)
 	struct winsize size;
 	if (!ioctl (STDOUT_FILENO, TIOCGWINSZ, (char *) &size))
 	{
 		char *row = getenv ("LINES");
 		char *col = getenv ("COLUMNS");
 		unsigned long tmp;
-		resize_term (
+		resizeterm (
 			(row && xstrtoul (&tmp, row, 10)) ? tmp : size.ws_row,
 			(col && xstrtoul (&tmp, col, 10)) ? tmp : size.ws_col);
 	}
-#else  // HAVE_RESIZE_TERM && TIOCGWINSZ
+#else  // HAVE_RESIZETERM && TIOCGWINSZ
 	endwin ();
 	refresh ();
-#endif  // HAVE_RESIZE_TERM && TIOCGWINSZ
+#endif  // HAVE_RESIZETERM && TIOCGWINSZ
 }

@@ -8,7 +8,7 @@
 #define GETTEXT_PACKAGE PROJECT_NAME
 #define GETTEXT_DIRNAME "${CMAKE_INSTALL_PREFIX}/share/locale"
 
-#cmakedefine HAVE_RESIZE_TERM
+#cmakedefine HAVE_RESIZETERM
 
 #endif /* ! CONFIG_H */
 
