@@ -1249,6 +1249,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
 		abort ();
 
+	termo_set_canonflags (app.tk, TERMO_CANON_DELBS);
 	if (!initscr () || nonl () == ERR)
 		abort ();
 
