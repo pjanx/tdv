@@ -1004,9 +1004,8 @@ app_process_keysym (Application *self, termo_key_t *event)
 		[TERMO_SYM_RIGHT]     = USER_ACTION_INPUT_RIGHT,
 
 		[TERMO_SYM_BACKSPACE] = USER_ACTION_INPUT_DELETE_PREVIOUS,
-		// XXX: what's the difference?
+		[TERMO_SYM_DEL]       = USER_ACTION_INPUT_DELETE_PREVIOUS,
 		[TERMO_SYM_DELETE]    = USER_ACTION_INPUT_DELETE_NEXT,
-		[TERMO_SYM_DEL]       = USER_ACTION_INPUT_DELETE_NEXT,
 	};
 	static ActionMap actions_alt =
 	{
@@ -1249,7 +1248,6 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
 		abort ();
 
-	termo_set_canonflags (app.tk, TERMO_CANON_DELBS);
 	if (!initscr () || nonl () == ERR)
 		abort ();
 
