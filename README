@@ -44,6 +44,14 @@ argument.  If you want the application to watch the X11 primary selection for
 changes and automatically search for the selected text, use the -w switch.
 This feature requires GTK+.
 
+Dictionaries
+------------
+Unfortunately this application only really works with specific dictionaries.
+Word definitions have to be in plain text, separated by newlines.
+
+CZ <-> { EN, DE, PL, RU } dictionaries:
+https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg
+
 License
 -------
 `sdtui' is written by Přemysl Janouch <p.janouch@gmail.com>.
