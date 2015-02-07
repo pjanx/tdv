@@ -716,38 +716,6 @@ app_process_resize (Application *self)
 	return TRUE;
 }
 
-/** Process mouse input. */
-static gboolean
-app_process_mouse (Application *self, termo_key_t *event)
-{
-	int line, column, button;
-	termo_mouse_event_t type;
-	termo_interpret_mouse (self->tk, event, &type, &button, &line, &column);
-
-	if (type != TERMO_MOUSE_PRESS || button != 1)
-		return TRUE;
-
-	SAVE_CURSOR
-	if (line == 0)
-	{
-		gsize label_len = g_utf8_strlen (self->search_label, -1);
-		gint pos = column - label_len;
-		if (pos >= 0)
-		{
-			self->input_pos = MIN ((guint) pos, self->input->len);
-			move (0, label_len + self->input_pos);
-			refresh ();
-		}
-	}
-	else if (line <= (int) (app_count_view_items (self) - self->top_offset))
-	{
-		self->selected = line - 1;
-		app_redraw_view (self);
-		RESTORE_CURSOR
-	}
-	return TRUE;
-}
-
 // --- User input handling -----------------------------------------------------
 
 /** All the actions that can be performed by the user. */
@@ -1084,6 +1052,50 @@ app_process_key (Application *self, termo_key_t *event)
 	g_array_insert_val (self->input, self->input_pos++, c);
 	app_search_for_entry (self);
 	app_redraw_top (self);
+	return TRUE;
+}
+
+static void
+app_process_left_mouse_click (Application *self, int line, int column)
+{
+	SAVE_CURSOR
+	if (line == 0)
+	{
+		gsize label_len = g_utf8_strlen (self->search_label, -1);
+		gint pos = column - label_len;
+		if (pos >= 0)
+		{
+			self->input_pos = MIN ((guint) pos, self->input->len);
+			move (0, label_len + self->input_pos);
+			refresh ();
+		}
+	}
+	else if (line <= (int) (app_count_view_items (self) - self->top_offset))
+	{
+		self->selected = line - 1;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+	}
+}
+
+/** Process mouse input. */
+static gboolean
+app_process_mouse (Application *self, termo_key_t *event)
+{
+	int line, column, button;
+	termo_mouse_event_t type;
+	termo_interpret_mouse (self->tk, event, &type, &button, &line, &column);
+
+	if (type != TERMO_MOUSE_PRESS)
+		return TRUE;
+
+	if (button == 1)
+		app_process_left_mouse_click (self, line, column);
+	else if (button == 4)
+		app_process_user_action (self, USER_ACTION_GOTO_DEFINITION_PREVIOUS);
+	else if (button == 5)
+		app_process_user_action (self, USER_ACTION_GOTO_DEFINITION_NEXT);
+
 	return TRUE;
 }
 
