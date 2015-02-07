@@ -10,6 +10,7 @@ endif ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
 
 # Build options
 option (USE_SYSTEM_TERMO "Don't compile our own termo, use the system one" OFF)
+option (WITH_GTK "Compile with GTK+ support" ON)
 
 # Version
 set (project_VERSION_MAJOR "0")
@@ -39,6 +40,15 @@ else (USE_SYSTEM_TERMO)
 	set (Termo_LIBRARIES termo-static)
 endif (USE_SYSTEM_TERMO)
 
+if (WITH_GTK)
+	# We actually don't care about the specific version
+	pkg_search_module (gtk REQUIRED gtk+-3.0 gtk+-2.0)
+	list (APPEND dependencies_INCLUDE_DIRS ${gtk_INCLUDE_DIRS})
+	list (APPEND dependencies_LIBRARY_DIRS ${gtk_LIBRARY_DIRS})
+	list (APPEND dependencies_LIBRARIES ${gtk_LIBRARIES})
+endif (WITH_GTK)
+
+link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS}
 	${dependencies_INCLUDE_DIRS} ${Termo_INCLUDE_DIRS})
 

@@ -42,6 +42,10 @@
 #include "stardict.h"
 #include "utils.h"
 
+#ifdef WITH_GTK
+#include <gtk/gtk.h>
+#endif  // WITH_GTK
+
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
 // --- Utilities ---------------------------------------------------------------
@@ -60,6 +64,8 @@ unichar_width (gunichar ch)
 typedef struct view_entry               ViewEntry;
 /** Encloses application data. */
 typedef struct application              Application;
+/** Application options. */
+typedef struct app_options              AppOptions;
 
 struct view_entry
 {
@@ -72,7 +78,7 @@ struct application
 {
 	GMainLoop     * loop;               //!< Main loop
 	termo_t       * tk;                 //!< termo handle
-	guint           tk_timeout;         //!< termo timeout
+	guint           tk_timer;           //!< termo timeout timer
 	GIConv          ucs4_to_locale;     //!< UTF-32 -> locale conversion
 	gboolean        locale_is_utf8;     //!< The locale is Unicode
 
@@ -90,8 +96,17 @@ struct application
 	gboolean        input_confirmed;    //!< Input has been confirmed
 
 	gfloat          division;           //!< Position of the division column
+
+	guint           selection_timer;    //!< Selection watcher timeout timer
+	gint            selection_interval; //!< Selection watcher timer interval
+	gchar         * selection_contents; //!< Selection contents
 };
 
+struct app_options
+{
+	gboolean show_version;              //!< Output version information and quit
+	gint     selection_watcher;         //!< Interval in milliseconds, or -1
+};
 
 /** Splits the entry and adds it to a pointer array. */
 static void
@@ -190,13 +205,41 @@ app_reload_view (Application *self)
 	g_object_unref (iterator);
 }
 
+#ifdef WITH_GTK
+static gboolean on_selection_timer (gpointer data);
+
+static void
+rearm_selection_watcher (Application *self)
+{
+	if (self->selection_interval > 0)
+		self->selection_timer = g_timeout_add
+			(self->selection_interval, on_selection_timer, self);
+}
+#endif  // WITH_GTK
+
 /** Initialize the application core. */
 static void
-app_init (Application *self, const gchar *filename)
+app_init (Application *self, AppOptions *options, const gchar *filename)
 {
-	self->loop = g_main_loop_new (NULL, FALSE);
+	self->loop = NULL;
+	self->selection_interval = options->selection_watcher;
+	self->selection_timer = 0;
+	self->selection_contents = NULL;
+
+#ifdef WITH_GTK
+	if (gtk_init_check (0, NULL))
+	{
+		// So that we set the input only when it actually changes
+		GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
+		self->selection_contents = gtk_clipboard_wait_for_text (clipboard);
+		rearm_selection_watcher (self);
+	}
+	else
+#endif  // WITH_GTK
+		self->loop = g_main_loop_new (NULL, FALSE);
+
 	self->tk = NULL;
-	self->tk_timeout = 0;
+	self->tk_timer = 0;
 
 	GError *error = NULL;
 	self->dict = stardict_dict_new (filename, &error);
@@ -233,11 +276,16 @@ app_init (Application *self, const gchar *filename)
 static void
 app_destroy (Application *self)
 {
-	g_main_loop_unref (self->loop);
+	if (self->loop)
+		g_main_loop_unref (self->loop);
 	if (self->tk)
 		termo_destroy (self->tk);
-	if (self->tk_timeout)
-		g_source_remove (self->tk_timeout);
+	if (self->tk_timer)
+		g_source_remove (self->tk_timer);
+
+	if (self->selection_timer)
+		g_source_remove (self->selection_timer);
+	g_free (self->selection_contents);
 
 	g_object_unref (self->dict);
 	g_ptr_array_free (self->entries, TRUE);
@@ -245,6 +293,30 @@ app_destroy (Application *self)
 	g_array_free (self->input, TRUE);
 
 	g_iconv_close (self->ucs4_to_locale);
+}
+
+/** Run the main event dispatch loop. */
+static void
+app_run (Application *self)
+{
+	if (self->loop)
+		g_main_loop_run (self->loop);
+#ifdef WITH_GTK
+	else
+		gtk_main ();
+#endif  // WITH_GTK
+}
+
+/** Quit the main event dispatch loop. */
+static void
+app_quit (Application *self)
+{
+	if (self->loop)
+		g_main_loop_quit (self->loop);
+#ifdef WITH_GTK
+	else
+		gtk_main_quit ();
+#endif  // WITH_GTK
 }
 
 /** Returns if the Unicode character is representable in the current locale. */
@@ -1140,17 +1212,17 @@ install_winch_handler (void)
 
 // --- Initialisation, event handling ------------------------------------------
 
-static gboolean process_stdin_input_timeout (gpointer data);
+static gboolean on_stdin_input_timeout (gpointer data);
 
 static gboolean
 process_stdin_input (G_GNUC_UNUSED GIOChannel *source,
 	G_GNUC_UNUSED GIOCondition condition, gpointer data)
 {
 	Application *app = data;
-	if (app->tk_timeout)
+	if (app->tk_timer)
 	{
-		g_source_remove (app->tk_timeout);
-		app->tk_timeout = 0;
+		g_source_remove (app->tk_timer);
+		app->tk_timer = 0;
 	}
 
 	termo_advisereadable (app->tk);
@@ -1162,28 +1234,28 @@ process_stdin_input (G_GNUC_UNUSED GIOChannel *source,
 			goto quit;
 
 	if (res == TERMO_RES_AGAIN)
-		app->tk_timeout = g_timeout_add (termo_get_waittime (app->tk),
-			process_stdin_input_timeout, app);
+		app->tk_timer = g_timeout_add (termo_get_waittime (app->tk),
+			on_stdin_input_timeout, app);
 	else if (res == TERMO_RES_ERROR || res == TERMO_RES_EOF)
 		goto quit;
 
 	return TRUE;
 
 quit:
-	g_main_loop_quit (app->loop);
-	return false;
+	app_quit (app);
+	return FALSE;
 }
 
 static gboolean
-process_stdin_input_timeout (gpointer data)
+on_stdin_input_timeout (gpointer data)
 {
 	Application *app = data;
 	termo_key_t event;
 	if (termo_getkey_force (app->tk, &event) == TERMO_RES_KEY)
 		if (!app_process_termo_event (app, &event))
-			g_main_loop_quit (app->loop);
+			app_quit (app);
 
-	app->tk_timeout = 0;
+	app->tk_timer = 0;
 	return FALSE;
 }
 
@@ -1201,6 +1273,96 @@ process_winch_input (GIOChannel *source,
 	return TRUE;
 }
 
+#ifdef WITH_GTK
+static void
+app_set_input (Application *self, const gchar *input)
+{
+	glong size;
+	gunichar *output = g_utf8_to_ucs4 (input, -1, NULL, &size, NULL);
+
+	// XXX: signal invalid data?
+	if (!output)
+		return;
+
+	g_array_free (self->input, TRUE);
+	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
+	self->input_pos = 0;
+
+	gunichar *p = output;
+	while (size--)
+	{
+		// XXX: skip?
+		if (!g_unichar_isprint (*p))
+			break;
+
+		g_array_insert_val (self->input, self->input_pos++, *p++);
+	}
+
+	g_free (output);
+	app_search_for_entry (self);
+	app_redraw_top (self);
+}
+
+static void
+on_selection_text_received (G_GNUC_UNUSED GtkClipboard *clipboard,
+	const gchar *text, gpointer data)
+{
+	Application *app = data;
+	rearm_selection_watcher (app);
+
+	if (text)
+	{
+		if (app->selection_contents && !strcmp (app->selection_contents, text))
+			return;
+
+		g_free (app->selection_contents);
+		app->selection_contents = g_strdup (text);
+		app_set_input (app, text);
+	}
+	else if (app->selection_contents)
+	{
+		g_free (app->selection_contents);
+		app->selection_contents = NULL;
+	}
+}
+
+static gboolean
+on_selection_timer (gpointer data)
+{
+	Application *app = data;
+	GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
+	gtk_clipboard_request_text (clipboard, on_selection_text_received, app);
+
+	app->selection_timer = 0;
+	return FALSE;
+}
+
+static gboolean
+on_watch_primary_selection (G_GNUC_UNUSED const gchar *option_name,
+	const gchar *value, gpointer data, GError **error)
+{
+	AppOptions *options = data;
+
+	if (!value)
+	{
+		options->selection_watcher = 500;
+		return TRUE;
+	}
+
+	char *end;
+	errno = 0;
+	long timer = strtol (value, &end, 10);
+	if (errno || *end || end == value || timer <= 0 || timer > G_MAXINT)
+	{
+		g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+			_("Invalid timer value"));
+		return FALSE;
+	}
+	options->selection_watcher = timer;
+	return TRUE;
+}
+#endif  // WITH_GTK
+
 int
 main (int argc, char *argv[])
 {
@@ -1209,12 +1371,24 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		g_type_init ();
 G_GNUC_END_IGNORE_DEPRECATIONS
 
-	gboolean show_version = FALSE;
+	AppOptions options =
+	{
+		.show_version = FALSE,
+		.selection_watcher = -1,
+	};
+
 	GOptionEntry entries[] =
 	{
 		{ "version", 0, G_OPTION_FLAG_IN_MAIN,
-		  G_OPTION_ARG_NONE, &show_version,
+		  G_OPTION_ARG_NONE, &options.show_version,
 		  N_("Output version information and exit"), NULL },
+#ifdef WITH_GTK
+		{ "watch-primary-selection", 'w',
+		  G_OPTION_FLAG_IN_MAIN | G_OPTION_FLAG_OPTIONAL_ARG,
+		  G_OPTION_ARG_CALLBACK, (gpointer) on_watch_primary_selection,
+		  N_("Watch the value of the primary selection for input"),
+		  N_("TIMER") },
+#endif  // WITH_GTK
 		{ NULL }
 	};
 
@@ -1228,7 +1402,10 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	GError *error = NULL;
 	GOptionContext *ctx = g_option_context_new
 		(N_("dictionary.ifo - StarDict terminal UI"));
-	g_option_context_add_main_entries (ctx, entries, GETTEXT_PACKAGE);
+	GOptionGroup *group = g_option_group_new ("", "", "", &options, NULL);
+	g_option_group_add_entries (group, entries);
+	g_option_group_set_translation_domain (group, GETTEXT_PACKAGE);
+	g_option_context_add_group (ctx, group);
 	g_option_context_set_translation_domain (ctx, GETTEXT_PACKAGE);
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
 	{
@@ -1237,7 +1414,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		exit (EXIT_FAILURE);
 	}
 
-	if (show_version)
+	if (options.show_version)
 	{
 		g_print (PROJECT_NAME " " PROJECT_VERSION "\n");
 		exit (EXIT_SUCCESS);
@@ -1254,7 +1431,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	g_option_context_free (ctx);
 
 	Application app;
-	app_init (&app, argv[1]);
+	app_init (&app, &options, argv[1]);
 
 	TERMO_CHECK_VERSION;
 	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
@@ -1275,7 +1452,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		G_IO_IN, process_stdin_input, &app);
 	g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
 		G_IO_IN, process_winch_input, &app);
-	g_main_loop_run (app.loop);
+	app_run (&app);
 
 	endwin ();
 	app_destroy (&app);
