@@ -1350,10 +1350,8 @@ on_watch_primary_selection (G_GNUC_UNUSED const gchar *option_name,
 		return TRUE;
 	}
 
-	char *end;
-	errno = 0;
-	long timer = strtol (value, &end, 10);
-	if (errno || *end || end == value || timer <= 0 || timer > G_MAXINT)
+	unsigned long timer;
+	if (!xstrtoul (&timer, value, 10) || !timer || timer > G_MAXINT)
 	{
 		g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
 			_("Invalid timer value"));

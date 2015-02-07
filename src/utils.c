@@ -1,7 +1,7 @@
 /*
  * utils.c: miscellaneous utilities
  *
- * Copyright (c) 2013, Přemysl Janouch <p.janouch@gmail.com>
+ * Copyright (c) 2013 - 2015, Přemysl Janouch <p.janouch@gmail.com>
  * All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -71,7 +71,7 @@ stream_read_string (GDataInputStream *dis, GError **error)
 	return s;
 }
 
-static bool
+gboolean
 xstrtoul (unsigned long *out, const char *s, int base)
 {
 	char *end;
