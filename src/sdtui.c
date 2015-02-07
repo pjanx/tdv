@@ -1297,8 +1297,9 @@ app_set_input (Application *self, const gchar *input)
 
 		g_array_insert_val (self->input, self->input_pos++, *p++);
 	}
-
 	g_free (output);
+
+	self->input_confirmed = FALSE;
 	app_search_for_entry (self);
 	app_redraw_top (self);
 }
