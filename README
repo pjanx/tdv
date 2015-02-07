@@ -1,4 +1,5 @@
 StarDict terminal UI
+====================
 
 This program aims to provide an easy way of viewing translation and other kinds
 of dictionaries in your terminal.  The author wasn't successful in finding any
@@ -11,7 +12,44 @@ software under a more permissive license than your usual GNU General Public
 License.  I'll buy you a beer for shouting obscenities at the address of RMS in
 public; I couldn't reuse _anything_.
 
-So far it has only been tested under Ubuntu Linux and some work has to be done
-yet until the software can be considered fit to be included in regular Linux and
-BSD distributions.  Help is much appreciated in this regard.
+Some work has to be done yet before the software can be considered fit for
+inclusion in regular Linux and BSD distributions.  Help is much appreciated in
+this regard.
 
+Building and Running
+--------------------
+Build dependencies: CMake, pkg-config, xsltproc, ncursesw, zlib, glib-2.0,
+                    pango, termo (included), gtk+ (optional, any version)
+
+ $ git clone https://github.com/pjanouch/sdtui.git
+ $ git submodule init
+ $ git submodule update
+ $ mkdir build
+ $ cd build
+ $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DWITH_GTK=ON
+ $ make
+
+To install the application, you can do either the usual:
+ $ make install
+
+Or you can try telling CMake to make a package for you.  For Debian it is:
+ $ cpack -G DEB
+ # dpkg -i sdtui-*.deb
+
+Note that for versions of CMake before 2.8.9, you need to prefix cpack with
+`fakeroot' or file ownership will end up wrong.
+
+Having the program installed, simply run it with a StarDict .ifo file as an
+argument.  If you want the application to watch the X11 primary selection for
+changes and automatically search for the selected text, use the -w switch.
+This feature requires GTK+.
+
+License
+-------
+`sdtui' is written by Přemysl Janouch <p.janouch@gmail.com>.
+
+You may use the software under the terms of the ISC license, the text of which
+is included within the package, or, at your option, you may relicense the work
+under the MIT or the Modified BSD License, as listed at the following site:
+
+http://www.gnu.org/licenses/license-list.html

@@ -46,6 +46,13 @@ preset search paths on startup.</para>
 <refsect1><title>Options</title>
 <variablelist>
 	<varlistentry>
+		<term><option>-w</option>, <option>--watch-primary-selection=TIMER</option></term>
+		<listitem><para>
+		watch the value of the primary selection for input
+		</para></listitem>
+	</varlistentry>
+
+	<varlistentry>
 		<term><option>-h</option>, <option>--help</option></term>
 		<listitem><para>
 		show help options
