@@ -683,6 +683,7 @@ app_search_for_entry (Application *self)
 	self->selected = 0;
 	g_object_unref (iterator);
 
+	self->show_help = FALSE;
 	app_reload_view (self);
 	app_redraw_view (self);
 }
@@ -1072,7 +1073,6 @@ app_process_key (Application *self, termo_key_t *event)
 		return TRUE;
 	}
 
-	self->show_help = FALSE;
 	if (self->input_confirmed)
 	{
 		if (self->input->len != 0)
