@@ -4,6 +4,18 @@ notifications:
   channels: "anathema.us.nu#anathema"
   use_notice: true
   skip_join: true
+env:
+ global:
+  - secure: "N6CD6ynyF+YpxhyQ6UkRz0pDQiM7jVqP5o5xkXuOP4I7+58Fq6ThEB/LK0NLIwHH9MVIyNWovlf5HHhkaLUW7qVFpmcxM3AGL0lAqaGIbZ8uCVuoL7ERtqpJ3uPl6hrt+tdUaSVvXQgteuTDgprQRICCDBxR/1s7/qBAL1T6VK0="
+addons:
+ coverity_scan:
+  project:
+   name: "pjanouch/sdtui"
+   description: "StarDict terminal UI"
+  notification_email: p.janouch@gmail.com
+  build_command_prepend: "mkdir build; cd build; cmake .. -DCMAKE_BUILD_TYPE=Release"
+  build_command: "make"
+  branch_pattern: coverity_scan
 compiler:
  - clang
  - gcc
