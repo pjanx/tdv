@@ -13,7 +13,7 @@ addons:
    name: "pjanouch/sdtui"
    description: "StarDict terminal UI"
   notification_email: p.janouch@gmail.com
-  build_command_prepend: "mkdir build; cd build; cmake .. -DCMAKE_BUILD_TYPE=Release"
+  build_command_prepend: "cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_GTK=ON -DBUILD_TESTING=ON"
   build_command: "make"
   branch_pattern: coverity_scan
 compiler:
