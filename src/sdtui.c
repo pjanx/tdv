@@ -1266,7 +1266,7 @@ process_winch_input (GIOChannel *source,
 	Application *app = data;
 
 	char c;
-	read (g_io_channel_unix_get_fd (source), &c, 1);
+	(void) read (g_io_channel_unix_get_fd (source), &c, 1);
 
 	update_curses_terminal_size ();
 	app_process_resize (app);
