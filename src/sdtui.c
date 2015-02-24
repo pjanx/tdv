@@ -416,14 +416,14 @@ app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 static void
 app_redraw_top (Application *self)
 {
-	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
 	attrset (A_REVERSE);
+	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
 	gsize indent = app_add_utf8_string (self, PROJECT_NAME "  ", A_BOLD, -1);
 	app_add_utf8_string (self, stardict_info_get_book_name
 		(stardict_dict_get_info (self->dict)), 0, COLS - indent);
 
-	mvwhline (stdscr, 1, 0, A_UNDERLINE, COLS);
 	attrset (A_UNDERLINE);
+	mvwhline (stdscr, 1, 0, A_UNDERLINE, COLS);
 	indent = app_add_utf8_string (self, self->search_label, 0, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
@@ -433,7 +433,7 @@ app_redraw_top (Application *self)
 	int word_attrs = 0;
 	if (self->input_confirmed)
 		word_attrs |= A_BOLD;
-	app_add_utf8_string (self, input_utf8, word_attrs, COLS - indent);
+	app_add_utf8_string (self, input_utf8, word_attrs, COLS - indent - 1);
 	g_free (input_utf8);
 
 	guint offset, i;
@@ -441,7 +441,7 @@ app_redraw_top (Application *self)
 		// This may be inconsistent with the output of app_add_utf8_string()
 		offset += unichar_width (g_array_index (self->input, gunichar, i));
 
-	move (1, indent + offset);
+	move (1, MIN ((gint) (indent + offset), COLS - 1));
 	refresh ();
 }
 
