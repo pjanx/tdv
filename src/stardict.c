@@ -244,8 +244,7 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 
 		if (i == _stardict_ifo_keys_length)
 		{
-			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
-				"%s: %s: %s", path, _("unknown key, ignoring"), ir.key);
+			g_info ("%s: %s: %s", path, _("unknown key, ignoring"), ir.key);
 			continue;
 		}
 
