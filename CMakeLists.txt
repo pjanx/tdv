@@ -24,8 +24,34 @@ set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 # Dependencies
 find_package (ZLIB REQUIRED)
 find_package (PkgConfig REQUIRED)
-pkg_check_modules (dependencies REQUIRED
-	ncursesw glib-2.0 gio-2.0 pango icu-uc icu-i18n)
+pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)
+
+pkg_check_modules (icu icu-uc icu-i18n)
+if (NOT icu_FOUND)
+	find_program (icu_CONFIG_EXECUTABLE icu-config)
+	if (NOT icu_CONFIG_EXECUTABLE)
+		message (FATAL_ERROR "ICU not found")
+	endif (NOT icu_CONFIG_EXECUTABLE)
+
+	execute_process (COMMAND ${icu_CONFIG_EXECUTABLE} --cppflags
+		OUTPUT_VARIABLE icu_CPPFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+	separate_arguments (icu_CPPFLAGS)
+
+	# target_link_libraries() handles linker flags as well
+	execute_process (COMMAND ${icu_CONFIG_EXECUTABLE} --ldflags
+		OUTPUT_VARIABLE icu_LIBRARIES OUTPUT_STRIP_TRAILING_WHITESPACE)
+	separate_arguments (icu_LIBRARIES)
+
+	# Filter out include directories from the preprocessor flags
+	set (icu_INCLUDE_DIRS)
+	foreach (flag ${icu_CPPFLAGS})
+		if (flag MATCHES "^-I(.*)")
+			list (APPEND icu_INCLUDE_DIRS "${CMAKE_MATCH_1}")
+		endif (flag MATCHES "^-I(.*)")
+	endforeach (flag)
+
+	# This should suffice most of the time, don't care about the rest
+endif (NOT icu_FOUND)
 
 if (USE_SYSTEM_TERMO)
 	find_package (Termo REQUIRED)
@@ -50,7 +76,7 @@ if (WITH_GTK)
 endif (WITH_GTK)
 
 link_directories (${dependencies_LIBRARY_DIRS})
-include_directories (${ZLIB_INCLUDE_DIRS}
+include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
 	${dependencies_INCLUDE_DIRS} ${Termo_INCLUDE_DIRS})
 
 # Configuration
@@ -105,8 +131,8 @@ set (project_common_headers
 	src/utils.h)
 
 # Project libraries
-set (project_common_libraries
-	${ZLIB_LIBRARIES} ${dependencies_LIBRARIES} termo-static)
+set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
+	${dependencies_LIBRARIES} termo-static)
 
 # Create a common project library so that source files are only compiled once
 if (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
