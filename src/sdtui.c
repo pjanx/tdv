@@ -48,6 +48,8 @@
 
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
+#define TOP_BAR_CUTOFF  2               //!< How many lines are reserved on top
+
 // --- Utilities ---------------------------------------------------------------
 
 static size_t
@@ -192,7 +194,7 @@ app_reload_view (Application *self)
 	if (self->entries->len != 0)
 		g_ptr_array_remove_range (self->entries, 0, self->entries->len);
 
-	gint remains = LINES - 1 + self->top_offset;
+	gint remains = LINES - TOP_BAR_CUTOFF + self->top_offset;
 	StardictIterator *iterator =
 		stardict_iterator_new (self->dict, self->top_position);
 	while (remains > 0 && stardict_iterator_is_valid (iterator))
@@ -414,9 +416,15 @@ app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 static void
 app_redraw_top (Application *self)
 {
-	mvwhline (stdscr, 0, 0, A_UNDERLINE, COLS);
+	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
+	attrset (A_REVERSE);
+	gsize indent = app_add_utf8_string (self, PROJECT_NAME "  ", A_BOLD, -1);
+	app_add_utf8_string (self, stardict_info_get_book_name
+		(stardict_dict_get_info (self->dict)), 0, COLS - indent);
+
+	mvwhline (stdscr, 1, 0, A_UNDERLINE, COLS);
 	attrset (A_UNDERLINE);
-	gsize indent = app_add_utf8_string (self, self->search_label, 0, -1);
+	indent = app_add_utf8_string (self, self->search_label, 0, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
@@ -433,7 +441,7 @@ app_redraw_top (Application *self)
 		// This may be inconsistent with the output of app_add_utf8_string()
 		offset += unichar_width (g_array_index (self->input, gunichar, i));
 
-	move (0, indent + offset);
+	move (1, indent + offset);
 	refresh ();
 }
 
@@ -453,26 +461,26 @@ app_get_left_column_width (Application *self)
 static void
 app_show_message (Application *self, const gchar *lines[], gsize len)
 {
-	gint top = (LINES - 1 - len) / 2;
+	gint top = (LINES - TOP_BAR_CUTOFF - len) / 2;
 
 	gint i;
 	for (i = 0; i < top; i++)
 	{
-		move (1 + i, 0);
+		move (TOP_BAR_CUTOFF + i, 0);
 		clrtoeol ();
 	}
 
 	attrset (0);
-	while (len-- && i < LINES - 1)
+	while (len-- && i < LINES - TOP_BAR_CUTOFF)
 	{
-		move (1 + i, 0);
+		move (TOP_BAR_CUTOFF + i, 0);
 		clrtoeol ();
 
 		gint x = (COLS - g_utf8_strlen (*lines, -1)) / 2;
 		if (x < 0)
 			x = 0;
 
-		move (1 + i, x);
+		move (TOP_BAR_CUTOFF + i, x);
 		app_add_utf8_string (self, *lines, 0, COLS - x);
 
 		lines++;
@@ -509,7 +517,7 @@ app_redraw_view (Application *self)
 		return;
 	}
 
-	move (1, 0);
+	move (TOP_BAR_CUTOFF, 0);
 
 	guint i, k = self->top_offset, shown = 0;
 	for (i = 0; i < self->entries->len; i++)
@@ -528,7 +536,7 @@ app_redraw_view (Application *self)
 			app_add_utf8_string (self,
 				ve->definitions[k], 0, COLS - left_width - 1);
 
-			if ((gint) ++shown == LINES - 1)
+			if ((gint) ++shown == LINES - TOP_BAR_CUTOFF)
 				goto done;
 		}
 
@@ -613,7 +621,7 @@ app_scroll_up (Application *self, guint n)
 		ViewEntry *last_entry =
 			g_ptr_array_index (self->entries, self->entries->len - 1);
 		if ((gint) (n_definitions - self->top_offset
-			- last_entry->definitions_length) >= LINES - 1)
+			- last_entry->definitions_length) >= LINES - TOP_BAR_CUTOFF)
 		{
 			n_definitions -= last_entry->definitions_length;
 			g_ptr_array_remove_index_fast
@@ -650,7 +658,7 @@ app_scroll_down (Application *self, guint n)
 			self->top_offset = 0;
 		}
 
-		if ((gint) (n_definitions - self->top_offset) < LINES - 1)
+		if ((gint) (n_definitions - self->top_offset) < LINES - TOP_BAR_CUTOFF)
 		{
 			ViewEntry *ve = append_entry (self,
 				self->top_position + self->entries->len);
@@ -718,10 +726,10 @@ app_one_entry_down (Application *self)
 			break;
 	}
 
-	if (first > LINES - 2)
+	if (first > LINES - TOP_BAR_CUTOFF - 1)
 	{
-		self->selected = LINES - 2;
-		app_scroll_down (self, first - (LINES - 2));
+		self->selected = LINES - TOP_BAR_CUTOFF - 1;
+		app_scroll_down (self, first - (LINES - TOP_BAR_CUTOFF - 1));
 	}
 	else
 	{
@@ -775,8 +783,8 @@ app_process_resize (Application *self)
 	app_reload_view (self);
 
 	guint n_visible = app_count_view_items (self) - self->top_offset;
-	if ((gint) n_visible > LINES - 1)
-		n_visible = LINES - 1;
+	if ((gint) n_visible > LINES - TOP_BAR_CUTOFF)
+		n_visible = LINES - TOP_BAR_CUTOFF;
 
 	if (self->selected >= n_visible)
 	{
@@ -866,7 +874,7 @@ app_process_user_action (Application *self, UserAction action)
 		RESTORE_CURSOR
 		return TRUE;
 	case USER_ACTION_GOTO_DEFINITION_NEXT:
-		if ((gint) self->selected < LINES - 2 &&
+		if ((gint) self->selected < LINES - TOP_BAR_CUTOFF - 1 &&
 			self->selected < app_count_view_items (self) - self->top_offset - 1)
 		{
 			self->selected++;
@@ -887,12 +895,12 @@ app_process_user_action (Application *self, UserAction action)
 		return TRUE;
 
 	case USER_ACTION_GOTO_PAGE_PREVIOUS:
-		app_scroll_up (self, LINES - 1);
+		app_scroll_up (self, LINES - TOP_BAR_CUTOFF);
 		// FIXME: selection
 		RESTORE_CURSOR
 		return TRUE;
 	case USER_ACTION_GOTO_PAGE_NEXT:
-		app_scroll_down (self, LINES - 1);
+		app_scroll_down (self, LINES - TOP_BAR_CUTOFF);
 		// FIXME: selection
 		RESTORE_CURSOR
 		return TRUE;
@@ -1132,6 +1140,8 @@ app_process_left_mouse_click (Application *self, int line, int column)
 {
 	SAVE_CURSOR
 	if (line == 0)
+		;  // At the moment there's nothing useful for us to do
+	else if (line == 1)
 	{
 		gsize label_len = g_utf8_strlen (self->search_label, -1);
 		gint pos = column - label_len;
@@ -1144,7 +1154,7 @@ app_process_left_mouse_click (Application *self, int line, int column)
 	}
 	else if (line <= (int) (app_count_view_items (self) - self->top_offset))
 	{
-		self->selected = line - 1;
+		self->selected = line - TOP_BAR_CUTOFF;
 		app_redraw_view (self);
 		RESTORE_CURSOR
 	}
