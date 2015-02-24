@@ -24,7 +24,8 @@ set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 # Dependencies
 find_package (ZLIB REQUIRED)
 find_package (PkgConfig REQUIRED)
-pkg_check_modules (dependencies REQUIRED ncursesw glib-2.0 gio-2.0 pango)
+pkg_check_modules (dependencies REQUIRED
+	ncursesw glib-2.0 gio-2.0 pango icu-uc icu-i18n)
 
 if (USE_SYSTEM_TERMO)
 	find_package (Termo REQUIRED)

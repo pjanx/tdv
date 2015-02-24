@@ -1,7 +1,7 @@
 /*
  * stardict.c: StarDict API
  *
- * Copyright (c) 2013, Přemysl Janouch <p.janouch@gmail.com>
+ * Copyright (c) 2013 - 2015, Přemysl Janouch <p.janouch@gmail.com>
  * All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -26,6 +26,8 @@
 #include <glib.h>
 #include <gio/gio.h>
 #include <glib/gi18n.h>
+
+#include <unicode/ucol.h>
 
 #include "stardict.h"
 #include "stardict-private.h"
@@ -177,6 +179,8 @@ stardict_info_free (StardictInfo *sdi)
 	g_free (sdi->description);
 	g_free (sdi->date);
 	g_free (sdi->same_type_sequence);
+
+	g_free (sdi->collation);
 	g_free (sdi);
 }
 
@@ -194,7 +198,10 @@ const struct stardict_ifo_key _stardict_ifo_keys[] =
 	DEFINE_IFO_KEY ("website",          STRING, website),
 	DEFINE_IFO_KEY ("description",      STRING, description),
 	DEFINE_IFO_KEY ("date",             STRING, date),
-	DEFINE_IFO_KEY ("sametypesequence", STRING, same_type_sequence)
+	DEFINE_IFO_KEY ("sametypesequence", STRING, same_type_sequence),
+
+	// These are our own custom
+	DEFINE_IFO_KEY ("collation",        STRING, collation)
 };
 
 gsize _stardict_ifo_keys_length = G_N_ELEMENTS (_stardict_ifo_keys);
@@ -358,6 +365,12 @@ struct stardict_dict_private
 	GArray        * index;              //!< Word index
 	GArray        * synonyms;           //!< Synonyms
 
+	/* The collated indexes are only permutations of their normal selves. */
+
+	UCollator     * collator;           //!< ICU index collator
+	GArray        * collated_index;     //!< Sorted indexes into @a index
+	GArray        * collated_synonyms;  //!< Sorted indexes into @a synonyms
+
 	/* There are currently three ways the dictionary data can be read:
 	 * through mmap(), from a seekable GInputStream, or from a preallocated
 	 * chunk of memory that the whole dictionary has been decompressed into.
@@ -383,6 +396,13 @@ stardict_dict_finalize (GObject *self)
 
 	g_array_free (priv->index, TRUE);
 	g_array_free (priv->synonyms, TRUE);
+
+	if (priv->collator)
+		ucol_close (priv->collator);
+	if (priv->collated_index)
+		g_array_free (priv->collated_index, TRUE);
+	if (priv->collated_synonyms)
+		g_array_free (priv->collated_synonyms, TRUE);
 
 	if (priv->mapped_dict)
 		g_mapped_file_unref (priv->mapped_dict);
@@ -641,6 +661,90 @@ cannot_open:
 	return TRUE;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+/** Compare the two strings by collation rules. */
+static inline gint
+stardict_dict_strcoll (gconstpointer s1, gconstpointer s2, gpointer data)
+{
+	StardictDict *sd = data;
+	UErrorCode error = U_ZERO_ERROR;
+	return ucol_strcollUTF8 (sd->priv->collator, s1, -1, s2, -1, &error);
+}
+
+/** Stricter stardict_dict_strcoll() used to sort the collated index. */
+static inline gint
+stardict_dict_strcoll_for_sorting
+	(gconstpointer s1, gconstpointer s2, gpointer data)
+{
+	UCollationResult a = stardict_dict_strcoll (s1, s2, data);
+	return a ? a : strcmp (s1, s2);
+}
+
+static inline gint
+stardict_dict_index_coll_for_sorting
+	(gconstpointer x1, gconstpointer x2, gpointer data)
+{
+	StardictDict *sd = data;
+	const gchar *s1 = g_array_index
+		(sd->priv->index, StardictIndexEntry, *(guint32 *) x1).name;
+	const gchar *s2 = g_array_index
+		(sd->priv->index, StardictIndexEntry, *(guint32 *) x2).name;
+	return stardict_dict_strcoll_for_sorting (s1, s2, data);
+}
+
+static inline gint
+stardict_dict_synonyms_coll_for_sorting
+	(gconstpointer x1, gconstpointer x2, gpointer data)
+{
+	StardictDict *sd = data;
+	const gchar *s1 = g_array_index
+		(sd->priv->index, StardictSynonymEntry, *(guint32 *) x1).word;
+	const gchar *s2 = g_array_index
+		(sd->priv->index, StardictSynonymEntry, *(guint32 *) x2).word;
+	return stardict_dict_strcoll_for_sorting (s1, s2, data);
+}
+
+static gboolean
+stardict_dict_set_collation (StardictDict *sd, const gchar *collation)
+{
+	StardictDictPrivate *priv = sd->priv;
+	UErrorCode error = U_ZERO_ERROR;
+	if (!(priv->collator = ucol_open (collation, &error)))
+	{
+		// TODO: set a meaningful error
+		g_info ("failed to create a collator for `%s'", collation);
+		return FALSE;
+	}
+
+	// TODO: if error != U_ZERO_ERROR, report a meaningful message
+
+	ucol_setAttribute (priv->collator, UCOL_CASE_FIRST, UCOL_OFF, &error);
+
+	priv->collated_index = g_array_sized_new (FALSE, FALSE,
+		sizeof (guint32), priv->index->len);
+	for (guint32 i = 0; i < priv->index->len; i++)
+		g_array_append_val (priv->collated_index, i);
+	g_array_sort_with_data (sd->priv->collated_index,
+		stardict_dict_index_coll_for_sorting, sd);
+
+	priv->collated_synonyms = g_array_sized_new (FALSE, FALSE,
+		sizeof (guint32), priv->synonyms->len);
+	for (guint32 i = 0; i < priv->synonyms->len; i++)
+		g_array_append_val (priv->collated_synonyms, i);
+	g_array_sort_with_data (sd->priv->collated_synonyms,
+		stardict_dict_synonyms_coll_for_sorting, sd);
+
+	// Make the collator something like case-insensitive, see:
+	// http://userguide.icu-project.org/collation/concepts
+	// We shouldn't need to sort the data anymore, and if we did, we could just
+	// reset the strength to its default value for the given locale.
+	ucol_setStrength (priv->collator, UCOL_SECONDARY);
+	return TRUE;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 /** Load a StarDict dictionary.
  *  @param[in] sdi  Parsed .ifo data.  The dictionary assumes ownership.
  */
@@ -709,8 +813,11 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 
 	gchar *base_syn = g_strconcat (base, ".syn", NULL);
 	if (g_file_test (base_syn, G_FILE_TEST_EXISTS | G_FILE_TEST_IS_REGULAR))
-		load_syn (sd, base_syn, NULL);
+		(void) load_syn (sd, base_syn, NULL);
 	g_free (base_syn);
+
+	if (sdi->collation)
+		(void) stardict_dict_set_collation (sd, sdi->collation);
 
 	g_free (base);
 	return sd;
@@ -722,6 +829,20 @@ error:
 	return NULL;
 }
 
+static gint
+stardict_dict_cmp_synonym (StardictDict *sd, const gchar *word, gint i)
+{
+	GArray *collated = sd->priv->collated_synonyms;
+	GArray *synonyms = sd->priv->synonyms;
+
+	if (sd->priv->collator)
+		return stardict_dict_strcoll (word,
+			g_array_index (synonyms, StardictSynonymEntry,
+				g_array_index (collated, guint32, i)).word, sd);
+	return g_ascii_strcasecmp (word,
+		g_array_index (synonyms, StardictSynonymEntry, i).word);
+}
+
 /** Return words for which the argument is a synonym of or NULL
  *  if there are no such words.
  */
@@ -731,12 +852,12 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 	GArray *synonyms = sd->priv->synonyms;
 	GArray *index = sd->priv->index;
 
-	BINARY_SEARCH_BEGIN (synonyms->len - 1, g_ascii_strcasecmp (word,
-			g_array_index (synonyms, StardictSynonymEntry, imid).word))
+	BINARY_SEARCH_BEGIN (synonyms->len - 1,
+		stardict_dict_cmp_synonym (sd, word, imid))
 
 	// Back off to the first matching entry
-	while (imid > 0 && !g_ascii_strcasecmp (word,
-		g_array_index (synonyms, StardictSynonymEntry, --imid).word));
+	while (imid > 0 && !stardict_dict_cmp_synonym (sd, word, --imid))
+		;
 
 	GPtrArray *array = g_ptr_array_new ();
 
@@ -751,8 +872,21 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 	return (gchar **) g_ptr_array_free (array, FALSE);
 
 	BINARY_SEARCH_END
-
 	return NULL;
+}
+
+static gint
+stardict_dict_cmp_index (StardictDict *sd, const gchar *word, gint i)
+{
+	GArray *collated = sd->priv->collated_index;
+	GArray *index = sd->priv->index;
+
+	if (sd->priv->collator)
+		return stardict_dict_strcoll (word,
+			g_array_index (index, StardictIndexEntry,
+				g_array_index (collated, guint32, i)).name, sd);
+	return g_ascii_strcasecmp (word,
+		g_array_index (index, StardictIndexEntry, i).name);
 }
 
 /** Search for a word.  The search is ASCII-case-insensitive.
@@ -765,12 +899,11 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 {
 	GArray *index = sd->priv->index;
 
-	BINARY_SEARCH_BEGIN (index->len - 1, g_ascii_strcasecmp (word,
-		g_array_index (index, StardictIndexEntry, imid).name))
+	BINARY_SEARCH_BEGIN (index->len - 1,
+		stardict_dict_cmp_index (sd, word, imid))
 
 	// Back off to the first matching entry
-	while (imid > 0 && !g_ascii_strcasecmp (word,
-		g_array_index (index, StardictIndexEntry, imid - 1).name))
+	while (imid > 0 && !stardict_dict_cmp_index (sd, word, imid - 1))
 		imid--;
 
 	if (success) *success = TRUE;
@@ -1051,6 +1184,13 @@ stardict_iterator_new (StardictDict *sd, guint32 offset)
 	return si;
 }
 
+static gint64
+stardict_iterator_get_real_offset (StardictIterator *sdi)
+{
+	return sdi->owner->priv->collator ? g_array_index
+		(sdi->owner->priv->collated_index, guint32, sdi->offset) : sdi->offset;
+}
+
 /** Return the word in the index that the iterator points at, or NULL. */
 const gchar *
 stardict_iterator_get_word (StardictIterator *sdi)
@@ -1059,7 +1199,7 @@ stardict_iterator_get_word (StardictIterator *sdi)
 	if (!stardict_iterator_is_valid (sdi))
 		return NULL;
 	return g_array_index (sdi->owner->priv->index,
-		StardictIndexEntry, sdi->offset).name;
+		StardictIndexEntry, stardict_iterator_get_real_offset (sdi)).name;
 }
 
 /** Return the dictionary entry that the iterator points at, or NULL. */
@@ -1069,7 +1209,8 @@ stardict_iterator_get_entry (StardictIterator *sdi)
 	g_return_val_if_fail (STARDICT_IS_ITERATOR (sdi), NULL);
 	if (!stardict_iterator_is_valid (sdi))
 		return FALSE;
-	return stardict_dict_get_entry (sdi->owner, sdi->offset);
+	return stardict_dict_get_entry (sdi->owner,
+		stardict_iterator_get_real_offset (sdi));
 }
 
 /** Return whether the iterator points to a valid index entry. */

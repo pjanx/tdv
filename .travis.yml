@@ -23,7 +23,7 @@ before_install:
  - sudo apt-get update -qq
 install:
  - sudo apt-get install -y xsltproc docbook-xsl zlib1g-dev libncursesw5-dev
- - sudo apt-get install -y libgtk-3-dev libpango1.0-dev
+ - sudo apt-get install -y libgtk-3-dev libpango1.0-dev libicu-dev
 before_script:
  - mkdir build
  - cd build
