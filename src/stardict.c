@@ -28,11 +28,16 @@
 #include <glib/gi18n.h>
 
 #include <unicode/ucol.h>
+#include <unicode/ustring.h>
 
 #include "stardict.h"
 #include "stardict-private.h"
 #include "dictzip-input-stream.h"
 #include "utils.h"
+
+#if ! GLIB_CHECK_VERSION (2, 40, 0)
+#define g_info g_debug
+#endif
 
 
 // --- Utilities ---------------------------------------------------------------
@@ -668,7 +673,30 @@ stardict_dict_strcoll (gconstpointer s1, gconstpointer s2, gpointer data)
 {
 	StardictDict *sd = data;
 	UErrorCode error = U_ZERO_ERROR;
+
+#if U_ICU_VERSION_MAJOR_NUM >= 50
 	return ucol_strcollUTF8 (sd->priv->collator, s1, -1, s2, -1, &error);
+#else  // U_ICU_VERSION_MAJOR_NUM >= 50
+	// This remarkably retarded API absolutely reeks of corporate;
+	// I don't have to tell you that this code runs slow, do I?
+
+	int32_t uc1_len = 0;
+	int32_t uc2_len = 0;
+
+	error = U_ZERO_ERROR;
+	u_strFromUTF8WithSub (NULL, 0, &uc1_len, s1, -1, 0xFFFD, NULL, &error);
+	error = U_ZERO_ERROR;
+	u_strFromUTF8WithSub (NULL, 0, &uc2_len, s2, -1, 0xFFFD, NULL, &error);
+
+	UChar uc1[uc1_len];
+	UChar uc2[uc2_len];
+	error = U_ZERO_ERROR;
+	u_strFromUTF8WithSub (uc1, uc1_len, NULL, s1, -1, 0xFFFD, NULL, &error);
+	error = U_ZERO_ERROR;
+	u_strFromUTF8WithSub (uc2, uc2_len, NULL, s2, -1, 0xFFFD, NULL, &error);
+
+	return ucol_strcoll (sd->priv->collator, uc1, uc1_len, uc2, uc2_len);
+#endif  // U_ICU_VERSION_MAJOR_NUM >= 50
 }
 
 /** Stricter stardict_dict_strcoll() used to sort the collated index. */
