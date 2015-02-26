@@ -1,6 +1,9 @@
-# Backup files
-*.*~
-# IDE project files
-/CMakeLists.txt.user
-# Blah
-/.clang_complete
+# Build files
+/build
+
+# Qt Creator files
+/CMakeLists.txt.user*
+/sdtui.config
+/sdtui.files
+/sdtui.creator*
+/sdtui.includes

@@ -1,26 +1,31 @@
-StarDict terminal UI
+StarDict Terminal UI
 ====================
 
-This program aims to provide an easy way of viewing translation and other kinds
-of dictionaries in your terminal.  The author wasn't successful in finding any
-free dictionary software of this type, GUI or not, and thus decided to write his
-own.
+`sdtui' aims to provide an easy way of viewing translation as well as other
+kinds of dictionaries in your terminal.  I wasn't successful in finding any free
+dictionary software of this kind, GUI or not, and thus decided to write my own.
 
-The project is covered by a BSD-style license, unlike vast majority of other
+The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
-software under a more permissive license than your usual GNU General Public
-License.  I'll buy you a beer for shouting obscenities at the address of RMS in
-public; I couldn't reuse _anything_.
+software.  I wasn't able to reuse _anything_.
 
-Some work has to be done yet before the software can be considered fit for
-inclusion in regular Linux and BSD distributions.  Help is much appreciated in
-this regard.
+Further Development
+-------------------
+While I've been successfully using sdtui for a long time now, some work has to
+be done yet before the software can be considered fit for inclusion in regular
+Linux and/or BSD distributions.  Help is much appreciated.
+
+An approximate list of things that need to be resolved:
+ - rewrite the frontend using a proper TUI framework
+ - load a list of installed dictionaries at startup (use the default locations
+   used by StarDict) and let the user choose which dictionary to open
+ - figure out a way to become capable of displaying most dictionaries
 
 Building and Running
 --------------------
-Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl,
-                    ncursesw, zlib, ICU, termo (included),
-                    glib-2.0, pango, gtk+ (optional, any version)
+Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl
+Runtime dependencies: ncursesw, zlib, ICU, termo (included),
+                      glib-2.0, pango, gtk+ (optional, any version)
 
  $ git clone https://github.com/pjanouch/sdtui.git
  $ git submodule init
@@ -31,7 +36,7 @@ Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl,
  $ make
 
 To install the application, you can do either the usual:
- $ make install
+ # make install
 
 Or you can try telling CMake to make a package for you.  For Debian it is:
  $ cpack -G DEB
