@@ -11,5 +11,5 @@
 #cmakedefine WITH_GTK
 #cmakedefine HAVE_RESIZETERM
 
-#endif /* ! CONFIG_H */
+#endif  // ! CONFIG_H
 

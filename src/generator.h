@@ -24,20 +24,20 @@
 #ifndef GENERATOR_H
 #define GENERATOR_H
 
-/** Simplifies the task of creating a StarDict dictionary. */
+/// Simplifies the task of creating a StarDict dictionary.
 typedef struct generator               Generator;
 
 struct generator
 {
-	StardictInfo       * info;         //!< Dictionary information, fill it in
+	StardictInfo       * info;         ///< Dictionary information, fill it in
 
-	goffset              entry_mark;   //!< Marks the entry's start offset
+	goffset              entry_mark;   ///< Marks the entry's start offset
 
-	GFileOutputStream  * dict_stream;  //!< Dictionary stream
-	GDataOutputStream  * dict_data;    //!< Dictionary data stream wrapper
+	GFileOutputStream  * dict_stream;  ///< Dictionary stream
+	GDataOutputStream  * dict_data;    ///< Dictionary data stream wrapper
 
-	GFileOutputStream  * idx_stream;   //!< Index file stream
-	GDataOutputStream  * idx_data;     //!< Index file data stream wrapper
+	GFileOutputStream  * idx_stream;   ///< Index file stream
+	GDataOutputStream  * idx_data;     ///< Index file data stream wrapper
 };
 
 Generator *generator_new (const gchar *base, GError **error);
@@ -53,4 +53,4 @@ gboolean generator_write_string (Generator *self,
 gboolean generator_finish_entry (Generator *self,
 	const gchar *word, GError **error);
 
-#endif /* ! GENERATOR_H */
+#endif  // ! GENERATOR_H

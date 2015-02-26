@@ -48,7 +48,7 @@
 
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
-#define TOP_BAR_CUTOFF  2               //!< How many lines are reserved on top
+#define TOP_BAR_CUTOFF  2               ///< How many lines are reserved on top
 
 // --- Utilities ---------------------------------------------------------------
 
@@ -62,55 +62,55 @@ unichar_width (gunichar ch)
 
 // --- Application -------------------------------------------------------------
 
-/** Data relating to one entry within the dictionary. */
+/// Data relating to one entry within the dictionary.
 typedef struct view_entry               ViewEntry;
-/** Encloses application data. */
+/// Encloses application data.
 typedef struct application              Application;
-/** Application options. */
+/// Application options.
 typedef struct app_options              AppOptions;
 
 struct view_entry
 {
-	gchar   * word;                     //!< Word
-	gchar  ** definitions;              //!< Word definition entries
-	gsize     definitions_length;       //!< Length of the @a definitions array
+	gchar   * word;                     ///< Word
+	gchar  ** definitions;              ///< Word definition entries
+	gsize     definitions_length;       ///< Length of the @a definitions array
 };
 
 struct application
 {
-	GMainLoop     * loop;               //!< Main loop
-	termo_t       * tk;                 //!< termo handle
-	guint           tk_timer;           //!< termo timeout timer
-	GIConv          ucs4_to_locale;     //!< UTF-32 -> locale conversion
-	gboolean        locale_is_utf8;     //!< The locale is Unicode
+	GMainLoop     * loop;               ///< Main loop
+	termo_t       * tk;                 ///< termo handle
+	guint           tk_timer;           ///< termo timeout timer
+	GIConv          ucs4_to_locale;     ///< UTF-32 -> locale conversion
+	gboolean        locale_is_utf8;     ///< The locale is Unicode
 
-	StardictDict  * dict;               //!< The current dictionary
-	guint           show_help : 1;      //!< Whether help can be shown
+	StardictDict  * dict;               ///< The current dictionary
+	guint           show_help : 1;      ///< Whether help can be shown
 
-	guint32         top_position;       //!< Index of the topmost dict. entry
-	guint           top_offset;         //!< Offset into the top entry
-	guint           selected;           //!< Offset to the selected definition
-	GPtrArray     * entries;            //!< ViewEntry's within the view
+	guint32         top_position;       ///< Index of the topmost dict. entry
+	guint           top_offset;         ///< Offset into the top entry
+	guint           selected;           ///< Offset to the selected definition
+	GPtrArray     * entries;            ///< ViewEntry's within the view
 
-	gchar         * search_label;       //!< Text of the "Search" label
-	GArray        * input;              //!< The current search input
-	guint           input_pos;          //!< Cursor position within input
-	gboolean        input_confirmed;    //!< Input has been confirmed
+	gchar         * search_label;       ///< Text of the "Search" label
+	GArray        * input;              ///< The current search input
+	guint           input_pos;          ///< Cursor position within input
+	gboolean        input_confirmed;    ///< Input has been confirmed
 
-	gfloat          division;           //!< Position of the division column
+	gfloat          division;           ///< Position of the division column
 
-	guint           selection_timer;    //!< Selection watcher timeout timer
-	gint            selection_interval; //!< Selection watcher timer interval
-	gchar         * selection_contents; //!< Selection contents
+	guint           selection_timer;    ///< Selection watcher timeout timer
+	gint            selection_interval; ///< Selection watcher timer interval
+	gchar         * selection_contents; ///< Selection contents
 };
 
 struct app_options
 {
-	gboolean show_version;              //!< Output version information and quit
-	gint     selection_watcher;         //!< Interval in milliseconds, or -1
+	gboolean show_version;              ///< Output version information and quit
+	gint     selection_watcher;         ///< Interval in milliseconds, or -1
 };
 
-/** Splits the entry and adds it to a pointer array. */
+/// Splits the entry and adds it to a pointer array.
 static void
 view_entry_split_add (GPtrArray *out, const gchar *text)
 {
@@ -121,7 +121,7 @@ view_entry_split_add (GPtrArray *out, const gchar *text)
 	g_strfreev (tmp);
 }
 
-/** Decomposes a dictionary entry into the format we want. */
+/// Decomposes a dictionary entry into the format we want.
 static ViewEntry *
 view_entry_new (StardictIterator *iterator)
 {
@@ -178,7 +178,7 @@ view_entry_new (StardictIterator *iterator)
 	return ve;
 }
 
-/** Release resources associated with the view entry. */
+/// Release resources associated with the view entry.
 static void
 view_entry_free (ViewEntry *ve)
 {
@@ -187,7 +187,7 @@ view_entry_free (ViewEntry *ve)
 	g_slice_free1 (sizeof *ve, ve);
 }
 
-/** Reload view items. */
+/// Reload view items.
 static void
 app_reload_view (Application *self)
 {
@@ -219,7 +219,7 @@ rearm_selection_watcher (Application *self)
 }
 #endif  // WITH_GTK
 
-/** Initialize the application core. */
+/// Initialize the application core.
 static void
 app_init (Application *self, AppOptions *options, const gchar *filename)
 {
@@ -274,7 +274,7 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 	app_reload_view (self);
 }
 
-/** Free any resources used by the application. */
+/// Free any resources used by the application.
 static void
 app_destroy (Application *self)
 {
@@ -297,7 +297,7 @@ app_destroy (Application *self)
 	g_iconv_close (self->ucs4_to_locale);
 }
 
-/** Run the main event dispatch loop. */
+/// Run the main event dispatch loop.
 static void
 app_run (Application *self)
 {
@@ -309,7 +309,7 @@ app_run (Application *self)
 #endif  // WITH_GTK
 }
 
-/** Quit the main event dispatch loop. */
+/// Quit the main event dispatch loop.
 static void
 app_quit (Application *self)
 {
@@ -321,7 +321,7 @@ app_quit (Application *self)
 #endif  // WITH_GTK
 }
 
-/** Returns if the Unicode character is representable in the current locale. */
+/// Returns if the Unicode character is representable in the current locale.
 static gboolean
 app_is_character_in_locale (Application *self, gunichar ch)
 {
@@ -337,12 +337,11 @@ app_is_character_in_locale (Application *self, gunichar ch)
 	return TRUE;
 }
 
-/** Write the given UTF-8 string padded with spaces.
- *  @param[in] n  The number of characters to write, or -1 for the whole string.
- *  @param[in] attrs  Text attributes for the text, without padding.
- *                    To change the attributes of all output, use attrset().
- *  @return The number of characters output.
- */
+/// Write the given UTF-8 string padded with spaces.
+/// @param[in] n  The number of characters to write, or -1 for the whole string.
+/// @param[in] attrs  Text attributes for the text, without padding.
+///                   To change the attributes of all output, use attrset().
+/// @return The number of characters output.
 static gsize
 app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 {
@@ -412,7 +411,7 @@ app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
 	return n;
 }
 
-/** Render the top bar. */
+/// Render the top bar.
 static void
 app_redraw_top (Application *self)
 {
@@ -445,7 +444,7 @@ app_redraw_top (Application *self)
 	refresh ();
 }
 
-/** Computes width for the left column. */
+/// Computes width for the left column.
 static guint
 app_get_left_column_width (Application *self)
 {
@@ -457,7 +456,7 @@ app_get_left_column_width (Application *self)
 	return width;
 }
 
-/** Display a message in the view area. */
+/// Display a message in the view area.
 static void
 app_show_message (Application *self, const gchar *lines[], gsize len)
 {
@@ -491,7 +490,7 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 	refresh ();
 }
 
-/** Show some information about the program. */
+/// Show some information about the program.
 static void
 app_show_help (Application *self)
 {
@@ -507,7 +506,7 @@ app_show_help (Application *self)
 	app_show_message (self, lines, G_N_ELEMENTS (lines));
 }
 
-/** Redraw the dictionary view. */
+/// Redraw the dictionary view.
 static void
 app_redraw_view (Application *self)
 {
@@ -549,7 +548,7 @@ done:
 	refresh ();
 }
 
-/** Just prepends a new view entry into the entries array. */
+/// Just prepends a new view entry into the entries array.
 static ViewEntry *
 prepend_entry (Application *self, guint32 position)
 {
@@ -563,7 +562,7 @@ prepend_entry (Application *self, guint32 position)
 	return g_ptr_array_index (self->entries, 0) = ve;
 }
 
-/** Just appends a new view entry to the entries array. */
+/// Just appends a new view entry to the entries array.
 static ViewEntry *
 append_entry (Application *self, guint32 position)
 {
@@ -579,7 +578,7 @@ append_entry (Application *self, guint32 position)
 	return ve;
 }
 
-/** Counts the number of definitions available for seeing. */
+/// Counts the number of definitions available for seeing.
 static guint
 app_count_view_items (Application *self)
 {
@@ -592,7 +591,7 @@ app_count_view_items (Application *self)
 	return n_definitions;
 }
 
-/** Scroll up @a n entries. */
+/// Scroll up @a n entries.
 static gboolean
 app_scroll_up (Application *self, guint n)
 {
@@ -606,7 +605,7 @@ app_scroll_up (Application *self, guint n)
 			continue;
 		}
 
-		/* We've reached the top */
+		// We've reached the top
 		if (self->top_position == 0)
 		{
 			success = FALSE;
@@ -617,7 +616,7 @@ app_scroll_up (Application *self, guint n)
 		self->top_offset = ve->definitions_length - 1;
 		n_definitions += ve->definitions_length;
 
-		/* Remove the last entry if not shown */
+		// Remove the last entry if not shown
 		ViewEntry *last_entry =
 			g_ptr_array_index (self->entries, self->entries->len - 1);
 		if ((gint) (n_definitions - self->top_offset
@@ -633,7 +632,7 @@ app_scroll_up (Application *self, guint n)
 	return success;
 }
 
-/** Scroll down @a n entries. */
+/// Scroll down @a n entries.
 static gboolean
 app_scroll_down (Application *self, guint n)
 {
@@ -667,7 +666,7 @@ app_scroll_down (Application *self, guint n)
 		}
 	}
 
-	/* Fix cursor to not point below the view items */
+	// Fix cursor to not point below the view items
 	if (self->selected >= n_definitions - self->top_offset)
 		self->selected  = n_definitions - self->top_offset - 1;
 
@@ -675,7 +674,7 @@ app_scroll_down (Application *self, guint n)
 	return success;
 }
 
-/** Moves the selection one entry up. */
+/// Moves the selection one entry up.
 static gboolean
 app_one_entry_up (Application *self)
 {
@@ -711,7 +710,7 @@ app_one_entry_up (Application *self)
 	return TRUE;
 }
 
-/** Moves the selection one entry down. */
+/// Moves the selection one entry down.
 static void
 app_one_entry_down (Application *self)
 {
@@ -738,7 +737,7 @@ app_one_entry_down (Application *self)
 	}
 }
 
-/** Redraw everything. */
+/// Redraw everything.
 static void
 app_redraw (Application *self)
 {
@@ -746,7 +745,7 @@ app_redraw (Application *self)
 	app_redraw_top (self);
 }
 
-/** Search for the current entry. */
+/// Search for the current entry.
 static void
 app_search_for_entry (Application *self)
 {
@@ -776,7 +775,7 @@ app_search_for_entry (Application *self)
 	move (last_y, last_x);          \
 	refresh ();
 
-/** The terminal has been resized, make appropriate changes. */
+/// The terminal has been resized, make appropriate changes.
 static gboolean
 app_process_resize (Application *self)
 {
@@ -798,7 +797,7 @@ app_process_resize (Application *self)
 
 // --- User input handling -----------------------------------------------------
 
-/** All the actions that can be performed by the user. */
+/// All the actions that can be performed by the user.
 typedef enum user_action                UserAction;
 
 enum user_action
@@ -1160,7 +1159,7 @@ app_process_left_mouse_click (Application *self, int line, int column)
 	}
 }
 
-/** Process mouse input. */
+/// Process mouse input.
 static gboolean
 app_process_mouse (Application *self, termo_key_t *event)
 {
@@ -1181,7 +1180,7 @@ app_process_mouse (Application *self, termo_key_t *event)
 	return TRUE;
 }
 
-/** Process input events from the terminal. */
+/// Process input events from the terminal.
 static gboolean
 app_process_termo_event (Application *self, termo_key_t *event)
 {
@@ -1200,7 +1199,7 @@ app_process_termo_event (Application *self, termo_key_t *event)
 
 // --- SIGWINCH ----------------------------------------------------------------
 
-static int g_winch_pipe[2];            /**< SIGWINCH signalling pipe. */
+static int g_winch_pipe[2];            ///< SIGWINCH signalling pipe.
 
 static void
 winch_handler (int signum)
@@ -1456,7 +1455,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	app_redraw (&app);
 
-	/* Message loop. */
+	// Message loop.
 	g_io_add_watch (g_io_channel_unix_new (STDIN_FILENO),
 		G_IO_IN, process_stdin_input, &app);
 	g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),

@@ -40,43 +40,43 @@ typedef struct worker_data WorkerData;
 
 struct worker_data
 {
-	gchar **cmdline;                    //! eSpeak command line
-	guint ignore_acronyms : 1;          //! Don't spell out acronyms
-	GRegex *re_stop;                    //! Regex for stop sequences
-	GRegex *re_acronym;                 //! Regex for ACRONYMS
+	gchar **cmdline;                    ///< eSpeak command line
+	guint ignore_acronyms : 1;          ///< Don't spell out acronyms
+	GRegex *re_stop;                    ///< Regex for stop sequences
+	GRegex *re_acronym;                 ///< Regex for ACRONYMS
 
-	guint32 start_entry;                //! The first entry to be processed
-	guint32 end_entry;                  //! Past the last entry to be processed
+	guint32 start_entry;                ///< The first entry to be processed
+	guint32 end_entry;                  ///< Past the last entry to be processed
 
-	/* Reader, writer */
-	GMutex *dict_mutex;                 //! Locks the dictionary object
+	// Reader, writer
+	GMutex *dict_mutex;                 ///< Locks the dictionary object
 
-	/* Reader */
-	GThread *main_thread;               //! A handle to the reader thread
-	StardictDict *dict;                 //! The dictionary object
-	gpointer output;                    //! Linked-list of pronunciation data
+	// Reader
+	GThread *main_thread;               ///< A handle to the reader thread
+	StardictDict *dict;                 ///< The dictionary object
+	gpointer output;                    ///< Linked-list of pronunciation data
 
-	GMutex *remaining_mutex;            //! Locks the progress stats
-	GCond *remaining_cond;              //! Signals a change in progress
-	guint32 remaining;                  //! How many entries remain
-	guint32 total;                      //! Total number of entries
+	GMutex *remaining_mutex;            ///< Locks the progress stats
+	GCond *remaining_cond;              ///< Signals a change in progress
+	guint32 remaining;                  ///< How many entries remain
+	guint32 total;                      ///< Total number of entries
 
-	/* Writer */
-	StardictIterator *iterator;         //! Iterates over the dictionary
-	FILE *child_stdin;                  //! Standard input of eSpeak
+	// Writer
+	StardictIterator *iterator;         ///< Iterates over the dictionary
+	FILE *child_stdin;                  ///< Standard input of eSpeak
 };
 
-/** eSpeak splits the output on certain characters. */
+/// eSpeak splits the output on certain characters.
 #define LINE_SPLITTING_CHARS            ".,:;?!"
 
-/** We don't want to include brackets either. */
+/// We don't want to include brackets either.
 #define OTHER_STOP_CHARS                "([{<"
 
-/** A void word used to make a unique "no pronunciation available" mark. */
+/// A void word used to make a unique "no pronunciation available" mark.
 #define VOID_ENTRY                      "not present in any dictionary"
 
 
-/** Adds dots between characters. */
+/// Adds dots between characters.
 static gboolean
 writer_acronym_cb (const GMatchInfo *info, GString *res,
 	G_GNUC_UNUSED gpointer data)
@@ -99,7 +99,7 @@ writer_acronym_cb (const GMatchInfo *info, GString *res,
 	return FALSE;
 }
 
-/** Writes to espeak's stdin. */
+/// Writes to espeak's stdin.
 static gpointer
 worker_writer (WorkerData *data)
 {
@@ -114,7 +114,7 @@ worker_writer (WorkerData *data)
 		word += strspn (word, LINE_SPLITTING_CHARS " \t");
 		gchar *x = g_strdup (word);
 
-		/* Cut the word if needed be */
+		// Cut the word if needed be
 		error = NULL;
 		if (g_regex_match_full (data->re_stop,
 			x, -1, 0, 0, &match_info, &error))
@@ -125,7 +125,7 @@ worker_writer (WorkerData *data)
 		}
 		g_match_info_free (match_info);
 
-		/* Change acronyms so that they're not pronounced as words */
+		// Change acronyms so that they're not pronounced as words
 		if (!error && !data->ignore_acronyms)
 		{
 			char *tmp = g_regex_replace_eval (data->re_acronym,
@@ -142,7 +142,7 @@ worker_writer (WorkerData *data)
 			*x = 0;
 		}
 
-		/* We might have accidentally cut off everything */
+		// We might have accidentally cut off everything
 		if (!*x)
 		{
 			g_free (x);
@@ -160,7 +160,7 @@ worker_writer (WorkerData *data)
 	return GINT_TO_POINTER (fclose (data->child_stdin));
 }
 
-/** Get the void entry (and test if espeak works). */
+/// Get the void entry (and test if espeak works).
 static gchar *
 get_void_entry (gchar *cmdline[])
 {
@@ -185,11 +185,11 @@ get_void_entry (gchar *cmdline[])
 	return output;
 }
 
-/** Reads from espeak's stdout. */
+/// Reads from espeak's stdout.
 static gpointer
 worker (WorkerData *data)
 {
-	/* Spawn eSpeak */
+	// Spawn eSpeak
 	GError *error = NULL;
 	gint child_in, child_out;
 	if (!g_spawn_async_with_pipes (NULL, data->cmdline, NULL,
@@ -205,7 +205,7 @@ worker (WorkerData *data)
 	if (!child_stdout)
 		perror ("fdopen");
 
-	/* Spawn a writer thread */
+	// Spawn a writer thread
 	g_mutex_lock (data->dict_mutex);
 	data->iterator = stardict_iterator_new (data->dict, data->start_entry);
 	g_mutex_unlock (data->dict_mutex);
@@ -213,7 +213,7 @@ worker (WorkerData *data)
 	GThread *writer = g_thread_new ("write worker",
 		(GThreadFunc) worker_writer, data);
 
-	/* Read the output */
+	// Read the output
 	g_mutex_lock (data->remaining_mutex);
 	guint32 remaining = data->remaining;
 	g_mutex_unlock (data->remaining_mutex);
@@ -236,8 +236,8 @@ worker (WorkerData *data)
 		*output_end = translation;
 		output_end = (gpointer *) translation;
 
-		/* We limit progress reporting so that
-		 * the mutex doesn't spin like crazy */
+		// We limit progress reporting so that
+		// the mutex doesn't spin like crazy
 		if ((--remaining & 255) != 0)
 			continue;
 
@@ -260,7 +260,7 @@ worker (WorkerData *data)
 
 // --- Main --------------------------------------------------------------------
 
-/** Copy the contents of one StardictInfo object into another.  Ignores path. */
+/// Copy the contents of one StardictInfo object into another.  Ignores path.
 static void
 stardict_info_copy (StardictInfo *dest, const StardictInfo *src)
 {
@@ -284,7 +284,7 @@ stardict_info_copy (StardictInfo *dest, const StardictInfo *src)
 	}
 }
 
-/** Write a list of data fields back to a dictionary. */
+/// Write a list of data fields back to a dictionary.
 static gboolean
 write_fields (Generator *generator, GList *fields, gboolean sts, GError **error)
 {
@@ -356,7 +356,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	g_option_context_free (ctx);
 
-	/* See if we can run espeak */
+	// See if we can run espeak
 	static gchar *cmdline[] = { "espeak", "--ipa", "-q", NULL, NULL, NULL };
 
 	if (voice)
@@ -367,7 +367,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	gchar *void_entry = g_strstrip (get_void_entry (cmdline));
 
-	/* Load the dictionary */
+	// Load the dictionary
 	printf ("Loading the original dictionary...\n");
 	StardictDict *dict = stardict_dict_new (argv[1], &error);
 	if (!dict)
@@ -395,7 +395,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 			n_processes);
 	}
 
-	/* Spawn worker threads to generate pronunciation data */
+	// Spawn worker threads to generate pronunciation data
 	static GMutex dict_mutex;
 
 	static GMutex remaining_mutex;
@@ -434,7 +434,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 			g_thread_new ("worker", (GThreadFunc) worker, &data[i]);
 	}
 
-	/* Loop while the threads still have some work to do and report status */
+	// Loop while the threads still have some work to do and report status
 	g_mutex_lock (&remaining_mutex);
 	for (;;)
 	{
@@ -460,7 +460,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	g_regex_unref (re_stop);
 	g_regex_unref (re_acronym);
 
-	/* Put extended entries into a new dictionary */
+	// Put extended entries into a new dictionary
 	Generator *generator = generator_new (argv[2], &error);
 	if (!generator)
 	{
@@ -472,7 +472,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	StardictInfo *info = generator->info;
 	stardict_info_copy (info, stardict_dict_get_info (dict));
 
-	/* This gets incremented each time an entry is finished */
+	// This gets incremented each time an entry is finished
 	info->word_count = 0;
 
 	if (info->same_type_sequence)
@@ -482,7 +482,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		info->same_type_sequence = new_sts;
 	}
 
-	/* Write out all the entries together with the pronunciation */
+	// Write out all the entries together with the pronunciation
 	for (i = 0; i < n_processes; i++)
 	{
 		StardictIterator *iterator =
@@ -508,8 +508,8 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 //			g_printerr ("%s /%s/\n",
 //				stardict_iterator_get_word (iterator), pronunciation);
 
-			/* For the sake of simplicity we fake a new start;
-			 * write_fields() only iterates the list in one direction. */
+			// For the sake of simplicity we fake a new start;
+			// write_fields() only iterates the list in one direction.
 			StardictEntryField field;
 			field.type = 't';
 			field.data = pronunciation;

@@ -30,7 +30,7 @@
 #include "generator.h"
 
 
-/** Creates an output stream for a path plus suffix. */
+/// Creates an output stream for a path plus suffix.
 static GFileOutputStream *
 replace_file_by_suffix (const gchar *base, const gchar *suffix, GError **error)
 {
@@ -44,7 +44,7 @@ replace_file_by_suffix (const gchar *base, const gchar *suffix, GError **error)
 	return stream;
 }
 
-/** Creates a Stardict dictionary generator for the specified base. */
+/// Creates a Stardict dictionary generator for the specified basename.
 Generator *
 generator_new (const gchar *base, GError **error)
 {
@@ -80,7 +80,7 @@ error_dict:
 	return NULL;
 }
 
-/** Finishes the dictionary and writes the .ifo file. */
+/// Finishes the dictionary and writes the .ifo file.
 gboolean
 generator_finish (Generator *self, GError **error)
 {
@@ -132,21 +132,21 @@ generator_finish (Generator *self, GError **error)
 	return success;
 }
 
-/** Start writing a dictionary entry. */
+/// Start writing a dictionary entry.
 void
 generator_begin_entry (Generator *self)
 {
 	self->entry_mark = g_seekable_tell (G_SEEKABLE (self->dict_stream));
 }
 
-/** Write the data type of an entry field, when there's no sametypesequence. */
+/// Write the data type of an entry field, when there's no sametypesequence.
 gboolean
 generator_write_type (Generator *self, gchar type, GError **error)
 {
 	return g_data_output_stream_put_byte (self->dict_data, type, NULL, error);
 }
 
-/** Write a raw binary field. */
+/// Write a raw binary field.
 gboolean
 generator_write_raw (Generator *self,
 	gpointer data, gsize data_size, gboolean mark_end, GError **error)
@@ -160,7 +160,7 @@ generator_write_raw (Generator *self,
 	return TRUE;
 }
 
-/** Write a text string. */
+/// Write a text string.
 gboolean
 generator_write_string (Generator *self,
 	const gchar *s, gboolean mark_end, GError **error)
@@ -172,7 +172,7 @@ generator_write_string (Generator *self,
 	return TRUE;
 }
 
-/** Finishes the current entry and writes it into the index. */
+/// Finishes the current entry and writes it into the index.
 gboolean
 generator_finish_entry (Generator *self, const gchar *word, GError **error)
 {
@@ -189,7 +189,7 @@ generator_finish_entry (Generator *self, const gchar *word, GError **error)
 	return TRUE;
 }
 
-/** Destroys the generator object, freeing up system resources. */
+/// Destroys the generator object, freeing up system resources.
 void
 generator_free (Generator *self)
 {

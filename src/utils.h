@@ -21,8 +21,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-/** After this statement, the element has been found and its index is stored
- *  in the variable "imid". */
+/// After this statement, the element has been found and its index is stored
+/// in the variable "imid".
 #define BINARY_SEARCH_BEGIN(max, compare)                                     \
 	gint imin = 0, imax = max, imid;                                          \
 	while (imin <= imax) {                                                    \
@@ -32,8 +32,8 @@
 		else if (cmp < 0) imax = imid - 1;                                    \
 		else {
 
-/** After this statement, the binary search has failed and "imin" stores
- *  the position where the element can be inserted. */
+/// After this statement, the binary search has failed and "imin" stores
+/// the position where the element can be inserted.
 #define BINARY_SEARCH_END                                                     \
 		}                                                                     \
 	}
@@ -43,4 +43,4 @@ gchar *stream_read_string (GDataInputStream *dis, GError **error);
 gboolean xstrtoul (unsigned long *out, const char *s, int base);
 void update_curses_terminal_size (void);
 
-#endif /* ! UTILS_H */
+#endif  // ! UTILS_H

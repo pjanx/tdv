@@ -21,12 +21,12 @@
 #ifndef DICTZIP_INPUT_STREAM_H
 #define DICTZIP_INPUT_STREAM_H
 
-/** Random-access dictzip reader. */
+/// Random-access dictzip reader.
 typedef struct dictzip_input_stream          DictzipInputStream;
 typedef struct dictzip_input_stream_class    DictzipInputStreamClass;
 typedef struct dictzip_input_stream_private  DictzipInputStreamPrivate;
 
-/* GObject boilerplate. */
+// GObject boilerplate.
 #define DICTZIP_TYPE_INPUT_STREAM  (dictzip_input_stream_get_type ())
 #define DICTZIP_INPUT_STREAM(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST ((obj), \
@@ -74,4 +74,4 @@ DictzipInputStream *dictzip_input_stream_new
 GFileInfo *dictzip_input_stream_get_file_info (DictzipInputStream *self);
 
 
-#endif /* ! DICTZIP_INPUT_STREAM_H */
+#endif  // ! DICTZIP_INPUT_STREAM_H

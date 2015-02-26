@@ -50,7 +50,7 @@ free_gzip_header (gz_header *gzh)
 	g_free (gzh->name);     gzh->name    = NULL;
 }
 
-/* Reading the header in manually due to stupidity of the ZLIB API. */
+// Reading the header in manually due to stupidity of the ZLIB API.
 static gboolean
 read_gzip_header (GInputStream *is, gz_header *gzh,
 	goffset *first_block_offset, GError **error)
@@ -279,19 +279,19 @@ static gssize dictzip_input_stream_skip (GInputStream *stream, gsize count,
 
 struct dictzip_input_stream_private
 {
-	GFileInfo  * file_info;            //!< File information from gzip header
+	GFileInfo  * file_info;            ///< File information from gzip header
 
-	goffset      first_block_offset;   //!< Offset to the first block/chunk
-	gsize        chunk_length;         //!< Uncompressed chunk length
-	gsize        n_chunks;             //!< Number of chunks in file
-	guint16    * chunks;               //!< Chunk sizes after compression
+	goffset      first_block_offset;   ///< Offset to the first block/chunk
+	gsize        chunk_length;         ///< Uncompressed chunk length
+	gsize        n_chunks;             ///< Number of chunks in file
+	guint16    * chunks;               ///< Chunk sizes after compression
 
-	z_stream     zs;                   //!< zlib decompression context
-	gpointer     input_buffer;         //!< Input buffer
+	z_stream     zs;                   ///< zlib decompression context
+	gpointer     input_buffer;         ///< Input buffer
 
-	goffset      offset;               //!< Current offset
-	gpointer   * decompressed;         //!< Array of decompressed chunks
-	gsize        last_chunk_length;    //!< Size of the last chunk
+	goffset      offset;               ///< Current offset
+	gpointer   * decompressed;         ///< Array of decompressed chunks
+	gsize        last_chunk_length;    ///< Size of the last chunk
 };
 
 G_DEFINE_TYPE_EXTENDED (DictzipInputStream, dictzip_input_stream,
@@ -422,7 +422,7 @@ get_chunk (DictzipInputStream *self, guint chunk_id, GError **error)
 	gpointer chunk = priv->decompressed[chunk_id];
 	if (!chunk)
 	{
-		/* Just inflating the file piece by piece as needed. */
+		// Just inflating the file piece by piece as needed.
 		gsize chunk_size;
 		chunk = inflate_chunk (self, chunk_id, &chunk_size, error);
 		if (!chunk)
@@ -452,8 +452,8 @@ dictzip_input_stream_seek (GSeekable *seekable, goffset offset,
 
 	if (type == G_SEEK_END)
 	{
-		/* This could be implemented by retrieving the last chunk
-		 * and deducing the filesize, should the functionality be needed. */
+		// This could be implemented by retrieving the last chunk
+		// and deducing the filesize, should the functionality be needed.
 		g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
 			"I don't know where the stream ends, cannot seek there");
 		return FALSE;
@@ -541,7 +541,7 @@ dictzip_input_stream_skip (GInputStream *stream, gsize count,
 	return count;
 }
 
-/** Create an input stream for the underlying dictzip file. */
+/// Create an input stream for the underlying dictzip file.
 DictzipInputStream *
 dictzip_input_stream_new (GInputStream *base_stream, GError **error)
 {
@@ -560,7 +560,7 @@ dictzip_input_stream_new (GInputStream *base_stream, GError **error)
 		"base-stream", base_stream, "close-base-stream", FALSE, NULL);
 	DictzipInputStreamPrivate *priv = self->priv;
 
-	/* Decode the header. */
+	// Decode the header.
 	gz_header gzh;
 	if (!read_gzip_header (G_INPUT_STREAM (base_stream),
 		&gzh, &priv->first_block_offset, &err))
@@ -584,7 +584,7 @@ dictzip_input_stream_new (GInputStream *base_stream, GError **error)
 		goto error;
 	}
 
-	/* Store file information. */
+	// Store file information.
 	priv->file_info = g_file_info_new ();
 
 	if (gzh.time != 0)
@@ -596,7 +596,7 @@ dictzip_input_stream_new (GInputStream *base_stream, GError **error)
 	if (gzh.name && *gzh.name)
 		g_file_info_set_name (priv->file_info, (gchar *) gzh.name);
 
-	/* Initialise zlib. */
+	// Initialise zlib.
 	int z_err;
 	z_err = inflateInit2 (&priv->zs, -15);
 	if (z_err != Z_OK)
@@ -608,7 +608,7 @@ dictzip_input_stream_new (GInputStream *base_stream, GError **error)
 
 	priv->input_buffer = g_malloc (65536);
 	priv->decompressed = g_new0 (gpointer, priv->n_chunks);
-	priv->last_chunk_length = -1; // We don't know yet.
+	priv->last_chunk_length = -1;  // We don't know yet.
 
 	free_gzip_header (&gzh);
 	return self;
@@ -619,7 +619,7 @@ error:
 	return NULL;
 }
 
-/** Return file information for the compressed file. */
+/// Return file information for the compressed file.
 GFileInfo *
 dictzip_input_stream_get_file_info (DictzipInputStream *self)
 {

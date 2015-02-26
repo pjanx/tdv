@@ -42,7 +42,7 @@
 
 // --- Utilities ---------------------------------------------------------------
 
-/** String compare function used for StarDict indexes. */
+/// String compare function used for StarDict indexes.
 static inline gint
 stardict_strcmp (const gchar *s1, const gchar *s2)
 {
@@ -60,18 +60,18 @@ stardict_error_quark (void)
 
 // --- IFO reader --------------------------------------------------------------
 
-/** Helper class for reading .ifo files. */
+/// Helper class for reading .ifo files.
 typedef struct ifo_reader               IfoReader;
 
 struct ifo_reader
 {
-	gchar           * data;             //!< File data terminated with \0
-	gchar           * data_end;         //!< Where the final \0 char. is
+	gchar           * data;             ///< File data terminated with \0
+	gchar           * data_end;         ///< Where the final \0 char. is
 
-	gchar           * start;            //!< Start of the current token
+	gchar           * start;            ///< Start of the current token
 
-	gchar           * key;              //!< The key (points into @a data)
-	gchar           * value;            //!< The value (points into @a data)
+	gchar           * key;              ///< The key (points into @a data)
+	gchar           * value;            ///< The value (points into @a data)
 };
 
 static gboolean
@@ -148,31 +148,30 @@ ifo_reader_read (IfoReader *ir)
 
 // --- StardictInfo ------------------------------------------------------------
 
-/** Return the filesystem path for the dictionary. */
+/// Return the filesystem path for the dictionary.
 const gchar *
 stardict_info_get_path (StardictInfo *sdi)
 {
 	return sdi->path;
 }
 
-/** Return the name of the dictionary. */
+/// Return the name of the dictionary.
 const gchar *
 stardict_info_get_book_name (StardictInfo *sdi)
 {
 	return sdi->book_name;
 }
 
-/** Return the word count of the dictionary.  Note that this information comes
- *  from the .ifo file, while the dictionary could successfully load with
- *  a different count of word entries.
- */
+/// Return the word count of the dictionary.  Note that this information comes
+/// from the .ifo file, while the dictionary could successfully load with
+/// a different count of word entries.
 gsize
 stardict_info_get_word_count (StardictInfo *sdi)
 {
 	return sdi->word_count;
 }
 
-/** Destroy the dictionary info object. */
+/// Destroy the dictionary info object.
 void
 stardict_info_free (StardictInfo *sdi)
 {
@@ -328,12 +327,11 @@ error:
 	return ret_val;
 }
 
-/** List all dictionary files located in a path.
- *  @return GList<StardictInfo *>. Deallocate the list with:
- *  @code
- *    g_list_free_full ((GDestroyNotify) stardict_info_free);
- *  @endcode
- */
+/// List all dictionary files located in a path.
+/// @return GList<StardictInfo *>. Deallocate the list with:
+/// @code
+///   g_list_free_full ((GDestroyNotify) stardict_info_free);
+/// @endcode
 GList *
 stardict_list_dictionaries (const gchar *path)
 {
@@ -369,18 +367,17 @@ struct stardict_dict_private
 	GArray        * index;              //!< Word index
 	GArray        * synonyms;           //!< Synonyms
 
-	/* The collated indexes are only permutations of their normal selves. */
+	// The collated indexes are only permutations of their normal selves.
 
 	UCollator     * collator;           //!< ICU index collator
 	GArray        * collated_index;     //!< Sorted indexes into @a index
 	GArray        * collated_synonyms;  //!< Sorted indexes into @a synonyms
 
-	/* There are currently three ways the dictionary data can be read:
-	 * through mmap(), from a seekable GInputStream, or from a preallocated
-	 * chunk of memory that the whole dictionary has been decompressed into.
-	 *
-	 * It wouldn't be unreasonable to drop the support for regular gzip files.
-	 */
+	// There are currently three ways the dictionary data can be read:
+	// through mmap(), from a seekable GInputStream, or from a preallocated
+	// chunk of memory that the whole dictionary has been decompressed into.
+	//
+	// It wouldn't be unreasonable to drop the support for regular gzip files.
 
 	GInputStream  * dict_stream;        //!< Dictionary input stream handle
 	GMappedFile   * mapped_dict;        //!< Dictionary memory map handle
@@ -432,9 +429,8 @@ stardict_dict_init (StardictDict *self)
 		STARDICT_TYPE_DICT, StardictDictPrivate);
 }
 
-/** Load a StarDict dictionary.
- *  @param[in] filename  Path to the .ifo file
- */
+/// Load a StarDict dictionary.
+/// @param[in] filename  Path to the .ifo file
 StardictDict *
 stardict_dict_new (const gchar *filename, GError **error)
 {
@@ -450,9 +446,8 @@ stardict_dict_new (const gchar *filename, GError **error)
 	return sd;
 }
 
-/** Return information about a loaded dictionary.  The returned reference is
- *  only valid for the lifetime of the dictionary object.
- */
+/// Return information about a loaded dictionary.  The returned reference is
+/// only valid for the lifetime of the dictionary object.
 StardictInfo *
 stardict_dict_get_info (StardictDict *sd)
 {
@@ -460,7 +455,7 @@ stardict_dict_get_info (StardictDict *sd)
 	return sd->priv->info;
 }
 
-/** Load a StarDict index from a GIO input stream. */
+/// Load a StarDict index from a GIO input stream.
 static gboolean
 load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 {
@@ -503,7 +498,7 @@ error:
 	return FALSE;
 }
 
-/** Load a StarDict index. */
+/// Load a StarDict index.
 static gboolean
 load_idx (StardictDict *sd, const gchar *filename,
 	gboolean gzipped, GError **error)
@@ -577,7 +572,7 @@ cannot_open:
 	return ret_val;
 }
 
-/** Destroy an index entry. */
+/// Destroy an index entry.
 static void
 index_destroy_cb (gpointer sde)
 {
@@ -585,7 +580,7 @@ index_destroy_cb (gpointer sde)
 	g_free (e->name);
 }
 
-/** Destroy a synonym entry. */
+/// Destroy a synonym entry.
 static void
 syn_destroy_cb (gpointer sde)
 {
@@ -593,7 +588,7 @@ syn_destroy_cb (gpointer sde)
 	g_free (e->word);
 }
 
-/** Load StarDict dictionary data. */
+/// Load StarDict dictionary data.
 static gboolean
 load_dict (StardictDict *sd, const gchar *filename, gboolean gzipped,
 	GError **error)
@@ -667,7 +662,7 @@ cannot_open:
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-/** Compare the two strings by collation rules. */
+/// Compare the two strings by collation rules.
 static inline gint
 stardict_dict_strcoll (gconstpointer s1, gconstpointer s2, gpointer data)
 {
@@ -699,7 +694,7 @@ stardict_dict_strcoll (gconstpointer s1, gconstpointer s2, gpointer data)
 #endif  // U_ICU_VERSION_MAJOR_NUM >= 50
 }
 
-/** Stricter stardict_dict_strcoll() used to sort the collated index. */
+/// Stricter stardict_dict_strcoll() used to sort the collated index.
 static inline gint
 stardict_dict_strcoll_for_sorting
 	(gconstpointer s1, gconstpointer s2, gpointer data)
@@ -772,9 +767,8 @@ stardict_dict_set_collation (StardictDict *sd, const gchar *collation)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-/** Load a StarDict dictionary.
- *  @param[in] sdi  Parsed .ifo data.  The dictionary assumes ownership.
- */
+/// Load a StarDict dictionary.
+/// @param[in] sdi  Parsed .ifo data.  The dictionary assumes ownership.
 StardictDict *
 stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 {
@@ -870,9 +864,8 @@ stardict_dict_cmp_synonym (StardictDict *sd, const gchar *word, gint i)
 		g_array_index (synonyms, StardictSynonymEntry, i).word);
 }
 
-/** Return words for which the argument is a synonym of or NULL
- *  if there are no such words.
- */
+/// Return words for which the argument is a synonym of or NULL
+/// if there are no such words.
 gchar **
 stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 {
@@ -916,11 +909,10 @@ stardict_dict_cmp_index (StardictDict *sd, const gchar *word, gint i)
 		g_array_index (index, StardictIndexEntry, i).name);
 }
 
-/** Search for a word.  The search is ASCII-case-insensitive.
- *  @param[in] word  The word in utf-8 encoding
- *  @param[out] success  TRUE if found
- *  @return An iterator object pointing to the word, or where it would be
- */
+/// Search for a word.  The search is ASCII-case-insensitive.
+/// @param[in] word  The word in utf-8 encoding
+/// @param[out] success  TRUE if found
+/// @return An iterator object pointing to the word, or where it would be
 StardictIterator *
 stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 {
@@ -1053,7 +1045,7 @@ error:
 	return NULL;
 }
 
-/** Read entry data from GInputStream. */
+/// Read entry data from GInputStream.
 static gchar *
 read_entry_data_from_stream
 	(GInputStream *stream, guint32 offset, StardictIndexEntry *sie)
@@ -1089,7 +1081,7 @@ read_entry_data_from_stream
 	return data;
 }
 
-/** Return the data for the specified offset in the index.  Unsafe. */
+/// Return the data for the specified offset in the index.  Unsafe.
 static StardictEntry *
 stardict_dict_get_entry (StardictDict *sd, guint32 offset)
 {
@@ -1164,9 +1156,8 @@ stardict_entry_init (G_GNUC_UNUSED StardictEntry *sde)
 {
 }
 
-/** Return the entries present within the entry.
- *  @return GList<StardictEntryField *>
- */
+/// Return the entries present within the entry.
+/// @return GList<StardictEntryField *>
 const GList *
 stardict_entry_get_fields (StardictEntry *sde)
 {
@@ -1199,7 +1190,7 @@ stardict_iterator_init (G_GNUC_UNUSED StardictIterator *sd)
 {
 }
 
-/** Create a new iterator for the dictionary with offset @a offset. */
+/// Create a new iterator for the dictionary with offset @a offset.
 StardictIterator *
 stardict_iterator_new (StardictDict *sd, guint32 offset)
 {
@@ -1218,7 +1209,7 @@ stardict_iterator_get_real_offset (StardictIterator *sdi)
 		(sdi->owner->priv->collated_index, guint32, sdi->offset) : sdi->offset;
 }
 
-/** Return the word in the index that the iterator points at, or NULL. */
+/// Return the word in the index that the iterator points at, or NULL.
 const gchar *
 stardict_iterator_get_word (StardictIterator *sdi)
 {
@@ -1229,7 +1220,7 @@ stardict_iterator_get_word (StardictIterator *sdi)
 		StardictIndexEntry, stardict_iterator_get_real_offset (sdi)).name;
 }
 
-/** Return the dictionary entry that the iterator points at, or NULL. */
+/// Return the dictionary entry that the iterator points at, or NULL.
 StardictEntry *
 stardict_iterator_get_entry (StardictIterator *sdi)
 {
@@ -1240,7 +1231,7 @@ stardict_iterator_get_entry (StardictIterator *sdi)
 		stardict_iterator_get_real_offset (sdi));
 }
 
-/** Return whether the iterator points to a valid index entry. */
+/// Return whether the iterator points to a valid index entry.
 gboolean
 stardict_iterator_is_valid (StardictIterator *sdi)
 {
@@ -1248,7 +1239,7 @@ stardict_iterator_is_valid (StardictIterator *sdi)
 	return sdi->offset >= 0 && sdi->offset < sdi->owner->priv->index->len;
 }
 
-/** Return the offset of the iterator within the dictionary index. */
+/// Return the offset of the iterator within the dictionary index.
 gint64
 stardict_iterator_get_offset (StardictIterator *sdi)
 {
@@ -1256,7 +1247,7 @@ stardict_iterator_get_offset (StardictIterator *sdi)
 	return sdi->offset;
 }
 
-/** Set the offset of the iterator. */
+/// Set the offset of the iterator.
 void
 stardict_iterator_set_offset
 	(StardictIterator *sdi, gint64 offset, gboolean relative)

@@ -33,7 +33,7 @@
 #include "utils.h"
 
 
-/** Read the whole stream into a byte array. */
+/// Read the whole stream into a byte array.
 gboolean
 stream_read_all (GByteArray *ba, GInputStream *is, GError **error)
 {
@@ -50,7 +50,7 @@ stream_read_all (GByteArray *ba, GInputStream *is, GError **error)
 	return FALSE;
 }
 
-/** Read a null-terminated string from a data input stream. */
+/// Read a null-terminated string from a data input stream.
 gchar *
 stream_read_string (GDataInputStream *dis, GError **error)
 {

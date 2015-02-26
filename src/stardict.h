@@ -25,26 +25,26 @@
 #ifndef STARDICT_H
 #define STARDICT_H
 
-/** An object intended for interacting with a dictionary. */
+/// An object intended for interacting with a dictionary.
 typedef struct stardict_dict            StardictDict;
 typedef struct stardict_dict_class      StardictDictClass;
 typedef struct stardict_dict_private    StardictDictPrivate;
 
-/** Overall information about a particular dictionary. */
+/// Overall information about a particular dictionary.
 typedef struct stardict_info            StardictInfo;
 
-/** Handles the task of moving around the dictionary. */
+/// Handles the task of moving around the dictionary.
 typedef struct stardict_iterator        StardictIterator;
 typedef struct stardict_iterator_class  StardictIteratorClass;
 
-/** Contains the decoded data for a single word definition. */
+/// Contains the decoded data for a single word definition.
 typedef struct stardict_entry           StardictEntry;
 typedef struct stardict_entry_class     StardictEntryClass;
 
-/** A single field of a word definition. */
+/// A single field of a word definition.
 typedef struct stardict_entry_field     StardictEntryField;
 
-/* GObject boilerplate. */
+// GObject boilerplate.
 #define STARDICT_TYPE_DICT  (stardict_dict_get_type ())
 #define STARDICT_DICT(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST ((obj), \
@@ -98,7 +98,7 @@ typedef struct stardict_entry_field     StardictEntryField;
 
 // --- Errors ------------------------------------------------------------------
 
-/** General error type. */
+/// General error type.
 typedef enum {
 	STARDICT_ERROR_FILE_NOT_FOUND,      //!< Some file was not found
 	STARDICT_ERROR_INVALID_DATA         //!< Dictionary contains invalid data
@@ -161,43 +161,43 @@ gint64 stardict_iterator_get_offset (StardictIterator *sdi) G_GNUC_PURE;
 void stardict_iterator_set_offset
 	(StardictIterator *sdi, gint64 offset, gboolean relative);
 
-/** Go to the next entry. */
+/// Go to the next entry.
 #define stardict_iterator_next(sdi) \
 	(stardict_iterator_set_offset (sdi,  1, TRUE))
 
-/** Go to the previous entry. */
+/// Go to the previous entry.
 #define stardict_iterator_prev(sdi) \
 	(stardict_iterator_set_offset (sdi, -1, TRUE))
 
 // --- Dictionary entries ------------------------------------------------------
 
 typedef enum {
-	STARDICT_FIELD_MEANING    = 'm',    //!< Word's purely textual meaning
-	STARDICT_FIELD_LOCALE     = 'l',    //!< Locale-dependent meaning
-	STARDICT_FIELD_PANGO      = 'g',    //!< Pango text markup language
-	STARDICT_FIELD_PHONETIC   = 't',    //!< English phonetic string
-	STARDICT_FIELD_XDXF       = 'x',    //!< xdxf language
-	STARDICT_FIELD_YB_KANA    = 'y',    //!< Chinese YinBiao or Japanese KANA
-	STARDICT_FIELD_POWERWORD  = 'k',    //!< KingSoft PowerWord's data
-	STARDICT_FIELD_MEDIAWIKI  = 'w',    //!< MediaWiki markup language
-	STARDICT_FIELD_HTML       = 'h',    //!< HTML codes
-	STARDICT_FIELD_RESOURCE   = 'r',    //!< Resource file list
-	STARDICT_FIELD_WAV        = 'W',    //!< WAV file
-	STARDICT_FIELD_PICTURE    = 'P',    //!< Picture file
-	STARDICT_FIELD_X          = 'X'     //!< Reserved, experimental extensions
+	STARDICT_FIELD_MEANING    = 'm',    ///< Word's purely textual meaning
+	STARDICT_FIELD_LOCALE     = 'l',    ///< Locale-dependent meaning
+	STARDICT_FIELD_PANGO      = 'g',    ///< Pango text markup language
+	STARDICT_FIELD_PHONETIC   = 't',    ///< English phonetic string
+	STARDICT_FIELD_XDXF       = 'x',    ///< xdxf language
+	STARDICT_FIELD_YB_KANA    = 'y',    ///< Chinese YinBiao or Japanese KANA
+	STARDICT_FIELD_POWERWORD  = 'k',    ///< KingSoft PowerWord's data
+	STARDICT_FIELD_MEDIAWIKI  = 'w',    ///< MediaWiki markup language
+	STARDICT_FIELD_HTML       = 'h',    ///< HTML codes
+	STARDICT_FIELD_RESOURCE   = 'r',    ///< Resource file list
+	STARDICT_FIELD_WAV        = 'W',    ///< WAV file
+	STARDICT_FIELD_PICTURE    = 'P',    ///< Picture file
+	STARDICT_FIELD_X          = 'X'     ///< Reserved, experimental extensions
 } StardictEntryFieldType;
 
 struct stardict_entry_field
 {
-	gchar           type;               //!< Type of entry (EntryFieldType)
-	gpointer        data;               //!< Raw data or null-terminated string
-	gsize           data_size;          //!< Size of data, includding any \0
+	gchar           type;               ///< Type of entry (EntryFieldType)
+	gpointer        data;               ///< Raw data or null-terminated string
+	gsize           data_size;          ///< Size of data, includding any \0
 };
 
 struct stardict_entry
 {
 	GObject         parent_instance;
-	GList         * fields;             //!< List of StardictEntryField's
+	GList         * fields;             ///< List of StardictEntryField's
 };
 
 struct stardict_entry_class
@@ -208,4 +208,4 @@ struct stardict_entry_class
 GType stardict_entry_get_type (void);
 const GList *stardict_entry_get_fields (StardictEntry *sde) G_GNUC_PURE;
 
- #endif /* ! STARDICT_H */
+ #endif  // ! STARDICT_H

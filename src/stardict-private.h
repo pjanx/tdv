@@ -21,10 +21,10 @@
 #ifndef STARDICTPRIVATE_H
 #define STARDICTPRIVATE_H
 
-/** Describes a single entry in the dictionary index. */
+/// Describes a single entry in the dictionary index.
 typedef struct stardict_index_entry     StardictIndexEntry;
 
-/** Describes a single entry in the synonyms index. */
+/// Describes a single entry in the synonyms index.
 typedef struct stardict_synonym_entry   StardictSynonymEntry;
 
 
@@ -53,31 +53,31 @@ struct stardict_info
 
 struct stardict_index_entry
 {
-	gchar           * name;             //!< The word in utf-8
-	guint64           data_offset;      //!< Offset of the definition
-	guint32           data_size;        //!< Size of the definition
+	gchar           * name;             ///< The word in utf-8
+	guint64           data_offset;      ///< Offset of the definition
+	guint32           data_size;        ///< Size of the definition
 };
 
 struct stardict_synonym_entry
 {
-	gchar           * word;             //!< A synonymous word
-	guint32           original_word;    //!< The original word's index
+	gchar           * word;             ///< A synonymous word
+	guint32           original_word;    ///< The original word's index
 };
 
 struct stardict_ifo_key
 {
-	const gchar *name;                  //!< Name of the key
+	const gchar *name;                  ///< Name of the key
 	enum {
-		IFO_STRING,                     //!< A @code gchar * @endcode value
-		IFO_NUMBER                      //!< A @code gulong @endcode value
-	} type;                             //!< Type of the value
-	size_t offset;                      //!< Offset within StardictInfo
+		IFO_STRING,                     ///< A @code gchar * @endcode value
+		IFO_NUMBER                      ///< A @code gulong @endcode value
+	} type;                             ///< Type of the value
+	size_t offset;                      ///< Offset within StardictInfo
 };
 
-/** Lists all the entries in StardictInfo. */
+/// Lists all the entries in StardictInfo.
 extern const struct stardict_ifo_key _stardict_ifo_keys[];
 
-/** Denotes the length of _stardict_ifo_keys. */
+/// Denotes the length of _stardict_ifo_keys.
 extern gsize _stardict_ifo_keys_length;
 
-#endif /* ! STARDICTPRIVATE_H */
+#endif  // ! STARDICTPRIVATE_H
