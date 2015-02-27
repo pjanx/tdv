@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <glib.h>
+#include <glib-unix.h>
 #include <gio/gio.h>
 #include <pango/pango.h>
 #include <glib/gi18n.h>
@@ -1213,6 +1214,9 @@ install_winch_handler (void)
 {
 	struct sigaction act, oldact;
 
+	if (pipe (g_winch_pipe) == -1)
+		abort ();
+
 	act.sa_handler = winch_handler;
 	act.sa_flags = SA_RESTART;
 	sigemptyset (&act.sa_mask);
@@ -1271,14 +1275,19 @@ on_stdin_input_timeout (gpointer data)
 static gboolean
 process_winch_input (GIOChannel *source,
 	G_GNUC_UNUSED GIOCondition condition, gpointer data)
-{
-	Application *app = data;
-
+ {
 	char c;
 	(void) read (g_io_channel_unix_get_fd (source), &c, 1);
 
 	update_curses_terminal_size ();
-	app_process_resize (app);
+	app_process_resize (data);
+	return TRUE;
+}
+
+static gboolean
+on_terminated (gpointer user_data)
+{
+	app_quit (user_data);
 	return TRUE;
 }
 
@@ -1448,19 +1457,24 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	if (!initscr () || nonl () == ERR)
 		abort ();
 
-	// TODO: catch SIGINT and SIGTERM as well
-	if (pipe (g_winch_pipe) == -1)
-		abort ();
 	install_winch_handler ();
 
 	app_redraw (&app);
 
-	// Message loop.
-	g_io_add_watch (g_io_channel_unix_new (STDIN_FILENO),
+	// Message loop
+	guint watch_term  = g_unix_signal_add (SIGTERM, on_terminated, &app);
+	guint watch_int   = g_unix_signal_add (SIGINT,  on_terminated, &app);
+	guint watch_stdin = g_io_add_watch (g_io_channel_unix_new (STDIN_FILENO),
 		G_IO_IN, process_stdin_input, &app);
-	g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
+	guint watch_winch = g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
 		G_IO_IN, process_winch_input, &app);
+
 	app_run (&app);
+
+	g_source_remove (watch_term);
+	g_source_remove (watch_int);
+	g_source_remove (watch_stdin);
+	g_source_remove (watch_winch);
 
 	endwin ();
 	app_destroy (&app);
