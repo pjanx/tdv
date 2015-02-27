@@ -1380,6 +1380,62 @@ on_watch_primary_selection (G_GNUC_UNUSED const gchar *option_name,
 }
 #endif  // WITH_GTK
 
+static void
+log_handler (const gchar *domain, GLogLevelFlags level,
+	const gchar *message, gpointer data)
+{
+	// There's probably no point in trying to display a fatal message nicely
+	if (level & G_LOG_FLAG_FATAL)
+		g_log_default_handler (domain, level, message, NULL);
+
+	const gchar *prefix;
+	switch (level & G_LOG_LEVEL_MASK)
+	{
+	case G_LOG_LEVEL_ERROR:    prefix = "E"; break;
+	case G_LOG_LEVEL_CRITICAL: prefix = "C"; break;
+	case G_LOG_LEVEL_WARNING:  prefix = "W"; break;
+	case G_LOG_LEVEL_MESSAGE:  prefix = "M"; break;
+	case G_LOG_LEVEL_INFO:     prefix = "I"; break;
+	case G_LOG_LEVEL_DEBUG:    prefix = "D"; break;
+	default:                   prefix = "?";
+	}
+
+	gchar *out;
+	if (domain)
+		out = g_strdup_printf ("%s: %s: %s", prefix, domain, message);
+	else
+		out = g_strdup_printf ("%s: %s", prefix, message);
+
+	// If the standard error output isn't redirected, try our best at showing
+	// the message to the user; it will probably get overdrawn soon
+	if (isatty (STDERR_FILENO))
+	{
+		// Beep, beep, I'm a jeep; let the user know
+		beep ();
+
+		// We certainly don't want to end up in a possibly infinite recursion
+		static gboolean in_processing;
+		if (in_processing)
+			goto out;
+
+		in_processing = TRUE;
+		SAVE_CURSOR
+
+		Application *self = data;
+		attrset (A_REVERSE);
+		mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
+		app_add_utf8_string (self, out, 0, COLS);
+
+		RESTORE_CURSOR
+		in_processing = FALSE;
+	}
+	else
+		fprintf (stderr, "%s\n", out);
+
+out:
+	g_free (out);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -1456,10 +1512,13 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	if (!initscr () || nonl () == ERR)
 		abort ();
+	app_redraw (&app);
 
+	// g_unix_signal_add() cannot handle SIGWINCH
 	install_winch_handler ();
 
-	app_redraw (&app);
+	// GtkClipboard can internally issue some rather disruptive warnings
+	g_log_set_default_handler (log_handler, &app);
 
 	// Message loop
 	guint watch_term  = g_unix_signal_add (SIGTERM, on_terminated, &app);
@@ -1477,6 +1536,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	g_source_remove (watch_winch);
 
 	endwin ();
+	g_log_set_default_handler (g_log_default_handler, NULL);
 	app_destroy (&app);
 
 	if (close (g_winch_pipe[0]) == -1
