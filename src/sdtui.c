@@ -1381,6 +1381,28 @@ on_watch_primary_selection (G_GNUC_UNUSED const gchar *option_name,
 #endif  // WITH_GTK
 
 static void
+log_handler_curses (Application *self, const gchar *message)
+{
+	// Beep, beep, I'm a jeep; let the user know
+	beep ();
+
+	// We certainly don't want to end up in a possibly infinite recursion
+	static gboolean in_processing;
+	if (in_processing)
+		return;
+
+	in_processing = TRUE;
+	SAVE_CURSOR
+
+	attrset (A_REVERSE);
+	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
+	app_add_utf8_string (self, message, 0, COLS);
+
+	RESTORE_CURSOR
+	in_processing = FALSE;
+}
+
+static void
 log_handler (const gchar *domain, GLogLevelFlags level,
 	const gchar *message, gpointer data)
 {
@@ -1409,30 +1431,10 @@ log_handler (const gchar *domain, GLogLevelFlags level,
 	// If the standard error output isn't redirected, try our best at showing
 	// the message to the user; it will probably get overdrawn soon
 	if (isatty (STDERR_FILENO))
-	{
-		// Beep, beep, I'm a jeep; let the user know
-		beep ();
-
-		// We certainly don't want to end up in a possibly infinite recursion
-		static gboolean in_processing;
-		if (in_processing)
-			goto out;
-
-		in_processing = TRUE;
-		SAVE_CURSOR
-
-		Application *self = data;
-		attrset (A_REVERSE);
-		mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
-		app_add_utf8_string (self, out, 0, COLS);
-
-		RESTORE_CURSOR
-		in_processing = FALSE;
-	}
+		log_handler_curses (data, out);
 	else
 		fprintf (stderr, "%s\n", out);
 
-out:
 	g_free (out);
 }
 
