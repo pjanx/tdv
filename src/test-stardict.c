@@ -120,9 +120,9 @@ typedef struct test_entry TestEntry;
 
 struct dictionary
 {
-	GFile *tmp_dir;                     //!< A temporary dictionary
-	GFile *ifo_file;                    //!< The dictionary's .ifo file
-	GArray *data;                       //!< Array of TestEntry's
+	GFile *tmp_dir;                     ///< A temporary dictionary
+	GFile *ifo_file;                    ///< The dictionary's .ifo file
+	GArray *data;                       ///< Array of TestEntry's
 };
 
 struct test_entry
