@@ -32,5 +32,5 @@ script:
  - make
  - cpack -G DEB
    # We've excluded the tests in termo from the build
- - sed -i /^subdirs/d CTestTestfile.cmake
+ - sed -i -e "/^subdirs/d" -e "/^SUBDIRS/d" CTestTestfile.cmake
  - ctest -V
