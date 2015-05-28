@@ -31,4 +31,6 @@ script:
  - cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GTK=ON -DBUILD_TESTING=ON
  - make
  - cpack -G DEB
- - ctest
+   # We've excluded the tests in termo from the build
+ - sed -i /^subdirs/d CTestTestfile.cmake"
+ - ctest -V
