@@ -87,6 +87,7 @@ struct application
 
 	StardictDict  * dict;               ///< The current dictionary
 	guint           show_help : 1;      ///< Whether help can be shown
+	guint           center_search : 1;  ///< Whether to center the search
 
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
@@ -253,6 +254,7 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 	}
 
 	self->show_help = TRUE;
+	self->center_search = TRUE;
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -592,7 +594,7 @@ app_count_view_items (Application *self)
 	return n_definitions;
 }
 
-/// Scroll up @a n entries.
+/// Scroll up @a n entries.  Doesn't redraw.
 static gboolean
 app_scroll_up (Application *self, guint n)
 {
@@ -628,12 +630,10 @@ app_scroll_up (Application *self, guint n)
 				(self->entries, self->entries->len - 1);
 		}
 	}
-
-	app_redraw_view (self);
 	return success;
 }
 
-/// Scroll down @a n entries.
+/// Scroll down @a n entries.  Doesn't redraw.
 static gboolean
 app_scroll_down (Application *self, guint n)
 {
@@ -670,8 +670,6 @@ app_scroll_down (Application *self, guint n)
 	// Fix cursor to not point below the view items
 	if (self->selected >= n_definitions - self->top_offset)
 		self->selected  = n_definitions - self->top_offset - 1;
-
-	app_redraw_view (self);
 	return success;
 }
 
@@ -704,10 +702,9 @@ app_one_entry_up (Application *self)
 		app_scroll_up (self, -first);
 	}
 	else
-	{
 		self->selected = first;
-		app_redraw_view (self);
-	}
+
+	app_redraw_view (self);
 	return TRUE;
 }
 
@@ -732,10 +729,9 @@ app_one_entry_down (Application *self)
 		app_scroll_down (self, first - (LINES - TOP_BAR_CUTOFF - 1));
 	}
 	else
-	{
 		self->selected = first;
-		app_redraw_view (self);
-	}
+
+	app_redraw_view (self);
 }
 
 /// Redraw everything.
@@ -765,6 +761,18 @@ app_search_for_entry (Application *self)
 
 	self->show_help = FALSE;
 	app_reload_view (self);
+
+	// If the user wants it centered, just move the view up half a screen;
+	// actually, one third seems to be a better guess
+	if (self->center_search)
+	{
+		for (int half = (LINES - TOP_BAR_CUTOFF) / 3; half > 0; half--)
+			if (app_scroll_up (self, 1))
+				self->selected++;
+			else
+				break;
+	}
+
 	app_redraw_view (self);
 }
 
@@ -865,23 +873,19 @@ app_process_user_action (Application *self, UserAction action)
 
 	case USER_ACTION_GOTO_DEFINITION_PREVIOUS:
 		if (self->selected > 0)
-		{
 			self->selected--;
-			app_redraw_view (self);
-		}
 		else
 			app_scroll_up (self, 1);
+		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
 	case USER_ACTION_GOTO_DEFINITION_NEXT:
 		if ((gint) self->selected < LINES - TOP_BAR_CUTOFF - 1 &&
 			self->selected < app_count_view_items (self) - self->top_offset - 1)
-		{
 			self->selected++;
-			app_redraw_view (self);
-		}
 		else
 			app_scroll_down (self, 1);
+		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
 
@@ -897,11 +901,13 @@ app_process_user_action (Application *self, UserAction action)
 	case USER_ACTION_GOTO_PAGE_PREVIOUS:
 		app_scroll_up (self, LINES - TOP_BAR_CUTOFF);
 		// FIXME: selection
+		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
 	case USER_ACTION_GOTO_PAGE_NEXT:
 		app_scroll_down (self, LINES - TOP_BAR_CUTOFF);
 		// FIXME: selection
+		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
 
@@ -1107,10 +1113,20 @@ app_process_ctrl_key (Application *self, termo_key_t *event)
 }
 
 static gboolean
+app_process_alt_key (Application *self, termo_key_t *event)
+{
+	if (event->code.codepoint == 'c')
+		self->center_search = !self->center_search;
+	return TRUE;
+}
+
+static gboolean
 app_process_key (Application *self, termo_key_t *event)
 {
 	if (event->modifiers == TERMO_KEYMOD_CTRL)
 		return app_process_ctrl_key (self, event);
+	if (event->modifiers == TERMO_KEYMOD_ALT)
+		return app_process_alt_key (self, event);
 	if (event->modifiers)
 		return TRUE;
 
