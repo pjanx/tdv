@@ -1,7 +1,7 @@
 StarDict Terminal UI
 ====================
 
-`sdtui' aims to provide an easy way of viewing translation as well as other
+'sdtui' aims to provide an easy way of viewing translation as well as other
 kinds of dictionaries in your terminal.  I wasn't successful in finding any free
 dictionary software of this kind, GUI or not, and thus decided to write my own.
 
@@ -16,6 +16,7 @@ be done yet before the software can be considered fit for inclusion in regular
 Linux and/or BSD distributions.  Help is much appreciated.
 
 An approximate list of things that need to be resolved:
+
  - rewrite the frontend using a proper TUI framework
  - load a list of installed dictionaries at startup (use the default locations
    used by StarDict) and let the user choose which dictionary to open
@@ -23,7 +24,7 @@ An approximate list of things that need to be resolved:
 
 Building and Running
 --------------------
-Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl
+Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included),
                       glib-2.0, pango, gtk+ (optional, any version)
 
@@ -34,25 +35,27 @@ Runtime dependencies: ncursesw, zlib, ICU, termo (included),
  $ make
 
 To install the application, you can do either the usual:
+
  # make install
 
 Or you can try telling CMake to make a package for you.  For Debian it is:
+
  $ cpack -G DEB
  # dpkg -i sdtui-*.deb
 
-Note that for versions of CMake before 2.8.9, you need to prefix cpack with
-`fakeroot' or file ownership will end up wrong.
+Note that for versions of CMake before 2.8.9, you need to prefix `cpack` with
+`fakeroot` or file ownership will end up wrong.
 
-Having the program installed, simply run it with a StarDict .ifo file as an
+Having the program installed, simply run it with a StarDict '.ifo' file as an
 argument.  If you want the application to watch the X11 primary selection for
-changes and automatically search for the selected text, use the -w switch.
+changes and automatically search for the selected text, use the `-w` switch.
 This feature requires GTK+.
 
 Extensions
 ----------
 As the original StarDict is a bit of a clusterfuck with regard to collation of
-dictionary entries, I had to introduce an additional "collation" field into the
-.ifo file.  When sdtui discovers this field while reading the dictionary, it
+dictionary entries, I had to introduce an additional `collation` field into the
+'.ifo' file.  When sdtui discovers this field while reading the dictionary, it
 automatically reorders the index according to that locale (e.g. "cs_CZ").
 This operation may take a little while.
 
@@ -61,8 +64,8 @@ Dictionaries
 Unfortunately this application only really works with specific dictionaries.
 Word definitions have to be in plain text, separated by newlines.
 
-CZ <-> { EN, DE, PL, RU } dictionaries:
-https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg
+https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[
+CZ <--> { EN, DE, PL, RU } dictionaries]
 
 Contributing and Support
 ------------------------
@@ -72,7 +75,7 @@ the developer, feel free to join me at irc://anathema.irc.so, channel #anathema.
 
 License
 -------
-`sdtui' is written by Přemysl Janouch <p.janouch@gmail.com>.
+'sdtui' is written by Přemysl Janouch <p.janouch@gmail.com>.
 
 You may use the software under the terms of the ISC license, the text of which
 is included within the package, or, at your option, you may relicense the work
