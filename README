@@ -27,11 +27,9 @@ Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl
 Runtime dependencies: ncursesw, zlib, ICU, termo (included),
                       glib-2.0, pango, gtk+ (optional, any version)
 
- $ git clone https://github.com/pjanouch/sdtui.git
- $ git submodule init
- $ git submodule update
- $ mkdir build
- $ cd build
+ $ git clone --recursive https://github.com/pjanouch/sdtui.git
+ $ mkdir sdtui/build
+ $ cd sdtui/build
  $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DWITH_GTK=ON
  $ make
 
@@ -65,6 +63,12 @@ Word definitions have to be in plain text, separated by newlines.
 
 CZ <-> { EN, DE, PL, RU } dictionaries:
 https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg
+
+Contributing and Support
+------------------------
+Use this project's GitHub to report any bugs, request features, or submit pull
+requests.  If you want to discuss this project, or maybe just hang out with
+the developer, feel free to join me at irc://anathema.irc.so, channel #anathema.
 
 License
 -------
