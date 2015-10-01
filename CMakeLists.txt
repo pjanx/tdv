@@ -8,10 +8,6 @@ if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
 		"${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -Wno-missing-field-initializers")
 endif ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUC)
 
-# Build options
-option (USE_SYSTEM_TERMO "Don't compile our own termo, use the system one" OFF)
-option (WITH_GTK "Compile with GTK+ support" ON)
-
 # Version
 set (project_VERSION_MAJOR "0")
 set (project_VERSION_MINOR "1")
@@ -53,8 +49,14 @@ if (NOT icu_FOUND)
 	# This should suffice most of the time, don't care about the rest
 endif (NOT icu_FOUND)
 
+find_package (Termo QUIET NO_MODULE)
+option (USE_SYSTEM_TERMO
+	"Don't compile our own termo library, use the system one" ${Termo_FOUND})
+
 if (USE_SYSTEM_TERMO)
-	find_package (Termo REQUIRED)
+	if (NOT Termo_FOUND)
+		message (FATAL_ERROR "System termo library not found")
+	endif (NOT Termo_FOUND)
 else (USE_SYSTEM_TERMO)
 	add_subdirectory (termo EXCLUDE_FROM_ALL)
 	# We don't have many good choices when we don't want to install it and want
@@ -67,9 +69,15 @@ else (USE_SYSTEM_TERMO)
 	set (Termo_LIBRARIES termo-static)
 endif (USE_SYSTEM_TERMO)
 
+# We actually don't care about the specific version
+pkg_search_module (gtk gtk+-3.0 gtk+-2.0)
+option (WITH_GTK "Compile with GTK+ support" ${gtk_FOUND})
+
 if (WITH_GTK)
-	# We actually don't care about the specific version
-	pkg_search_module (gtk REQUIRED gtk+-3.0 gtk+-2.0)
+	if (NOT gtk_FOUND)
+		message (FATAL_ERROR "GTK+ library not found")
+	endif (NOT gtk_FOUND)
+
 	list (APPEND dependencies_INCLUDE_DIRS ${gtk_INCLUDE_DIRS})
 	list (APPEND dependencies_LIBRARY_DIRS ${gtk_LIBRARY_DIRS})
 	list (APPEND dependencies_LIBRARIES ${gtk_LIBRARIES})
