@@ -272,7 +272,11 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 
 	const char *charset;
 	self->locale_is_utf8 = g_get_charset (&charset);
-	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32");
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32LE");
+#else // G_BYTE_ORDER != G_LITTLE_ENDIAN
+	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32BE");
+#endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
 
 	app_reload_view (self);
 }
