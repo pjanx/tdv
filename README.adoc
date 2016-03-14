@@ -22,6 +22,15 @@ An approximate list of things that need to be resolved:
    used by StarDict) and let the user choose which dictionary to open
  - figure out a way to become capable of displaying most dictionaries
 
+Packages
+--------
+Regular releases are sporadic.  git master should be stable enough.  You can get
+a package with the latest development version from Archlinux's AUR, or from
+openSUSE Build Service for the rest of mainstream distributions.  Consult the
+list of repositories and their respective links at:
+
+https://build.opensuse.org/project/repositories/home:pjanouch:git
+
 Building and Running
 --------------------
 Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl +
@@ -71,7 +80,7 @@ Contributing and Support
 ------------------------
 Use this project's GitHub to report any bugs, request features, or submit pull
 requests.  If you want to discuss this project, or maybe just hang out with
-the developer, feel free to join me at irc://anathema.irc.so, channel #anathema.
+the developer, feel free to join me at irc://irc.janouch.name, channel #dev.
 
 License
 -------
