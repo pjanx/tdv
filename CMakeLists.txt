@@ -195,7 +195,7 @@ install (TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 foreach (page ${project_MAN_PAGES_OUTPUT})
-	string (REGEX MATCH "\\.([0-9])" manpage_suffix "${page}")
+	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
 	install (FILES "${page}"
 		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
 endforeach (page)
