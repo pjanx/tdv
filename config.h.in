@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define PROJECT_NAME "${CMAKE_PROJECT_NAME}"
+#define PROJECT_NAME "${PROJECT_NAME}"
 #define PROJECT_VERSION "${project_VERSION}"
 #define PROJECT_URL "${project_URL}"
 

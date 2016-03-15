@@ -99,9 +99,9 @@ CHECK_FUNCTION_EXISTS ("resizeterm" HAVE_RESIZETERM)
 
 # Localization
 find_package (Gettext REQUIRED)
-file (GLOB project_PO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/po/*.po)
+file (GLOB project_PO_FILES ${PROJECT_SOURCE_DIR}/po/*.po)
 GETTEXT_CREATE_TRANSLATIONS (
-	${CMAKE_CURRENT_SOURCE_DIR}/po/${CMAKE_PROJECT_NAME}.pot
+	${PROJECT_SOURCE_DIR}/po/${PROJECT_NAME}.pot
 	ALL ${project_PO_FILES})
 
 # Documentation
@@ -110,9 +110,9 @@ if (NOT XSLTPROC_EXECUTABLE)
 	message (FATAL_ERROR "xsltproc not found")
 endif (NOT XSLTPROC_EXECUTABLE)
 
-set (project_MAN_PAGES "${CMAKE_PROJECT_NAME}.1")
+set (project_MAN_PAGES "${PROJECT_NAME}.1")
 foreach (page ${project_MAN_PAGES})
-	set (page_output "${CMAKE_CURRENT_BINARY_DIR}/${page}")
+	set (page_output "${PROJECT_BINARY_DIR}/${page}")
 	list (APPEND project_MAN_PAGES_OUTPUT "${page_output}")
 	add_custom_command (OUTPUT ${page_output}
 		COMMAND ${XSLTPROC_EXECUTABLE}
@@ -122,7 +122,7 @@ foreach (page ${project_MAN_PAGES})
 			--param man.charmap.use.subset 0
 			--param man.authors.section.enabled 0
 			http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
-			"${CMAKE_CURRENT_SOURCE_DIR}/docs/${page}.xml"
+			"${PROJECT_SOURCE_DIR}/docs/${page}.xml"
 		DEPENDS "docs/${page}.xml"
 		COMMENT "Generating man page for ${page}" VERBATIM)
 endforeach (page)
@@ -136,7 +136,7 @@ set (project_common_sources
 	src/stardict.c
 	src/utils.c)
 set (project_common_headers
-	${CMAKE_CURRENT_BINARY_DIR}/config.h
+	${PROJECT_BINARY_DIR}/config.h
 	src/dictzip-input-stream.h
 	src/stardict.h
 	src/stardict-private.h
@@ -163,20 +163,20 @@ else (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
 endif (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
 
 # Generate a configuration file
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
-	${CMAKE_CURRENT_BINARY_DIR}/config.h)
-include_directories (${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+configure_file (${PROJECT_SOURCE_DIR}/config.h.in
+	${PROJECT_BINARY_DIR}/config.h)
+include_directories (${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
 # Primary target source files
 set (project_sources
-	src/${CMAKE_PROJECT_NAME}.c)
+	src/${PROJECT_NAME}.c)
 set (project_headers
 	${project_common_headers})
 
 # Build the main executable and link it
-add_executable (${CMAKE_PROJECT_NAME}
+add_executable (${PROJECT_NAME}
 	${project_sources} ${project_headers} ${project_common_sources})
-target_link_libraries (${CMAKE_PROJECT_NAME} ${project_common_libraries})
+target_link_libraries (${PROJECT_NAME} ${project_common_libraries})
 
 # Tools
 add_executable (query-tool EXCLUDE_FROM_ALL
@@ -191,7 +191,7 @@ add_custom_target (tools DEPENDS add-pronunciation query-tool)
 
 # The files to be installed
 include (GNUInstallDirs)
-install (TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 foreach (page ${project_MAN_PAGES_OUTPUT})
@@ -219,17 +219,17 @@ endif (BUILD_TESTING)
 set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict terminal UI")
 set (CPACK_PACKAGE_VENDOR "Premysl Janouch")
 set (CPACK_PACKAGE_CONTACT "Přemysl Janouch <p.janouch@gmail.com>")
-set (CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set (CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
 set (CPACK_PACKAGE_VERSION_MAJOR ${project_VERSION_MAJOR})
 set (CPACK_PACKAGE_VERSION_MINOR ${project_VERSION_MINOR})
 set (CPACK_PACKAGE_VERSION_PATCH ${project_VERSION_PATCH})
 set (CPACK_GENERATOR "TGZ;ZIP")
 set (CPACK_PACKAGE_FILE_NAME
-	"${CMAKE_PROJECT_NAME}-${project_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-set (CPACK_PACKAGE_INSTALL_DIRECTORY "${CMAKE_PROJECT_NAME}-${project_VERSION}")
+	"${PROJECT_NAME}-${project_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set (CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}-${project_VERSION}")
 set (CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set (CPACK_SOURCE_IGNORE_FILES "/\\\\.git;/build;/CMakeLists.txt.user")
-set (CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${project_VERSION}")
+set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${project_VERSION}")
 
 include (CPack)
 
