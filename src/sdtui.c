@@ -605,6 +605,7 @@ app_redraw_view (Application *self)
 	}
 
 	move (TOP_BAR_CUTOFF, 0);
+	clrtobot ();
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
@@ -653,9 +654,7 @@ app_redraw_view (Application *self)
 
 done:
 	free (input_utf8);
-
 	attrset (0);
-	clrtobot ();
 	refresh ();
 }
 
