@@ -138,6 +138,9 @@ gchar **stardict_dict_get_synonyms (StardictDict *sd, const gchar *word);
 StardictIterator *stardict_dict_search
 	(StardictDict *sd, const gchar *word, gboolean *success);
 
+size_t stardict_longest_common_collation_prefix
+	(StardictDict *sd, const gchar *w1, const gchar *w2);
+
 // --- Dictionary iterators ----------------------------------------------------
 
 struct stardict_iterator

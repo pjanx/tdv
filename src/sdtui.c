@@ -606,6 +606,9 @@ app_redraw_view (Application *self)
 
 	move (TOP_BAR_CUTOFF, 0);
 
+	gchar *input_utf8 = g_ucs4_to_utf8
+		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
+
 	guint i, k = self->top_offset, shown = 0;
 	for (i = 0; i < self->entries->len; i++)
 	{
@@ -617,9 +620,27 @@ app_redraw_view (Application *self)
 			if (k + 1 == ve->definitions_length)  attrs |= A_UNDERLINE;
 			attrset (attrs);
 
-			guint left_width = app_get_left_column_width (self);
-			app_add_utf8_string (self, ve->word, 0, left_width);
-			addstr (" ");
+			RowBuffer buf;
+			row_buffer_init (&buf, self);
+
+			size_t common = stardict_longest_common_collation_prefix
+				(self->dict, ve->word, input_utf8);
+
+			gchar *prefix = g_strndup (ve->word, common);
+			row_buffer_append (&buf, prefix, A_BOLD);
+			g_free (prefix);
+
+			row_buffer_append (&buf, ve->word + common, 0);
+
+			gint left_width = app_get_left_column_width (self);
+			if (buf.total_width > left_width)
+				row_buffer_ellipsis (&buf, left_width, attrs);
+
+			row_buffer_flush (&buf);
+			for (int i = buf.total_width; i < left_width + 1; i++)
+				addch (' ');
+			row_buffer_free (&buf);
+
 			app_add_utf8_string (self,
 				ve->definitions[k], 0, COLS - left_width - 1);
 
@@ -631,6 +652,8 @@ app_redraw_view (Application *self)
 	}
 
 done:
+	free (input_utf8);
+
 	attrset (0);
 	clrtobot ();
 	refresh ();

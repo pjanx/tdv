@@ -29,6 +29,7 @@
 
 #include <unicode/ucol.h>
 #include <unicode/ustring.h>
+#include <unicode/ubrk.h>
 
 #include "stardict.h"
 #include "stardict-private.h"
@@ -932,6 +933,73 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 
 	if (success) *success = FALSE;
 	return stardict_iterator_new (sd, imin);
+}
+
+/// Return the longest sequence of bytes from @a s1 that form a common prefix
+/// with @a s2 wrt. collation rules for this dictionary.
+size_t
+stardict_longest_common_collation_prefix (StardictDict *sd,
+	const gchar *s1, const gchar *s2)
+{
+	UErrorCode error;
+	int32_t uc1_len = 0;
+	int32_t uc2_len = 0;
+
+	// It sets the error to overflow each time, even during pre-flight
+	error = U_ZERO_ERROR;
+	u_strFromUTF8 (NULL, 0, &uc1_len, s1, -1, &error);
+	error = U_ZERO_ERROR;
+	u_strFromUTF8 (NULL, 0, &uc2_len, s2, -1, &error);
+	error = U_ZERO_ERROR;
+
+	UChar uc1[uc1_len];
+	UChar uc2[uc2_len];
+	u_strFromUTF8 (uc1, uc1_len, NULL, s1, -1, &error);
+	u_strFromUTF8 (uc2, uc2_len, NULL, s2, -1, &error);
+
+	// Both inputs need to be valid UTF-8 because of all the iteration mess
+	if (U_FAILURE (error))
+		return 0;
+
+	// ucol_getSortKey() can't be used for these purposes, so the only
+	// reasonable thing remaining is iterating by full graphemes.  It doesn't
+	// work entirely correctly (e.g. Czech "ch" should be regarded as a single
+	// unit, and punctuation could be ignored).  It's just good enough.
+	//
+	// In theory we could set the strength to UCOL_PRIMARY and ignore accents
+	// but that's likely not what the user wants most of the time.
+	//
+	// Locale shouldn't matter much with graphemes, let's use the default.
+	UBreakIterator *it1 =
+		ubrk_open (UBRK_CHARACTER, NULL, uc1, uc1_len, &error);
+	UBreakIterator *it2 =
+		ubrk_open (UBRK_CHARACTER, NULL, uc2, uc2_len, &error);
+
+	int32_t longest = 0;
+	int32_t pos1, pos2;
+	while ((pos1 = ubrk_next (it1)) != UBRK_DONE
+		&& (pos2 = ubrk_next (it2)) != UBRK_DONE)
+	{
+		if (!ucol_strcoll (sd->priv->collator, uc1, pos1, uc2, pos2))
+			longest = pos1;
+	}
+	ubrk_close (it1);
+	ubrk_close (it2);
+
+	if (!longest)
+		return 0;
+
+	int32_t common_len = 0;
+	u_strToUTF8 (NULL, 0, &common_len, uc1, longest, &error);
+
+	// Since this heavily depends on UTF-16 <-> UTF-8 not modifying the chars
+	// (surrogate pairs interference?), let's add some paranoia here
+	char common[common_len];
+	error = U_ZERO_ERROR;
+	u_strToUTF8 (common, common_len, NULL, uc1, longest, &error);
+	g_return_val_if_fail (!memcmp (s1, common, common_len), 0);
+
+	return (size_t) common_len;
 }
 
 static void
