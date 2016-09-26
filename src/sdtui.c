@@ -277,7 +277,9 @@ app_load_color (Application *self, GKeyFile *kf, const gchar *name, int id)
 		else if (!strcmp (*it, "ul"))      attrs.attrs |= A_UNDERLINE;
 		else if (!strcmp (*it, "blink"))   attrs.attrs |= A_BLINK;
 		else if (!strcmp (*it, "reverse")) attrs.attrs |= A_REVERSE;
+#ifdef A_ITALIC
 		else if (!strcmp (*it, "italic"))  attrs.attrs |= A_ITALIC;
+#endif  // A_ITALIC
 	}
 	g_strfreev (values);
 
