@@ -344,77 +344,158 @@ app_is_character_in_locale (Application *self, gunichar ch)
 	return TRUE;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+// Necessary abstraction to simplify aligned, formatted character output
+
+typedef struct row_char                 RowChar;
+typedef struct row_buffer               RowBuffer;
+
+struct row_char
+{
+	gunichar c;                         ///< Unicode codepoint
+	chtype attrs;                       ///< Special attributes
+	int width;                          ///< How many cells this takes
+};
+
+struct row_buffer
+{
+	Application *app;                   ///< Reference to Application
+	GArray *chars;                      ///< Characters
+	int total_width;                    ///< Total width of all characters
+};
+
+static void
+row_buffer_init (RowBuffer *self, Application *app)
+{
+	self->app = app;
+	self->chars = g_array_new (FALSE, TRUE, sizeof (RowChar));
+	self->total_width = 0;
+}
+
+#define row_buffer_free(self) g_array_unref ((self)->chars)
+
+/// Replace invalid chars and push all codepoints to the array w/ attributes.
+static void
+row_buffer_append (RowBuffer *self, const gchar *str, chtype attrs)
+{
+	glong ucs4_len;
+	gunichar *ucs4 = g_utf8_to_ucs4_fast (str, -1, &ucs4_len);
+	for (glong i = 0; i < ucs4_len; i++)
+	{
+		// XXX: this is very crude as it disrespects combining marks
+		gunichar c =
+			app_is_character_in_locale (self->app, ucs4[i]) ? ucs4[i] : '?';
+		struct row_char rc = { ucs4[i], attrs, unichar_width (c) };
+		g_array_append_val (self->chars, rc);
+		self->total_width += rc.width;
+	}
+	g_free (ucs4);
+}
+
+/// Pop as many codepoints as needed to free up "space" character cells.
+/// Given the suffix nature of combining marks, this should work pretty fine.
+static gint
+row_buffer_pop_cells (RowBuffer *self, gint space)
+{
+	int made = 0;
+	while (self->chars->len && made < space)
+	{
+		guint last = self->chars->len - 1;
+		made += g_array_index (self->chars, RowChar, last).width;
+		g_array_remove_index (self->chars, last);
+	}
+	self->total_width -= made;
+	return made;
+}
+
+static void
+row_buffer_ellipsis (RowBuffer *self, int target, chtype attrs)
+{
+	row_buffer_pop_cells (self, self->total_width - target);
+
+	gunichar ellipsis = L'…';
+	if (app_is_character_in_locale (self->app, ellipsis))
+	{
+		if (self->total_width >= target)
+			row_buffer_pop_cells (self, 1);
+		if (self->total_width + 1 <= target)
+			row_buffer_append (self, "…", attrs);
+	}
+	else if (target >= 3)
+	{
+		if (self->total_width >= target)
+			row_buffer_pop_cells (self, 3);
+		if (self->total_width + 3 <= target)
+			row_buffer_append (self, "...", attrs);
+	}
+}
+
+static void
+row_buffer_print (RowBuffer *self, gunichar *ucs4, size_t len, chtype attrs)
+{
+	gsize locale_str_len;
+	guchar *str = (guchar *) g_convert_with_iconv
+		((const gchar *) ucs4, len * sizeof *ucs4,
+		self->app->ucs4_to_locale, NULL, &locale_str_len, NULL);
+	g_return_if_fail (str != NULL);
+
+	for (gsize i = 0; i < locale_str_len; i++)
+		addch (str[i] | attrs);
+	g_free (str);
+}
+
+static void
+row_buffer_flush (RowBuffer *self)
+{
+	if (!self->chars->len)
+		return;
+
+	gunichar ucs4[self->chars->len];
+	for (guint i = 0; i < self->chars->len; i++)
+		ucs4[i] = g_array_index (self->chars, RowChar, i).c;
+
+	guint mark = 0;
+	for (guint i = 1; i < self->chars->len; i++)
+	{
+		chtype attrs = g_array_index (self->chars, RowChar, i - 1).attrs;
+		if (attrs != g_array_index (self->chars, RowChar, i).attrs)
+		{
+			row_buffer_print (self, ucs4 + mark, i - mark, attrs);
+			mark = i;
+		}
+	}
+	row_buffer_print (self, ucs4 + mark, self->chars->len - mark,
+		g_array_index (self->chars, RowChar, self->chars->len - 1).attrs);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 /// Write the given UTF-8 string padded with spaces.
 /// @param[in] n  The number of characters to write, or -1 for the whole string.
 /// @param[in] attrs  Text attributes for the text, without padding.
 ///                   To change the attributes of all output, use attrset().
 /// @return The number of characters output.
 static gsize
-app_add_utf8_string (Application *self, const gchar *str, int attrs, int n)
+app_add_utf8_string (Application *self, const gchar *str, chtype attrs, int n)
 {
 	if (!n)
 		return 0;
 
-	glong ucs4_len;
-	gunichar *ucs4 = g_utf8_to_ucs4_fast (str, -1, &ucs4_len);
-
-	// Replace invalid chars and compute how many characters fit in the limit
-	gint cols, i;
-	for (cols = i = 0; i < ucs4_len; i++)
-	{
-		if (!app_is_character_in_locale (self, ucs4[i]))
-			ucs4[i] = '?';
-
-		gint width = unichar_width (ucs4[i]);
-		if (n >= 0 && cols + width > n)
-			break;
-		cols += width;
-	}
+	RowBuffer buf;
+	row_buffer_init (&buf, self);
+	row_buffer_append (&buf, str, attrs);
 
 	if (n < 0)
-		n = cols;
+		n = buf.total_width;
+	if (buf.total_width > n)
+		row_buffer_ellipsis (&buf, n, attrs);
 
-	// Append ellipsis if the whole string didn't fit
-	gunichar ellipsis = L'…';
-	gint ellipsis_width = unichar_width (ellipsis);
-
-	gint len = i;
-	if (len != ucs4_len)
-	{
-		if (app_is_character_in_locale (self, ellipsis))
-		{
-			if (cols + ellipsis_width > n)
-				cols -= unichar_width (ucs4[len - 1]);
-			else
-				len++;
-
-			ucs4[len - 1] = ellipsis;
-			cols += ellipsis_width;
-		}
-		else if (n >= 3 && len >= 3)
-		{
-			// With zero-width characters this overflows
-			// It's just a fallback anyway
-			cols -= unichar_width (ucs4[len - 1]); ucs4[len - 1] = '.';
-			cols -= unichar_width (ucs4[len - 2]); ucs4[len - 2] = '.';
-			cols -= unichar_width (ucs4[len - 3]); ucs4[len - 3] = '.';
-			cols += 3;
-		}
-	}
-
-	guchar *locale_str;
-	gsize locale_str_len;
-	locale_str = (guchar *) g_convert_with_iconv ((const gchar *) ucs4,
-		len * sizeof *ucs4, self->ucs4_to_locale, NULL, &locale_str_len, NULL);
-	g_return_val_if_fail (locale_str != NULL, 0);
-
-	for (gsize i = 0; i < locale_str_len; i++)
-		addch (locale_str[i] | attrs);
-	while (cols++ < n)
+	row_buffer_flush (&buf);
+	for (int i = buf.total_width; i < n; i++)
 		addch (' ');
 
-	g_free (locale_str);
-	g_free (ucs4);
+	row_buffer_free (&buf);
 	return n;
 }
 
