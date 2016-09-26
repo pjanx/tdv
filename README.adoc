@@ -70,7 +70,7 @@ This operation may take a little while, in the order of seconds.
 
 Configuration
 -------------
-To get a nicer look in 256color terminals, create ~/.config/sdtui/sdtui.conf
+To get a nicer look in 256color terminals, create _~/.config/sdtui/sdtui.conf_
 with the following.  Note that it is intended for black-on-white terminals.
 
 ....
