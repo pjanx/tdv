@@ -77,6 +77,7 @@ with the following.  Note that it is intended for black-on-white terminals.
 [Settings]
 center-search = true
 underline-last = false
+hl-common-prefix = true
 
 [Colors]
 header = reverse

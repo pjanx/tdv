@@ -112,6 +112,7 @@ struct application
 	guint           show_help : 1;      ///< Whether help can be shown
 	guint           center_search : 1;  ///< Whether to center the search
 	guint           underline_last : 1; ///< Underline the last definition
+	guint           hl_prefix : 1;      ///< Highlight the common prefix
 
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
@@ -284,27 +285,28 @@ app_load_color (Application *self, GKeyFile *kf, const gchar *name, int id)
 	self->attrs[id] = attrs;
 }
 
+static gboolean
+app_load_bool (GKeyFile *kf, const gchar *name, gboolean def)
+{
+	GError *e = NULL;
+	bool value = g_key_file_get_boolean (kf, "Settings", name, &e);
+	if (e)
+	{
+		g_error_free (e);
+		return def;
+	}
+	return value;
+}
+
 static void
 app_load_config_values (Application *self, GKeyFile *kf)
 {
-	GError *e;
-	const gchar *settings = "Settings";
-
-	e = NULL;
-	bool center_search =
-		g_key_file_get_boolean (kf, settings, "center-search", &e);
-	if (e)
-		g_error_free (e);
-	else
-		self->center_search = center_search;
-
-	e = NULL;
-	bool underline_last =
-		g_key_file_get_boolean (kf, settings, "underline-last", &e);
-	if (e)
-		g_error_free (e);
-	else
-		self->underline_last = underline_last;
+	self->center_search =
+		app_load_bool (kf, "center-search", self->center_search);
+	self->underline_last =
+		app_load_bool (kf, "underline-last", self->underline_last);
+	self->hl_prefix =
+		app_load_bool (kf, "hl-common-prefix", self->hl_prefix);
 
 #define XX(name, config, fg_, bg_, attrs_) \
 	app_load_color (self, kf, config, ATTRIBUTE_ ## name);
@@ -391,6 +393,7 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 	self->show_help = TRUE;
 	self->center_search = TRUE;
 	self->underline_last = TRUE;
+	self->hl_prefix = TRUE;
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -779,6 +782,7 @@ app_redraw_view (Application *self)
 	move (TOP_BAR_CUTOFF, 0);
 	clrtobot ();
 
+	// TODO: clean this stuff up a bit, it's all rather ugly
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
 
@@ -799,13 +803,16 @@ app_redraw_view (Application *self)
 			RowBuffer buf;
 			row_buffer_init (&buf, self);
 
-			size_t common = stardict_longest_common_collation_prefix
-				(self->dict, ve->word, input_utf8);
+			size_t common = 0;
+			if (self->hl_prefix)
+			{
+				common = stardict_longest_common_collation_prefix
+					(self->dict, ve->word, input_utf8);
 
-			gchar *prefix = g_strndup (ve->word, common);
-			row_buffer_append (&buf, prefix, A_BOLD);
-			g_free (prefix);
-
+				gchar *prefix = g_strndup (ve->word, common);
+				row_buffer_append (&buf, prefix, A_BOLD);
+				g_free (prefix);
+			}
 			row_buffer_append (&buf, ve->word + common, 0);
 
 			gint left_width = app_get_left_column_width (self);
