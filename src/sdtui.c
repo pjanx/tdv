@@ -63,6 +63,29 @@ unichar_width (gunichar ch)
 
 // --- Application -------------------------------------------------------------
 
+#define ATTRIBUTE_TABLE(XX)                     \
+	XX( HEADER, "header", -1, -1, A_REVERSE   ) \
+	XX( SEARCH, "search", -1, -1, A_UNDERLINE ) \
+	XX( EVEN,   "even",   -1, -1, 0           ) \
+	XX( ODD,    "odd",    -1, -1, 0           )
+
+enum
+{
+#define XX(name, config, fg_, bg_, attrs_) ATTRIBUTE_ ## name,
+	ATTRIBUTE_TABLE (XX)
+#undef XX
+	ATTRIBUTE_COUNT
+};
+
+struct attrs
+{
+	short fg;                           ///< Foreground color index
+	short bg;                           ///< Background color index
+	chtype attrs;                       ///< Other attributes
+};
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 /// Data relating to one entry within the dictionary.
 typedef struct view_entry               ViewEntry;
 /// Encloses application data.
@@ -88,6 +111,7 @@ struct application
 	StardictDict  * dict;               ///< The current dictionary
 	guint           show_help : 1;      ///< Whether help can be shown
 	guint           center_search : 1;  ///< Whether to center the search
+	guint           underline_last : 1; ///< Underline the last definition
 
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
@@ -104,7 +128,12 @@ struct application
 	guint           selection_timer;    ///< Selection watcher timeout timer
 	gint            selection_interval; ///< Selection watcher timer interval
 	gchar         * selection_contents; ///< Selection contents
+
+	struct attrs    attrs[ATTRIBUTE_COUNT];
 };
+
+/// Shortcut to retrieve named terminal attributes
+#define APP_ATTR(name) self->attrs[ATTRIBUTE_ ## name].attrs
 
 struct app_options
 {
@@ -221,6 +250,112 @@ rearm_selection_watcher (Application *self)
 }
 #endif  // WITH_GTK
 
+/// Load configuration for a color using a subset of git config colors.
+static void
+app_load_color (Application *self, GKeyFile *kf, const gchar *name, int id)
+{
+	gchar *value = g_key_file_get_string (kf, "Colors", name, NULL);
+	if (!value)
+		return;
+
+	struct attrs attrs = { -1, -1, 0 };
+	gchar **values = g_strsplit (value, " ", 0);
+	gint colors = 0;
+	for (gchar **it = values; *it; it++)
+	{
+		gchar *end = NULL;
+		gint64 n = g_ascii_strtoll (*it, &end, 10);
+		if (*it != end && !*end && n >= G_MINSHORT && n <= G_MAXSHORT)
+		{
+			if (colors == 0) attrs.fg = n;
+			if (colors == 1) attrs.bg = n;
+			colors++;
+		}
+		else if (!strcmp (*it, "bold"))    attrs.attrs |= A_BOLD;
+		else if (!strcmp (*it, "dim"))     attrs.attrs |= A_DIM;
+		else if (!strcmp (*it, "ul"))      attrs.attrs |= A_UNDERLINE;
+		else if (!strcmp (*it, "blink"))   attrs.attrs |= A_BLINK;
+		else if (!strcmp (*it, "reverse")) attrs.attrs |= A_REVERSE;
+		else if (!strcmp (*it, "italic"))  attrs.attrs |= A_ITALIC;
+	}
+	g_strfreev (values);
+
+	g_free (value);
+	self->attrs[id] = attrs;
+}
+
+static void
+app_load_config_values (Application *self, GKeyFile *kf)
+{
+	GError *e;
+	const gchar *settings = "Settings";
+
+	e = NULL;
+	bool center_search =
+		g_key_file_get_boolean (kf, settings, "center-search", &e);
+	if (e)
+		g_error_free (e);
+	else
+		self->center_search = center_search;
+
+	e = NULL;
+	bool underline_last =
+		g_key_file_get_boolean (kf, settings, "underline-last", &e);
+	if (e)
+		g_error_free (e);
+	else
+		self->underline_last = underline_last;
+
+#define XX(name, config, fg_, bg_, attrs_) \
+	app_load_color (self, kf, config, ATTRIBUTE_ ## name);
+	ATTRIBUTE_TABLE (XX)
+#undef XX
+}
+
+static void
+app_load_config (Application *self)
+{
+	GKeyFile *kf = g_key_file_new ();
+	GPtrArray *paths = g_ptr_array_new ();
+	g_ptr_array_add (paths, (gpointer) g_get_user_config_dir ());
+	for (const gchar *const *system = g_get_system_config_dirs ();
+		*system; system++)
+		g_ptr_array_add (paths, (gpointer) *system);
+	g_ptr_array_add (paths, NULL);
+
+	// XXX: if there are dashes in the final path component,
+	//   the function tries to replace them with directory separators,
+	//   which is completely undocumented
+	GError *e = NULL;
+	g_key_file_load_from_dirs (kf,
+		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
+		(const gchar **) paths->pdata, NULL, 0, &e);
+	g_ptr_array_free (paths, TRUE);
+
+	// TODO: proper error handling showing all relevant information;
+	//   we can afford that here since the terminal hasn't been initialized yet
+	if (e)
+	{
+		if (e->code != G_KEY_FILE_ERROR_NOT_FOUND)
+			g_error ("%s: %s\n", _("Cannot load configuration"), e->message);
+		g_error_free (e);
+	}
+	else
+		app_load_config_values (self, kf);
+
+	g_key_file_free (kf);
+}
+
+static void
+app_init_attrs (Application *self)
+{
+#define XX(name, config, fg_, bg_, attrs_)          \
+	self->attrs[ATTRIBUTE_ ## name].fg    = fg_;    \
+	self->attrs[ATTRIBUTE_ ## name].bg    = bg_;    \
+	self->attrs[ATTRIBUTE_ ## name].attrs = attrs_;
+	ATTRIBUTE_TABLE (XX)
+#undef XX
+}
 /// Initialize the application core.
 static void
 app_init (Application *self, AppOptions *options, const gchar *filename)
@@ -255,6 +390,7 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 
 	self->show_help = TRUE;
 	self->center_search = TRUE;
+	self->underline_last = TRUE;
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -279,6 +415,42 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 #endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
 
 	app_reload_view (self);
+	app_init_attrs (self);
+	app_load_config (self);
+}
+
+static void
+app_init_terminal (Application *self)
+{
+	TERMO_CHECK_VERSION;
+	if (!(self->tk = termo_new (STDIN_FILENO, NULL, 0)))
+		abort ();
+	if (!initscr () || nonl () == ERR)
+		abort ();
+
+	// By default we don't use any colors so they're not required...
+	if (start_color () == ERR
+	 || use_default_colors () == ERR
+	 || COLOR_PAIRS <= ATTRIBUTE_COUNT)
+		return;
+
+	gboolean failed = false;
+	for (int a = 0; a < ATTRIBUTE_COUNT; a++)
+	{
+		if (self->attrs[a].fg >= COLORS || self->attrs[a].fg < -1
+		 || self->attrs[a].bg >= COLORS || self->attrs[a].bg < -1)
+		{
+			failed = true;
+			continue;
+		}
+
+		init_pair (a + 1, self->attrs[a].fg, self->attrs[a].bg);
+		self->attrs[a].attrs |= COLOR_PAIR (a + 1);
+	}
+
+	// ...thus we can reset back to defaults even after initializing some
+	if (failed)
+		app_init_attrs (self);
 }
 
 /// Free any resources used by the application.
@@ -503,14 +675,14 @@ app_add_utf8_string (Application *self, const gchar *str, chtype attrs, int n)
 static void
 app_redraw_top (Application *self)
 {
-	attrset (A_REVERSE);
-	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
+	attrset (APP_ATTR (HEADER));
+	mvwhline (stdscr, 0, 0, APP_ATTR (HEADER), COLS);
 	gsize indent = app_add_utf8_string (self, PROJECT_NAME "  ", A_BOLD, -1);
 	app_add_utf8_string (self, stardict_info_get_book_name
 		(stardict_dict_get_info (self->dict)), 0, COLS - indent);
 
-	attrset (A_UNDERLINE);
-	mvwhline (stdscr, 1, 0, A_UNDERLINE, COLS);
+	attrset (APP_ATTR (SEARCH));
+	mvwhline (stdscr, 1, 0, APP_ATTR (SEARCH), COLS);
 	indent = app_add_utf8_string (self, self->search_label, 0, -1);
 
 	gchar *input_utf8 = g_ucs4_to_utf8
@@ -616,9 +788,12 @@ app_redraw_view (Application *self)
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
 		for (; k < ve->definitions_length; k++)
 		{
-			int attrs = 0;
-			if (shown == self->selected)          attrs |= A_REVERSE;
-			if (k + 1 == ve->definitions_length)  attrs |= A_UNDERLINE;
+			int attrs = ((self->top_position + i) & 1)
+				? APP_ATTR (ODD) : APP_ATTR (EVEN);
+			if (shown == self->selected)      attrs |= A_REVERSE;
+			gboolean last = k + 1 == ve->definitions_length;
+			if (last && self->underline_last) attrs |= A_UNDERLINE;
+
 			attrset (attrs);
 
 			RowBuffer buf;
@@ -1630,13 +1805,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	Application app;
 	app_init (&app, &options, argv[1]);
-
-	TERMO_CHECK_VERSION;
-	if (!(app.tk = termo_new (STDIN_FILENO, NULL, 0)))
-		abort ();
-
-	if (!initscr () || nonl () == ERR)
-		abort ();
+	app_init_terminal (&app);
 	app_redraw (&app);
 
 	// g_unix_signal_add() cannot handle SIGWINCH

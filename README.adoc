@@ -66,7 +66,24 @@ As the original StarDict is a bit of a clusterfuck with regard to collation of
 dictionary entries, I had to introduce an additional `collation` field into the
 '.ifo' file.  When sdtui discovers this field while reading the dictionary, it
 automatically reorders the index according to that locale (e.g. "cs_CZ").
-This operation may take a little while.
+This operation may take a little while, in the order of seconds.
+
+Configuration
+-------------
+To get a nicer look in 256color terminals, create ~/.config/sdtui/sdtui.conf
+with the following.  Note that it is intended for black-on-white terminals.
+
+....
+[Settings]
+center-search = true
+underline-last = false
+
+[Colors]
+header = reverse
+search = ul
+even = 16 231
+odd = 16 255
+....
 
 Dictionaries
 ------------
