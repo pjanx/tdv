@@ -931,6 +931,35 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 
 	BINARY_SEARCH_END
 
+	// Try to find a longer common prefix with a preceding entry
+#define PREFIX(i) stardict_longest_common_collation_prefix \
+	(sd, word, g_array_index (index, StardictIndexEntry, i).name)
+
+	if (sd->priv->collator)
+	{
+		GArray *collated = sd->priv->collated_index;
+		size_t probe, best = PREFIX (g_array_index (collated, guint32, imin));
+		while (imin > 0 && (probe =
+			PREFIX (g_array_index (collated, guint32, imin - 1))) >= best)
+		{
+			best = probe;
+			imin--;
+		}
+	}
+	else
+	{
+		// XXX: only looking for _better_ backward matches here, since the
+		//   fallback common prefix searching algorithm doesn't ignore case
+		size_t probe, best = PREFIX (imin);
+		while (imin > 0 && (probe = PREFIX (imin - 1)) > best)
+		{
+			best = probe;
+			imin--;
+		}
+	}
+
+#undef PREFIX
+
 	if (success) *success = FALSE;
 	return stardict_iterator_new (sd, imin);
 }
@@ -985,7 +1014,7 @@ stardict_longest_common_collation_prefix (StardictDict *sd,
 			if (!ucol_strcoll (sd->priv->collator, uc1, pos1, uc2, pos2))
 				longest = pos1;
 		}
-		// I'd need a new collator, so just do the minimal working thing
+		// XXX: I'd need a new collator, so just do the minimal working thing
 		else if (pos1 == pos2 && !memcmp (uc1, uc2, pos1 * sizeof *uc1))
 			longest = pos1;
 	}
