@@ -980,7 +980,13 @@ stardict_longest_common_collation_prefix (StardictDict *sd,
 	while ((pos1 = ubrk_next (it1)) != UBRK_DONE
 		&& (pos2 = ubrk_next (it2)) != UBRK_DONE)
 	{
-		if (!ucol_strcoll (sd->priv->collator, uc1, pos1, uc2, pos2))
+		if (sd->priv->collator)
+		{
+			if (!ucol_strcoll (sd->priv->collator, uc1, pos1, uc2, pos2))
+				longest = pos1;
+		}
+		// I'd need a new collator, so just do the minimal working thing
+		else if (pos1 == pos2 && !memcmp (uc1, uc2, pos1 * sizeof *uc1))
 			longest = pos1;
 	}
 	ubrk_close (it1);
