@@ -317,7 +317,7 @@ app_load_config_values (Application *self, GKeyFile *kf)
 }
 
 static void
-app_load_config (Application *self)
+app_load_config (Application *self, GError **e)
 {
 	GKeyFile *kf = g_key_file_new ();
 	GPtrArray *paths = g_ptr_array_new ();
@@ -330,22 +330,20 @@ app_load_config (Application *self)
 	// XXX: if there are dashes in the final path component,
 	//   the function tries to replace them with directory separators,
 	//   which is completely undocumented
-	GError *e = NULL;
+	GError *error = NULL;
 	g_key_file_load_from_dirs (kf,
 		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
-		(const gchar **) paths->pdata, NULL, 0, &e);
+		(const gchar **) paths->pdata, NULL, 0, &error);
 	g_ptr_array_free (paths, TRUE);
 
 	// TODO: proper error handling showing all relevant information;
 	//   we can afford that here since the terminal hasn't been initialized yet
-	if (e)
-	{
-		if (e->code != G_KEY_FILE_ERROR_NOT_FOUND)
-			g_error ("%s: %s\n", _("Cannot load configuration"), e->message);
-		g_error_free (e);
-	}
-	else
+	if (!error)
 		app_load_config_values (self, kf);
+	else if (error->code == G_KEY_FILE_ERROR_NOT_FOUND)
+		g_error_free (error);
+	else
+		g_propagate_error (e, error);
 
 	g_key_file_free (kf);
 }
@@ -421,7 +419,13 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 
 	app_reload_view (self);
 	app_init_attrs (self);
-	app_load_config (self);
+
+	app_load_config (self, &error);
+	if (error)
+	{
+		g_printerr ("%s: %s\n", _("Cannot load configuration"), error->message);
+		exit (EXIT_FAILURE);
+	}
 }
 
 static void
