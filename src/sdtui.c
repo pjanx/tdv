@@ -1986,7 +1986,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	GError *error = NULL;
 	GOptionContext *ctx = g_option_context_new
-		(N_("[dictionary.ifo]... - StarDict terminal UI"));
+		(N_("[dictionary.ifo...] - StarDict terminal UI"));
 	GOptionGroup *group = g_option_group_new ("", "", "", NULL, NULL);
 	g_option_group_add_entries (group, entries);
 	g_option_group_set_translation_domain (group, GETTEXT_PACKAGE);

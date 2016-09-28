@@ -26,7 +26,7 @@
 		<arg choice="opt" rep="repeat">
 			<option><replaceable>OPTION</replaceable></option>
 		</arg>
-		<arg choice="plain">
+		<arg choice="opt" rep="repeat">
 			<replaceable>dictionary.ifo</replaceable>
 		</arg>
 	</cmdsynopsis>
@@ -39,19 +39,12 @@ for viewing translation dictionaries, using a simple curses-based terminal UI.
 <para>The program expects to find on its command line the path to a dictionary's
 .ifo file, which contains further information required for loading the
 dictionary.</para>
-<para>Future versions may additionally show a list of dictionaries available in
-preset search paths on startup.</para>
+<para>Some options as well as dictionaries to load on start by default can be
+specified in a configuration file. See the README for an example.</para>
 </refsect1>
 
 <refsect1><title>Options</title>
 <variablelist>
-	<varlistentry>
-		<term><option>-w</option>, <option>--watch-primary-selection=TIMER</option></term>
-		<listitem><para>
-		watch the value of the primary selection for input
-		</para></listitem>
-	</varlistentry>
-
 	<varlistentry>
 		<term><option>-h</option>, <option>--help</option></term>
 		<listitem><para>
