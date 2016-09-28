@@ -18,8 +18,9 @@ Linux and/or BSD distributions.  Help is much appreciated.
 An approximate list of things that need to be resolved:
 
  - rewrite the frontend using a proper TUI framework
- - load a list of installed dictionaries at startup (use the default locations
-   used by StarDict) and let the user choose which dictionary to open
+ - possibly make it work better with multiple dictionaries as now it's only
+   acceptable if you give them short names in the configuration so that they
+   all fit in the header
  - figure out a way to become capable of displaying most dictionaries
 
 Packages
