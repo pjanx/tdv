@@ -1671,12 +1671,13 @@ app_process_left_mouse_click (Application *self, int line, int column)
 		;  // At the moment there's nothing useful for us to do
 	else if (line == 1)
 	{
+		// FIXME: this is only an approximation
 		gsize label_len = g_utf8_strlen (self->search_label, -1);
 		gint pos = column - label_len;
 		if (pos >= 0)
 		{
 			self->input_pos = MIN ((guint) pos, self->input->len);
-			move (0, label_len + self->input_pos);
+			move (1, label_len + self->input_pos);
 			refresh ();
 		}
 	}
