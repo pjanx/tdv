@@ -942,11 +942,13 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 #define PREFIX(i) stardict_longest_common_collation_prefix \
 	(sd, word, g_array_index (index, StardictIndexEntry, i).name)
 
+	// We need to take care not to step through the entire dictionary
+	// if not a single character matches, because it can be quite costly
 	if (sd->priv->collator)
 	{
 		GArray *collated = sd->priv->collated_index;
 		size_t probe, best = PREFIX (g_array_index (collated, guint32, imin));
-		while (imin > 0 && (probe =
+		while (best && imin > 0 && (probe =
 			PREFIX (g_array_index (collated, guint32, imin - 1))) >= best)
 		{
 			best = probe;
@@ -958,7 +960,7 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 		// XXX: only looking for _better_ backward matches here, since the
 		//   fallback common prefix searching algorithm doesn't ignore case
 		size_t probe, best = PREFIX (imin);
-		while (imin > 0 && (probe = PREFIX (imin - 1)) > best)
+		while (best && imin > 0 && (probe = PREFIX (imin - 1)) > best)
 		{
 			best = probe;
 			imin--;
