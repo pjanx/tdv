@@ -153,11 +153,12 @@ resolve_filename (const gchar *filename, gchar *(*relative_cb) (const char *))
 
 // --- Application -------------------------------------------------------------
 
-#define ATTRIBUTE_TABLE(XX)                     \
-	XX( HEADER, "header", -1, -1, A_REVERSE   ) \
-	XX( SEARCH, "search", -1, -1, A_UNDERLINE ) \
-	XX( EVEN,   "even",   -1, -1, 0           ) \
-	XX( ODD,    "odd",    -1, -1, 0           )
+#define ATTRIBUTE_TABLE(XX)                            \
+	XX( HEADER, "header",        -1, -1, A_REVERSE   ) \
+	XX( ACTIVE, "header-active", -1, -1, A_UNDERLINE ) \
+	XX( SEARCH, "search",        -1, -1, A_UNDERLINE ) \
+	XX( EVEN,   "even",          -1, -1, 0           ) \
+	XX( ODD,    "odd",           -1, -1, 0           )
 
 enum
 {
@@ -336,6 +337,11 @@ dictionary_load (Dictionary *self, GError **e)
 		self->name = g_strdup (stardict_info_get_book_name
 			(stardict_dict_get_info (self->dict)));
 	}
+
+	// Add some padding for decorative purposes
+	gchar *tmp = g_strdup_printf (" %s ", self->name);
+	g_free (self->name);
+	self->name = tmp;
 
 	gunichar *ucs4 = g_utf8_to_ucs4_fast (self->name, -1, NULL);
 	for (gunichar *it = ucs4; *it; it++)
@@ -867,9 +873,17 @@ app_redraw_top (Application *self)
 {
 	attrset (APP_ATTR (HEADER));
 	mvwhline (stdscr, 0, 0, APP_ATTR (HEADER), COLS);
-	gsize indent = app_add_utf8_string (self, PROJECT_NAME "  ", A_BOLD, -1);
-	app_add_utf8_string (self, stardict_info_get_book_name
-		(stardict_dict_get_info (self->dict)), 0, COLS - indent);
+	gsize indent = app_add_utf8_string (self, PROJECT_NAME " ", A_BOLD, -1);
+
+	attrset (0);
+	for (guint i = 0; i < self->dictionaries->len; i++)
+	{
+		Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, i);
+		indent += app_add_utf8_string (self, dict->name,
+			(self->dictionaries->len > 1 && self->dict == dict->dict)
+				? APP_ATTR (ACTIVE) : APP_ATTR (HEADER),
+			MIN (COLS - indent, dict->name_width));
+	}
 
 	attrset (APP_ATTR (SEARCH));
 	mvwhline (stdscr, 1, 0, APP_ATTR (SEARCH), COLS);
