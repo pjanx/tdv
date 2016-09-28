@@ -61,6 +61,21 @@ unichar_width (gunichar ch)
 	return 1 + g_unichar_iswide (ch);
 }
 
+// At times, GLib even with its sheer size is surprisingly useless,
+// and I need to port some code over from "liberty".
+
+static gchar **
+get_xdg_config_dirs (void)
+{
+	GPtrArray *paths = g_ptr_array_new ();
+	g_ptr_array_add (paths, (gpointer) g_get_user_config_dir ());
+	for (const gchar *const *system = g_get_system_config_dirs ();
+		*system; system++)
+		g_ptr_array_add (paths, (gpointer) *system);
+	g_ptr_array_add (paths, NULL);
+	return (gchar **) g_ptr_array_free (paths, FALSE);
+}
+
 // --- Application -------------------------------------------------------------
 
 #define ATTRIBUTE_TABLE(XX)                     \
@@ -320,12 +335,7 @@ static void
 app_load_config (Application *self, GError **e)
 {
 	GKeyFile *kf = g_key_file_new ();
-	GPtrArray *paths = g_ptr_array_new ();
-	g_ptr_array_add (paths, (gpointer) g_get_user_config_dir ());
-	for (const gchar *const *system = g_get_system_config_dirs ();
-		*system; system++)
-		g_ptr_array_add (paths, (gpointer) *system);
-	g_ptr_array_add (paths, NULL);
+	gchar **paths = get_xdg_config_dirs ();
 
 	// XXX: if there are dashes in the final path component,
 	//   the function tries to replace them with directory separators,
@@ -333,8 +343,8 @@ app_load_config (Application *self, GError **e)
 	GError *error = NULL;
 	g_key_file_load_from_dirs (kf,
 		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
-		(const gchar **) paths->pdata, NULL, 0, &error);
-	g_ptr_array_free (paths, TRUE);
+		(const gchar **) paths, NULL, 0, &error);
+	g_strfreev (paths);
 
 	// TODO: proper error handling showing all relevant information;
 	//   we can afford that here since the terminal hasn't been initialized yet
