@@ -443,13 +443,13 @@ app_init_terminal (Application *self)
 	 || COLOR_PAIRS <= ATTRIBUTE_COUNT)
 		return;
 
-	gboolean failed = false;
+	gboolean failed = FALSE;
 	for (int a = 0; a < ATTRIBUTE_COUNT; a++)
 	{
 		if (self->attrs[a].fg >= COLORS || self->attrs[a].fg < -1
 		 || self->attrs[a].bg >= COLORS || self->attrs[a].bg < -1)
 		{
-			failed = true;
+			failed = TRUE;
 			continue;
 		}
 
