@@ -30,11 +30,13 @@
 #include <gio/gio.h>
 #include <pango/pango.h>
 #include <glib/gi18n.h>
+#include <glib/gstdio.h>
 
 #include <unistd.h>
 #include <poll.h>
 #include <errno.h>
 #include <signal.h>
+#include <pwd.h>
 
 #include <termo.h> // input
 #include <ncurses.h> // output
@@ -76,6 +78,79 @@ get_xdg_config_dirs (void)
 	return (gchar **) g_ptr_array_free (paths, FALSE);
 }
 
+static gchar *
+resolve_relative_filename_generic
+	(gchar **paths, const gchar *tail, const gchar *filename)
+{
+	for (; *paths; paths++)
+	{
+		// As per XDG spec, relative paths are ignored
+		if (**paths != '/')
+			continue;
+
+		gchar *file = g_build_filename (*paths, tail, filename, NULL);
+		GStatBuf st;
+		if (!g_stat (file, &st))
+			return file;
+		g_free (file);
+	}
+	return NULL;
+}
+
+static gchar *
+resolve_relative_config_filename (const gchar *filename)
+{
+	gchar **paths = get_xdg_config_dirs ();
+	gchar *result = resolve_relative_filename_generic
+		(paths, PROJECT_NAME, filename);
+	g_strfreev (paths);
+	return result;
+}
+
+static gchar *
+try_expand_tilde (const gchar *filename)
+{
+	size_t until_slash = strcspn (filename, "/");
+	if (!until_slash)
+		return g_build_filename (g_get_home_dir () ?: "", filename, NULL);
+
+	long buf_len = sysconf (_SC_GETPW_R_SIZE_MAX);
+	if (buf_len < 0)
+		buf_len = 1024;
+	struct passwd pwd, *success = NULL;
+
+	gchar *user = g_strndup (filename, until_slash);
+	gchar *buf = g_malloc (buf_len);
+	while (getpwnam_r (user, &pwd, buf, buf_len, &success) == ERANGE)
+		buf = g_realloc (buf, buf_len <<= 1);
+	g_free (user);
+
+	gchar *result = NULL;
+	if (success)
+		result = g_strdup_printf ("%s%s", pwd.pw_dir, filename + until_slash);
+	g_free (buf);
+	return result;
+}
+
+static gchar *
+resolve_filename (const gchar *filename, gchar *(*relative_cb) (const char *))
+{
+	// Absolute path is absolute
+	if (*filename == '/')
+		return g_strdup (filename);
+
+	// We don't want to use wordexp() for this as it may execute /bin/sh
+	if (*filename == '~')
+	{
+		// Paths to home directories ought to be absolute
+		char *expanded = try_expand_tilde (filename + 1);
+		if (expanded)
+			return expanded;
+		g_debug ("failed to expand the home directory in `%s'", filename);
+	}
+	return relative_cb (filename);
+}
+
 // --- Application -------------------------------------------------------------
 
 #define ATTRIBUTE_TABLE(XX)                     \
@@ -103,6 +178,8 @@ struct attrs
 
 /// Data relating to one entry within the dictionary.
 typedef struct view_entry               ViewEntry;
+/// Data relating to a dictionary file.
+typedef struct dictionary               Dictionary;
 /// Encloses application data.
 typedef struct application              Application;
 /// Application options.
@@ -115,6 +192,14 @@ struct view_entry
 	gsize     definitions_length;       ///< Length of the @a definitions array
 };
 
+struct dictionary
+{
+	gchar         * name;               ///< Visible identifier
+	gsize           name_width;         ///< Visible width of the name
+	gchar         * filename;           ///< Path to the dictionary
+	StardictDict  * dict;               ///< Dictionary
+};
+
 struct application
 {
 	GMainLoop     * loop;               ///< Main loop
@@ -122,6 +207,8 @@ struct application
 	guint           tk_timer;           ///< termo timeout timer
 	GIConv          ucs4_to_locale;     ///< UTF-32 -> locale conversion
 	gboolean        locale_is_utf8;     ///< The locale is Unicode
+
+	GArray        * dictionaries;       ///< All loaded dictionaries
 
 	StardictDict  * dict;               ///< The current dictionary
 	guint           show_help : 1;      ///< Whether help can be shown
@@ -156,6 +243,8 @@ struct app_options
 	gboolean show_version;              ///< Output version information and quit
 	gint     selection_watcher;         ///< Interval in milliseconds, or -1
 };
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /// Splits the entry and adds it to a pointer array.
 static void
@@ -233,6 +322,39 @@ view_entry_free (ViewEntry *ve)
 	g_strfreev (ve->definitions);
 	g_slice_free1 (sizeof *ve, ve);
 }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+static gboolean
+dictionary_load (Dictionary *self, GError **e)
+{
+	if (!(self->dict = stardict_dict_new (self->filename, e)))
+		return FALSE;
+
+	if (!self->name)
+	{
+		self->name = g_strdup (stardict_info_get_book_name
+			(stardict_dict_get_info (self->dict)));
+	}
+
+	gunichar *ucs4 = g_utf8_to_ucs4_fast (self->name, -1, NULL);
+	for (gunichar *it = ucs4; *it; it++)
+		self->name_width += unichar_width (*it);
+	g_free (ucs4);
+	return TRUE;
+}
+
+static void
+dictionary_free (Dictionary *self)
+{
+	g_free (self->name);
+	g_free (self->filename);
+
+	if (self->dict)
+		g_object_unref (self->dict);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /// Reload view items.
 static void
@@ -329,6 +451,30 @@ app_load_config_values (Application *self, GKeyFile *kf)
 	app_load_color (self, kf, config, ATTRIBUTE_ ## name);
 	ATTRIBUTE_TABLE (XX)
 #undef XX
+
+	const gchar *dictionaries = "Dictionaries";
+	gchar **names = g_key_file_get_keys (kf, dictionaries, NULL, NULL);
+	if (!names)
+		return;
+
+	for (gchar **it = names; *it; it++)
+	{
+		gchar *path = g_key_file_get_string (kf, dictionaries, *it, NULL);
+		if (!path)
+			continue;
+
+		// Try to resolve relative paths and expand tildes
+		gchar *resolved = resolve_filename
+			(path, resolve_relative_config_filename);
+		if (resolved)
+			g_free (path);
+		else
+			resolved = path;
+
+		Dictionary dict = { .name = g_strdup (*it), .filename = resolved };
+		g_array_append_val (self->dictionaries, dict);
+	}
+	g_strfreev (names);
 }
 
 static void
@@ -368,9 +514,10 @@ app_init_attrs (Application *self)
 	ATTRIBUTE_TABLE (XX)
 #undef XX
 }
+
 /// Initialize the application core.
 static void
-app_init (Application *self, AppOptions *options, const gchar *filename)
+app_init (Application *self, AppOptions *options, char **filenames)
 {
 	self->loop = NULL;
 	self->selection_interval = options->selection_watcher;
@@ -391,14 +538,6 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 
 	self->tk = NULL;
 	self->tk_timer = 0;
-
-	GError *error = NULL;
-	self->dict = stardict_dict_new (filename, &error);
-	if (!self->dict)
-	{
-		g_printerr ("%s: %s\n", _("Error loading dictionary"), error->message);
-		exit (EXIT_FAILURE);
-	}
 
 	self->show_help = TRUE;
 	self->center_search = TRUE;
@@ -427,15 +566,47 @@ app_init (Application *self, AppOptions *options, const gchar *filename)
 	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32BE");
 #endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
 
-	app_reload_view (self);
 	app_init_attrs (self);
+	self->dictionaries = g_array_new (FALSE, TRUE, sizeof (Dictionary));
+	g_array_set_clear_func
+		(self->dictionaries, (GDestroyNotify) dictionary_free);
 
+	GError *error = NULL;
 	app_load_config (self, &error);
 	if (error)
 	{
 		g_printerr ("%s: %s\n", _("Cannot load configuration"), error->message);
 		exit (EXIT_FAILURE);
 	}
+
+	// Dictionaries given on the command line override the configuration
+	if (*filenames)
+	{
+		g_array_set_size (self->dictionaries, 0);
+		while (*filenames)
+		{
+			Dictionary dict = { .filename = g_strdup (*filenames++) };
+			g_array_append_val (self->dictionaries, dict);
+		}
+	}
+
+	for (guint i = 0; i < self->dictionaries->len && dictionary_load
+		(&g_array_index (self->dictionaries, Dictionary, i), &error); i++)
+		;
+	if (error)
+	{
+		g_printerr ("%s: %s\n", _("Error loading dictionary"), error->message);
+		exit (EXIT_FAILURE);
+	}
+
+	if (!self->dictionaries->len)
+	{
+		g_printerr ("%s\n", _("No dictionaries found either in "
+			"the configuration or on the command line"));
+		exit (EXIT_FAILURE);
+	}
+	self->dict = g_array_index (self->dictionaries, Dictionary, 0).dict;
+	app_reload_view (self);
 }
 
 static void
@@ -487,10 +658,10 @@ app_destroy (Application *self)
 		g_source_remove (self->selection_timer);
 	g_free (self->selection_contents);
 
-	g_object_unref (self->dict);
 	g_ptr_array_free (self->entries, TRUE);
 	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
+	g_array_free (self->dictionaries, TRUE);
 
 	g_iconv_close (self->ucs4_to_locale);
 }
@@ -1081,6 +1252,20 @@ app_search_for_entry (Application *self)
 	app_redraw_view (self);
 }
 
+/// Switch to a different dictionary by number.
+static gboolean
+app_goto_dictionary (Application *self, guint n)
+{
+	if (n >= self->dictionaries->len)
+		return FALSE;
+
+	Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, n);
+	self->dict = dict->dict;
+	app_search_for_entry (self);
+	app_redraw_top (self);
+	return TRUE;
+}
+
 #define SAVE_CURSOR                 \
 	int last_x, last_y;             \
 	getyx (stdscr, last_y, last_x);
@@ -1422,6 +1607,14 @@ app_process_alt_key (Application *self, termo_key_t *event)
 {
 	if (event->code.codepoint == 'c')
 		self->center_search = !self->center_search;
+
+	if (event->code.codepoint >= '0'
+	 && event->code.codepoint <= '9')
+	{
+		gint n = event->code.codepoint - '0';
+		if (!app_goto_dictionary (self, (n == 0 ? 10 : n) - 1))
+			beep ();
+	}
 	return TRUE;
 }
 
@@ -1797,7 +1990,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	GError *error = NULL;
 	GOptionContext *ctx = g_option_context_new
-		(N_("dictionary.ifo - StarDict terminal UI"));
+		(N_("[dictionary.ifo]... - StarDict terminal UI"));
 	GOptionGroup *group = g_option_group_new ("", "", "", &options, NULL);
 	g_option_group_add_entries (group, entries);
 	g_option_group_set_translation_domain (group, GETTEXT_PACKAGE);
@@ -1809,6 +2002,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 			error->message);
 		exit (EXIT_FAILURE);
 	}
+	g_option_context_free (ctx);
 
 	if (options.show_version)
 	{
@@ -1816,18 +2010,8 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		exit (EXIT_SUCCESS);
 	}
 
-	if (argc != 2)
-	{
-		gchar *help = g_option_context_get_help (ctx, TRUE, FALSE);
-		g_printerr ("%s", help);
-		g_free (help);
-		exit (EXIT_FAILURE);
-	}
-
-	g_option_context_free (ctx);
-
 	Application app;
-	app_init (&app, &options, argv[1]);
+	app_init (&app, &options, argv + 1);
 	app_init_terminal (&app);
 	app_redraw (&app);
 
