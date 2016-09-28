@@ -184,8 +184,6 @@ typedef struct view_entry               ViewEntry;
 typedef struct dictionary               Dictionary;
 /// Encloses application data.
 typedef struct application              Application;
-/// Application options.
-typedef struct app_options              AppOptions;
 
 struct view_entry
 {
@@ -239,12 +237,6 @@ struct application
 
 /// Shortcut to retrieve named terminal attributes
 #define APP_ATTR(name) self->attrs[ATTRIBUTE_ ## name].attrs
-
-struct app_options
-{
-	gboolean show_version;              ///< Output version information and quit
-	gint     selection_watcher;         ///< Interval in milliseconds, or -1
-};
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -454,6 +446,14 @@ app_load_config_values (Application *self, GKeyFile *kf)
 	self->hl_prefix =
 		app_load_bool (kf, "hl-common-prefix", self->hl_prefix);
 
+	guint64 timer;
+	const gchar *watch_selection = "watch-selection";
+	if (app_load_bool (kf, watch_selection, FALSE))
+		self->selection_interval = 500;
+	else if ((timer = g_key_file_get_uint64
+		(kf, "Settings", watch_selection, NULL)) && timer <= G_MAXINT)
+		self->selection_interval = timer;
+
 #define XX(name, config, fg_, bg_, attrs_) \
 	app_load_color (self, kf, config, ATTRIBUTE_ ## name);
 	ATTRIBUTE_TABLE (XX)
@@ -524,24 +524,12 @@ app_init_attrs (Application *self)
 
 /// Initialize the application core.
 static void
-app_init (Application *self, AppOptions *options, char **filenames)
+app_init (Application *self, char **filenames)
 {
 	self->loop = NULL;
-	self->selection_interval = options->selection_watcher;
+	self->selection_interval = -1;
 	self->selection_timer = 0;
 	self->selection_contents = NULL;
-
-#ifdef WITH_GTK
-	if (gtk_init_check (0, NULL))
-	{
-		// So that we set the input only when it actually changes
-		GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
-		self->selection_contents = gtk_clipboard_wait_for_text (clipboard);
-		rearm_selection_watcher (self);
-	}
-	else
-#endif  // WITH_GTK
-		self->loop = g_main_loop_new (NULL, FALSE);
 
 	self->tk = NULL;
 	self->tk_timer = 0;
@@ -585,6 +573,19 @@ app_init (Application *self, AppOptions *options, char **filenames)
 		g_printerr ("%s: %s\n", _("Cannot load configuration"), error->message);
 		exit (EXIT_FAILURE);
 	}
+
+	// Now we have settings for the clipboard watcher, we can arm the timer
+#ifdef WITH_GTK
+	if (gtk_init_check (0, NULL))
+	{
+		// So that we set the input only when it actually changes
+		GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
+		self->selection_contents = gtk_clipboard_wait_for_text (clipboard);
+		rearm_selection_watcher (self);
+	}
+	else
+#endif  // WITH_GTK
+		self->loop = g_main_loop_new (NULL, FALSE);
 
 	// Dictionaries given on the command line override the configuration
 	if (*filenames)
@@ -1899,29 +1900,6 @@ on_selection_timer (gpointer data)
 	app->selection_timer = 0;
 	return FALSE;
 }
-
-static gboolean
-on_watch_primary_selection (G_GNUC_UNUSED const gchar *option_name,
-	const gchar *value, gpointer data, GError **error)
-{
-	AppOptions *options = data;
-
-	if (!value)
-	{
-		options->selection_watcher = 500;
-		return TRUE;
-	}
-
-	unsigned long timer;
-	if (!xstrtoul (&timer, value, 10) || !timer || timer > G_MAXINT)
-	{
-		g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
-			_("Invalid timer value"));
-		return FALSE;
-	}
-	options->selection_watcher = timer;
-	return TRUE;
-}
 #endif  // WITH_GTK
 
 static void
@@ -1990,24 +1968,12 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		g_type_init ();
 G_GNUC_END_IGNORE_DEPRECATIONS
 
-	AppOptions options =
-	{
-		.show_version = FALSE,
-		.selection_watcher = -1,
-	};
-
+	gboolean show_version = FALSE;
 	GOptionEntry entries[] =
 	{
 		{ "version", 0, G_OPTION_FLAG_IN_MAIN,
-		  G_OPTION_ARG_NONE, &options.show_version,
+		  G_OPTION_ARG_NONE, &show_version,
 		  N_("Output version information and exit"), NULL },
-#ifdef WITH_GTK
-		{ "watch-primary-selection", 'w',
-		  G_OPTION_FLAG_IN_MAIN | G_OPTION_FLAG_OPTIONAL_ARG,
-		  G_OPTION_ARG_CALLBACK, (gpointer) on_watch_primary_selection,
-		  N_("Watch the value of the primary selection for input"),
-		  N_("TIMER") },
-#endif  // WITH_GTK
 		{ NULL }
 	};
 
@@ -2021,7 +1987,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	GError *error = NULL;
 	GOptionContext *ctx = g_option_context_new
 		(N_("[dictionary.ifo]... - StarDict terminal UI"));
-	GOptionGroup *group = g_option_group_new ("", "", "", &options, NULL);
+	GOptionGroup *group = g_option_group_new ("", "", "", NULL, NULL);
 	g_option_group_add_entries (group, entries);
 	g_option_group_set_translation_domain (group, GETTEXT_PACKAGE);
 	g_option_context_add_group (ctx, group);
@@ -2034,14 +2000,14 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	}
 	g_option_context_free (ctx);
 
-	if (options.show_version)
+	if (show_version)
 	{
 		g_print (PROJECT_NAME " " PROJECT_VERSION "\n");
 		exit (EXIT_SUCCESS);
 	}
 
 	Application app;
-	app_init (&app, &options, argv + 1);
+	app_init (&app, argv + 1);
 	app_init_terminal (&app);
 	app_redraw (&app);
 
