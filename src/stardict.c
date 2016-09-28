@@ -253,6 +253,13 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 			continue;
 		}
 
+		if (!g_utf8_validate (ir.value, -1, NULL))
+		{
+			g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
+				"%s: %s", path, _("invalid encoding, must be valid UTF-8"));
+			goto error;
+		}
+
 		if (_stardict_ifo_keys[i].type == IFO_STRING)
 		{
 			G_STRUCT_MEMBER (gchar *, sti, _stardict_ifo_keys[i].offset)
