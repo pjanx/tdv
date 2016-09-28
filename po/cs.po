@@ -7,112 +7,125 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sdtui 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
-"POT-Creation-Date: 2013-05-19 08:02+0200\n"
-"PO-Revision-Date: 2013-05-19 08:03+0100\n"
+"POT-Creation-Date: 2016-09-28 16:12+0200\n"
+"PO-Revision-Date: 2016-09-28 16:15+0200\n"
 "Last-Translator: Přemysl Janouch <p.janouch@gmail.com>\n"
 "Language-Team: Czech <translation-team-cs@lists.sourceforge.net>\n"
 "Language: cs\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 1.5.4\n"
+"X-Generator: Poedit 1.8.9\n"
 
-#: ../src/sdtui.c:1072
+#: ../src/sdtui.c:573
+msgid "Cannot load configuration"
+msgstr "Nemohu načíst konfiguraci"
+
+#: ../src/sdtui.c:1997
 msgid "Error"
 msgstr "Chyba"
 
-#: ../src/sdtui.c:295
+#: ../src/sdtui.c:606
 msgid "Error loading dictionary"
 msgstr "Chyba při načítání slovníku"
 
-#: ../src/sdtui.c:1054
+#: ../src/sdtui.c:612
+msgid ""
+"No dictionaries found either in the configuration or on the command line"
+msgstr "V konfiguraci ani na příkazové řádce nebyly nalezeny žádné slovníky"
+
+#: ../src/sdtui.c:1976
 msgid "Output version information and exit"
 msgstr "Vypíše informace o verzi a ukončí se"
 
-#: ../src/sdtui.c:308
+#: ../src/sdtui.c:548
 msgid "Search"
 msgstr "Hledat"
 
-#: ../src/sdtui.c:440
+#: ../src/sdtui.c:966
 msgid "Terminal UI for StarDict dictionaries"
 msgstr "Terminálové UI pro stardictové slovníky"
 
-#: ../src/sdtui.c:443
+#: ../src/sdtui.c:969
 msgid "Type to search"
 msgstr "Zadejte vyhledávaný výraz"
 
-#: ../src/sdtui.c:1059
+#: ../src/sdtui.c:1981
 msgid "Warning"
 msgstr "Varování"
 
-#: ../src/stardict.c:702
+#: ../src/sdtui.c:1989
+msgid "[dictionary.ifo...] - StarDict terminal UI"
+msgstr "[slovník.ifo...] - terminálové UI pro StarDict"
+
+#: ../src/stardict.c:835
 msgid "cannot find .dict file"
 msgstr "nemohu najít .dict soubor"
 
-#: ../src/stardict.c:679
+#: ../src/stardict.c:812
 msgid "cannot find .idx file"
 msgstr "nemohu najít .idx soubor"
 
-#: ../src/sdtui.c:1067
-msgid "dictionary.ifo - StarDict terminal UI"
-msgstr "slovník.ifo - terminálové UI pro StarDict"
-
-#: ../src/sdtui.c:230
+#: ../src/sdtui.c:283
 msgid "error in entry"
 msgstr "chyba v záznamu"
 
-#: ../src/sdtui.c:1059
+#: ../src/sdtui.c:1981
 msgid "failed to set the locale"
 msgstr "selhalo nastavení locale"
 
-#: ../src/stardict.c:343
+#: ../src/stardict.c:308
 msgid "index file size not specified"
 msgstr "nebyla určena velikost rejstříku"
 
-#: ../src/stardict.c:861 ../src/stardict.c:886
+#: ../src/stardict.c:1130 ../src/stardict.c:1155
 msgid "invalid data entry"
 msgstr "neplatná datová položka"
 
-#: ../src/stardict.c:136
+#: ../src/stardict.c:259
+msgid "invalid encoding, must be valid UTF-8"
+msgstr "neplatné kódování, musí být validní UTF-8"
+
+#: ../src/stardict.c:91
 msgid "invalid header format"
 msgstr "neplatný formát hlavičky"
 
-#: ../src/stardict.c:352
+#: ../src/stardict.c:317
 msgid "invalid index offset bits"
 msgstr "neplatný počet bitů pro offset v rejstříku"
 
-#: ../src/stardict.c:311
+#: ../src/stardict.c:276
 msgid "invalid integer"
 msgstr "neplatné číslo"
 
-#: ../src/stardict.c:279
+#: ../src/stardict.c:238
 msgid "invalid version"
 msgstr "neplatná verze"
 
-#: ../src/stardict.c:331
+#: ../src/stardict.c:296
 msgid "no book name specified"
 msgstr "nebyl určen název knihy"
 
-#: ../src/sdtui.c:249
+#: ../src/sdtui.c:302
 msgid "no usable field found"
 msgstr "nenalezeno žádné použitelné pole"
 
-#: ../src/stardict.c:321
+#: ../src/stardict.c:286
 msgid "option format error"
 msgstr "chyba v zápisu volby"
 
-#: ../src/sdtui.c:1072
+#: ../src/sdtui.c:1997
 msgid "option parsing failed"
 msgstr "zpracování přepínačů selhalo"
 
-#: ../src/stardict.c:294
+#: ../src/stardict.c:252
 msgid "unknown key, ignoring"
 msgstr "neznámý klíč, ignoruji"
 
-#: ../src/stardict.c:268
+#: ../src/stardict.c:227
 msgid "version not specified"
 msgstr "nebyla určena verze"
 
-#: ../src/stardict.c:337
+#: ../src/stardict.c:302
 msgid "word count not specified"
 msgstr "nebyl určen počet slov"
