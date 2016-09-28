@@ -52,6 +52,7 @@
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
 #define TOP_BAR_CUTOFF  2               ///< How many lines are reserved on top
+#define APP_TITLE  PROJECT_NAME " "     ///< Left top corner
 
 // --- Utilities ---------------------------------------------------------------
 
@@ -873,7 +874,7 @@ app_redraw_top (Application *self)
 {
 	attrset (APP_ATTR (HEADER));
 	mvwhline (stdscr, 0, 0, APP_ATTR (HEADER), COLS);
-	gsize indent = app_add_utf8_string (self, PROJECT_NAME " ", A_BOLD, -1);
+	gsize indent = app_add_utf8_string (self, APP_TITLE, A_BOLD, -1);
 
 	attrset (0);
 	for (guint i = 0; i < self->dictionaries->len; i++)
@@ -1280,14 +1281,6 @@ app_goto_dictionary (Application *self, guint n)
 	return TRUE;
 }
 
-#define SAVE_CURSOR                 \
-	int last_x, last_y;             \
-	getyx (stdscr, last_y, last_x);
-
-#define RESTORE_CURSOR              \
-	move (last_y, last_x);          \
-	refresh ();
-
 /// The terminal has been resized, make appropriate changes.
 static gboolean
 app_process_resize (Application *self)
@@ -1344,6 +1337,14 @@ enum user_action
 
 	USER_ACTION_COUNT
 };
+
+#define SAVE_CURSOR                 \
+	int last_x, last_y;             \
+	getyx (stdscr, last_y, last_x);
+
+#define RESTORE_CURSOR              \
+	move (last_y, last_x);          \
+	refresh ();
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -1668,7 +1669,21 @@ app_process_left_mouse_click (Application *self, int line, int column)
 {
 	SAVE_CURSOR
 	if (line == 0)
-		;  // At the moment there's nothing useful for us to do
+	{
+		int indent = strlen (APP_TITLE);
+		if (column < indent)
+			return;
+
+		Dictionary *dicts = (Dictionary *) self->dictionaries->data;
+		for (guint i = 0; i < self->dictionaries->len; i++)
+		{
+			if (column < (indent += dicts[i].name_width))
+			{
+				app_goto_dictionary (self, i);
+				return;
+			}
+		}
+	}
 	else if (line == 1)
 	{
 		// FIXME: this is only an approximation
