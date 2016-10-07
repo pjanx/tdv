@@ -756,7 +756,7 @@ row_buffer_append (RowBuffer *self, const gchar *str, chtype attrs)
 		// XXX: this is very crude as it disrespects combining marks
 		gunichar c =
 			app_is_character_in_locale (self->app, ucs4[i]) ? ucs4[i] : '?';
-		struct row_char rc = { ucs4[i], attrs, unichar_width (c) };
+		struct row_char rc = { c, attrs, unichar_width (c) };
 		g_array_append_val (self->chars, rc);
 		self->total_width += rc.width;
 	}
