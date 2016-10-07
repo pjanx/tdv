@@ -379,7 +379,6 @@ struct stardict_dict_private
 	// The collated indexes are only permutations of their normal selves.
 
 	UCollator     * collator;           //!< ICU index collator
-	GArray        * collated_index;     //!< Sorted indexes into @a index
 	GArray        * collated_synonyms;  //!< Sorted indexes into @a synonyms
 
 	// There are currently three ways the dictionary data can be read:
@@ -410,8 +409,6 @@ stardict_dict_finalize (GObject *self)
 
 	if (priv->collator)
 		ucol_close (priv->collator);
-	if (priv->collated_index)
-		g_array_free (priv->collated_index, TRUE);
 	if (priv->collated_synonyms)
 		g_array_free (priv->collated_synonyms, TRUE);
 
@@ -494,6 +491,7 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 			goto error;
 
 		entry.name = g_string_chunk_insert (sd->priv->string_allocator, name);
+		entry.reverse_index = priv->index->len;
 		g_array_append_val (priv->index, entry);
 		g_free (name);
 	}
@@ -707,12 +705,8 @@ static inline gint
 stardict_dict_index_coll_for_sorting
 	(gconstpointer x1, gconstpointer x2, gpointer data)
 {
-	StardictDict *sd = data;
-	const gchar *s1 = g_array_index
-		(sd->priv->index, StardictIndexEntry, *(guint32 *) x1).name;
-	const gchar *s2 = g_array_index
-		(sd->priv->index, StardictIndexEntry, *(guint32 *) x2).name;
-	return stardict_dict_strcoll_for_sorting (s1, s2, data);
+	const StardictIndexEntry *e1 = x1, *e2 = x2;
+	return stardict_dict_strcoll_for_sorting (e1->name, e2->name, data);
 }
 
 static inline gint
@@ -741,14 +735,20 @@ stardict_dict_set_collation (StardictDict *sd, const gchar *collation)
 
 	// TODO: if error != U_ZERO_ERROR, report a meaningful message
 
+	// Reorder the index according to the ICU locale
 	ucol_setAttribute (priv->collator, UCOL_CASE_FIRST, UCOL_OFF, &error);
-
-	priv->collated_index = g_array_sized_new (FALSE, FALSE,
-		sizeof (guint32), priv->index->len);
-	for (guint32 i = 0; i < priv->index->len; i++)
-		g_array_append_val (priv->collated_index, i);
-	g_array_sort_with_data (sd->priv->collated_index,
+	g_array_sort_with_data (sd->priv->index,
 		stardict_dict_index_coll_for_sorting, sd);
+
+	// Construct a reverse index from the original index as it's used less
+	guint32 *reverse = g_malloc_n (priv->index->len, sizeof *reverse);
+	for (guint32 i = 0; i < priv->index->len; i++)
+		reverse[g_array_index (priv->index,
+			StardictIndexEntry, i).reverse_index] = i;
+	for (guint32 i = 0; i < priv->index->len; i++)
+		g_array_index (priv->index,
+			StardictIndexEntry, i).reverse_index = reverse[i];
+	g_free (reverse);
 
 	priv->collated_synonyms = g_array_sized_new (FALSE, FALSE,
 		sizeof (guint32), priv->synonyms->len);
@@ -882,9 +882,16 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 
 	// And add all matching entries from that position on to the array
 	do
+	{
+		guint32 i = g_array_index
+			(synonyms, StardictSynonymEntry, ++imid).original_word;
+		// When we use a collator this will point to the original entry,
+		// otherwise it points to itself and this changes nothing
+		i = g_array_index
+			(sd->priv->index, StardictIndexEntry, i).reverse_index;
 		g_ptr_array_add (array, g_strdup (g_array_index
-			(index, StardictIndexEntry, g_array_index
-			(synonyms, StardictSynonymEntry, ++imid).original_word).name));
+			(index, StardictIndexEntry, i).name));
+	}
 	while ((guint) imid < synonyms->len - 1 && !stardict_strcmp (word,
 		g_array_index (synonyms, StardictSynonymEntry, imid + 1).word));
 
@@ -897,15 +904,11 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 static gint
 stardict_dict_cmp_index (StardictDict *sd, const gchar *word, gint i)
 {
-	GArray *collated = sd->priv->collated_index;
-	GArray *index = sd->priv->index;
-
+	const gchar *target =
+		g_array_index (sd->priv->index, StardictIndexEntry, i).name;
 	if (sd->priv->collator)
-		return stardict_dict_strcoll (word,
-			g_array_index (index, StardictIndexEntry,
-				g_array_index (collated, guint32, i)).name, sd);
-	return g_ascii_strcasecmp (word,
-		g_array_index (index, StardictIndexEntry, i).name);
+		return stardict_dict_strcoll (word, target, sd);
+	return g_ascii_strcasecmp (word, target);
 }
 
 /// Search for a word.  The search is ASCII-case-insensitive.
@@ -930,32 +933,24 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 	BINARY_SEARCH_END
 
 	// Try to find a longer common prefix with a preceding entry
+	// FIXME: this doesn't work well with diacritics, which are ignored when
+	//   reordering but can take us to an entry with a suboptimal prefix
+	//   while searching
 #define PREFIX(i) stardict_longest_common_collation_prefix \
 	(sd, word, g_array_index (index, StardictIndexEntry, i).name)
 
 	// We need to take care not to step through the entire dictionary
 	// if not a single character matches, because it can be quite costly
-	if (sd->priv->collator)
+	size_t probe, best = PREFIX (imin);
+
+	// XXX: only looking for _better_ backward matches here, since the
+	//   fallback common prefix searching algorithm doesn't ignore case
+	size_t needed_improvement = !sd->priv->collator;
+	while (best && imin > 0
+		&& (probe = PREFIX (imin - 1)) >= best + needed_improvement)
 	{
-		GArray *collated = sd->priv->collated_index;
-		size_t probe, best = PREFIX (g_array_index (collated, guint32, imin));
-		while (best && imin > 0 && (probe =
-			PREFIX (g_array_index (collated, guint32, imin - 1))) >= best)
-		{
-			best = probe;
-			imin--;
-		}
-	}
-	else
-	{
-		// XXX: only looking for _better_ backward matches here, since the
-		//   fallback common prefix searching algorithm doesn't ignore case
-		size_t probe, best = PREFIX (imin);
-		while (best && imin > 0 && (probe = PREFIX (imin - 1)) > best)
-		{
-			best = probe;
-			imin--;
-		}
+		best = probe;
+		imin--;
 	}
 
 #undef PREFIX
@@ -1305,13 +1300,6 @@ stardict_iterator_new (StardictDict *sd, guint32 offset)
 	return si;
 }
 
-static gint64
-stardict_iterator_get_real_offset (StardictIterator *sdi)
-{
-	return sdi->owner->priv->collator ? g_array_index
-		(sdi->owner->priv->collated_index, guint32, sdi->offset) : sdi->offset;
-}
-
 /// Return the word in the index that the iterator points at, or NULL.
 const gchar *
 stardict_iterator_get_word (StardictIterator *sdi)
@@ -1320,7 +1308,7 @@ stardict_iterator_get_word (StardictIterator *sdi)
 	if (!stardict_iterator_is_valid (sdi))
 		return NULL;
 	return g_array_index (sdi->owner->priv->index,
-		StardictIndexEntry, stardict_iterator_get_real_offset (sdi)).name;
+		StardictIndexEntry, sdi->offset).name;
 }
 
 /// Return the dictionary entry that the iterator points at, or NULL.
@@ -1330,8 +1318,7 @@ stardict_iterator_get_entry (StardictIterator *sdi)
 	g_return_val_if_fail (STARDICT_IS_ITERATOR (sdi), NULL);
 	if (!stardict_iterator_is_valid (sdi))
 		return FALSE;
-	return stardict_dict_get_entry (sdi->owner,
-		stardict_iterator_get_real_offset (sdi));
+	return stardict_dict_get_entry (sdi->owner, sdi->offset);
 }
 
 /// Return whether the iterator points to a valid index entry.

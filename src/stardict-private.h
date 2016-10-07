@@ -56,6 +56,7 @@ struct stardict_index_entry
 	gchar           * name;             ///< The word in utf-8
 	guint64           data_offset;      ///< Offset of the definition
 	guint32           data_size;        ///< Size of the definition
+	guint32           reverse_index;    ///< Word at this index before sorting
 };
 
 struct stardict_synonym_entry
