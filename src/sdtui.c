@@ -805,13 +805,13 @@ static void
 row_buffer_print (RowBuffer *self, gunichar *ucs4, size_t len, chtype attrs)
 {
 	gsize locale_str_len;
-	guchar *str = (guchar *) g_convert_with_iconv
-		((const gchar *) ucs4, len * sizeof *ucs4,
+	gchar *str = g_convert_with_iconv ((const gchar *) ucs4, len * sizeof *ucs4,
 		self->app->ucs4_to_locale, NULL, &locale_str_len, NULL);
 	g_return_if_fail (str != NULL);
 
-	for (gsize i = 0; i < locale_str_len; i++)
-		addch (str[i] | attrs);
+	attrset (attrs);
+	addstr (str);
+	attrset (0);
 	g_free (str);
 }
 
@@ -839,71 +839,62 @@ row_buffer_flush (RowBuffer *self)
 		g_array_index (self->chars, RowChar, self->chars->len - 1).attrs);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-/// Write the given UTF-8 string padded with spaces.
-/// @param[in] n  The number of characters to write, or -1 for the whole string.
-/// @param[in] attrs  Text attributes for the text, without padding.
-///                   To change the attributes of all output, use attrset().
-/// @return The number of characters output.
-static gsize
-app_add_utf8_string (Application *self, const gchar *str, chtype attrs, int n)
+/// Align the buffer to @a width (if not lesser than zero) using @a attrs
+static void
+row_buffer_finish (RowBuffer *self, int width, chtype attrs)
 {
-	if (!n)
-		return 0;
+	if (width >= 0 && self->total_width > width)
+		row_buffer_ellipsis (self, width, attrs);
+	while (self->total_width < width)
+	{
+		struct row_char rc = { ' ', attrs, 1 };
+		g_array_append_val (self->chars, rc);
+		self->total_width += rc.width;
+	}
 
-	RowBuffer buf;
-	row_buffer_init (&buf, self);
-	row_buffer_append (&buf, str, attrs);
-
-	if (n < 0)
-		n = buf.total_width;
-	if (buf.total_width > n)
-		row_buffer_ellipsis (&buf, n, attrs);
-
-	row_buffer_flush (&buf);
-	for (int i = buf.total_width; i < n; i++)
-		addch (' ');
-
-	row_buffer_free (&buf);
-	return n;
+	row_buffer_flush (self);
+	row_buffer_free (self);
 }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /// Render the top bar.
 static void
 app_redraw_top (Application *self)
 {
-	attrset (APP_ATTR (HEADER));
-	mvwhline (stdscr, 0, 0, APP_ATTR (HEADER), COLS);
-	gsize indent = app_add_utf8_string (self, APP_TITLE, A_BOLD, -1);
+	RowBuffer buf;
+	row_buffer_init (&buf, self);
+	row_buffer_append (&buf, APP_TITLE, APP_ATTR (HEADER) | A_BOLD);
 
-	attrset (0);
 	for (guint i = 0; i < self->dictionaries->len; i++)
 	{
 		Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, i);
-		indent += app_add_utf8_string (self, dict->name,
+		row_buffer_append (&buf, dict->name,
 			(self->dictionaries->len > 1 && self->dict == dict->dict)
-				? APP_ATTR (ACTIVE) : APP_ATTR (HEADER),
-			MIN (COLS - indent, dict->name_width));
+				? APP_ATTR (ACTIVE) : APP_ATTR (HEADER));
 	}
+	move (0, 0);
+	row_buffer_finish (&buf, COLS, APP_ATTR (HEADER));
 
-	attrset (APP_ATTR (SEARCH));
-	mvwhline (stdscr, 1, 0, APP_ATTR (SEARCH), COLS);
-	indent = app_add_utf8_string (self, self->search_label, 0, -1);
+	row_buffer_init (&buf, self);
+	row_buffer_append (&buf, self->search_label, APP_ATTR (SEARCH));
+	gsize indent = buf.total_width;
+
+	int word_attrs = APP_ATTR (SEARCH);
+	if (self->input_confirmed)
+		word_attrs |= A_BOLD;
 
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
 	g_return_if_fail (input_utf8 != NULL);
-
-	int word_attrs = 0;
-	if (self->input_confirmed)
-		word_attrs |= A_BOLD;
-	app_add_utf8_string (self, input_utf8, word_attrs, COLS - indent - 1);
+	row_buffer_append (&buf, input_utf8, word_attrs);
 	g_free (input_utf8);
+
+	row_buffer_finish (&buf, COLS, APP_ATTR (SEARCH));
 
 	guint offset, i;
 	for (offset = i = 0; i < self->input_pos; i++)
-		// This may be inconsistent with the output of app_add_utf8_string()
+		// This may be inconsistent with RowBuffer
 		offset += unichar_width (g_array_index (self->input, gunichar, i));
 
 	move (1, MIN ((gint) (indent + offset), COLS - 1));
@@ -935,7 +926,6 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 		clrtoeol ();
 	}
 
-	attrset (0);
 	while (len-- && i < LINES - TOP_BAR_CUTOFF)
 	{
 		move (TOP_BAR_CUTOFF + i, 0);
@@ -946,7 +936,11 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 			x = 0;
 
 		move (TOP_BAR_CUTOFF + i, x);
-		app_add_utf8_string (self, *lines, 0, COLS - x);
+
+		RowBuffer buf;
+		row_buffer_init (&buf, self);
+		row_buffer_append (&buf, *lines, 0);
+		row_buffer_finish (&buf, -1, 0);
 
 		lines++;
 		i++;
@@ -988,6 +982,7 @@ app_redraw_view (Application *self)
 	// TODO: clean this stuff up a bit, it's all rather ugly
 	gchar *input_utf8 = g_ucs4_to_utf8
 		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
+	gint left_width = app_get_left_column_width (self);
 
 	guint i, k = self->top_offset, shown = 0;
 	for (i = 0; i < self->entries->len; i++)
@@ -1001,8 +996,6 @@ app_redraw_view (Application *self)
 			gboolean last = k + 1 == ve->definitions_length;
 			if (last && self->underline_last) attrs |= A_UNDERLINE;
 
-			attrset (attrs);
-
 			RowBuffer buf;
 			row_buffer_init (&buf, self);
 
@@ -1013,22 +1006,16 @@ app_redraw_view (Application *self)
 					(self->dict, ve->word, input_utf8);
 
 				gchar *prefix = g_strndup (ve->word, common);
-				row_buffer_append (&buf, prefix, A_BOLD);
+				row_buffer_append (&buf, prefix, attrs | A_BOLD);
 				g_free (prefix);
 			}
-			row_buffer_append (&buf, ve->word + common, 0);
+			row_buffer_append (&buf, ve->word + common, attrs);
+			row_buffer_finish (&buf, left_width, attrs);
 
-			gint left_width = app_get_left_column_width (self);
-			if (buf.total_width > left_width)
-				row_buffer_ellipsis (&buf, left_width, attrs);
-
-			row_buffer_flush (&buf);
-			for (int i = buf.total_width; i < left_width + 1; i++)
-				addch (' ');
-			row_buffer_free (&buf);
-
-			app_add_utf8_string (self,
-				ve->definitions[k], 0, COLS - left_width - 1);
+			row_buffer_init (&buf, self);
+			row_buffer_append (&buf, " ", attrs);
+			row_buffer_append (&buf, ve->definitions[k], attrs);
+			row_buffer_finish (&buf, COLS - left_width, attrs);
 
 			if ((gint) ++shown == LINES - TOP_BAR_CUTOFF)
 				goto done;
@@ -1039,7 +1026,6 @@ app_redraw_view (Application *self)
 
 done:
 	free (input_utf8);
-	attrset (0);
 	refresh ();
 }
 
@@ -1916,9 +1902,10 @@ log_handler_curses (Application *self, const gchar *message)
 	in_processing = TRUE;
 	SAVE_CURSOR
 
-	attrset (A_REVERSE);
-	mvwhline (stdscr, 0, 0, A_REVERSE, COLS);
-	app_add_utf8_string (self, message, 0, COLS);
+	RowBuffer buf;
+	row_buffer_init (&buf, self);
+	row_buffer_append (&buf, message, A_REVERSE);
+	row_buffer_finish (&buf, COLS, A_REVERSE);
 
 	RESTORE_CURSOR
 	in_processing = FALSE;
