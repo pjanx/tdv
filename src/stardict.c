@@ -374,6 +374,7 @@ struct stardict_dict_private
 	StardictInfo  * info;               //!< General information about the dict
 	GArray        * index;              //!< Word index
 	GArray        * synonyms;           //!< Synonyms
+	GStringChunk  * string_allocator;   //!< String allocator (index+synonyms)
 
 	// The collated indexes are only permutations of their normal selves.
 
@@ -405,6 +406,7 @@ stardict_dict_finalize (GObject *self)
 
 	g_array_free (priv->index, TRUE);
 	g_array_free (priv->synonyms, TRUE);
+	g_string_chunk_free (priv->string_allocator);
 
 	if (priv->collator)
 		ucol_close (priv->collator);
@@ -475,7 +477,8 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 	StardictIndexEntry entry;
 	GError *err = NULL;
 	// Ignoring "wordcount", just reading as long as we can
-	while ((entry.name = stream_read_string (dis, &err)))
+	gchar *name;
+	while ((name = stream_read_string (dis, &err)))
 	{
 		if (priv->info->idx_offset_bits == 32)
 			entry.data_offset
@@ -490,7 +493,9 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 		if (err)
 			goto error;
 
+		entry.name = g_string_chunk_insert (sd->priv->string_allocator, name);
 		g_array_append_val (priv->index, entry);
+		g_free (name);
 	}
 
 	if (err != NULL)
@@ -501,7 +506,7 @@ load_idx_internal (StardictDict *sd, GInputStream *is, GError **error)
 
 error:
 	g_propagate_error (error, err);
-	g_free (entry.name);
+	g_free (name);
 	g_object_unref (dis);
 	return FALSE;
 }
@@ -556,18 +561,21 @@ load_syn (StardictDict *sd, const gchar *filename, GError **error)
 	StardictSynonymEntry entry;
 	GError *err = NULL;
 	// Ignoring "synwordcount", just reading as long as we can
-	while ((entry.word = stream_read_string (dis, &err)))
+	gchar *word;
+	while ((word = stream_read_string (dis, &err)))
 	{
 		entry.original_word = g_data_input_stream_read_uint32 (dis, NULL, &err);
 		if (err)
 			break;
 
+		entry.word = g_string_chunk_insert (sd->priv->string_allocator, word);
 		g_array_append_val (sd->priv->synonyms, entry);
+		g_free (word);
 	}
 
 	if (err != NULL)
 	{
-		g_free (entry.word);
+		g_free (word);
 		g_propagate_error (error, err);
 	}
 	else
@@ -578,22 +586,6 @@ load_syn (StardictDict *sd, const gchar *filename, GError **error)
 cannot_open:
 	g_object_unref (file);
 	return ret_val;
-}
-
-/// Destroy an index entry.
-static void
-index_destroy_cb (gpointer sde)
-{
-	StardictIndexEntry *e = sde;
-	g_free (e->name);
-}
-
-/// Destroy a synonym entry.
-static void
-syn_destroy_cb (gpointer sde)
-{
-	StardictSynonymEntry *e = sde;
-	g_free (e->word);
 }
 
 /// Load StarDict dictionary data.
@@ -786,9 +778,8 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 	StardictDictPrivate *priv = sd->priv;
 	priv->info = sdi;
 	priv->index = g_array_new (FALSE, FALSE, sizeof (StardictIndexEntry));
-	g_array_set_clear_func (priv->index, index_destroy_cb);
 	priv->synonyms = g_array_new (FALSE, FALSE, sizeof (StardictSynonymEntry));
-	g_array_set_clear_func (priv->synonyms, syn_destroy_cb);
+	priv->string_allocator = g_string_chunk_new ((1 << 15));
 
 	const gchar *dot = strrchr (sdi->path, '.');
 	gchar *base = dot ? g_strndup (sdi->path, dot - sdi->path)
