@@ -81,7 +81,7 @@ watch-selection = true
 
 [Colors]
 header = reverse
-header-active = underline
+header-active = ul
 search = ul
 even = 16 231
 odd = 16 255
