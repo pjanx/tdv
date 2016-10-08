@@ -568,7 +568,7 @@ app_load_dictionaries_parallel (Application *self, GError **e)
 	ctx.self = self;
 	ctx.error_queue = g_async_queue_new_full ((GDestroyNotify) g_error_free);
 	for (guint i = 0; i < self->dictionaries->len; i++)
-		g_thread_pool_push (pool, GUINT_TO_POINTER (i) + 1, NULL);
+		g_thread_pool_push (pool, GUINT_TO_POINTER (i + 1), NULL);
 
 	g_thread_pool_free (pool, FALSE, TRUE);
 
