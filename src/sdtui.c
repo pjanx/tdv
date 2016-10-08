@@ -522,6 +522,69 @@ app_init_attrs (Application *self)
 #undef XX
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+static gboolean
+app_load_dictionaries (Application *self, GError **e)
+{
+	for (guint i = 0; i < self->dictionaries->len; i++)
+		if (!dictionary_load (&g_array_index (self->dictionaries,
+			Dictionary, i), e))
+			return FALSE;
+	return TRUE;
+}
+
+// Parallelize dictionary loading if possible, because of collation reindexing
+#if GLIB_CHECK_VERSION (2, 36, 0)
+struct load_ctx
+{
+	Application *self;                  ///< Application context
+	GAsyncQueue *error_queue;           ///< Errors
+};
+
+static void
+app_load_worker (gpointer data, gpointer user_data)
+{
+	struct load_ctx *ctx = user_data;
+	GError *e = NULL;
+	dictionary_load (&g_array_index
+		(ctx->self->dictionaries, Dictionary, GPOINTER_TO_UINT (data) - 1), &e);
+	if (e)
+		g_async_queue_push (ctx->error_queue, e);
+}
+
+static gboolean
+app_load_dictionaries_parallel (Application *self, GError **e)
+{
+	struct load_ctx ctx;
+	GThreadPool *pool = g_thread_pool_new (app_load_worker, &ctx,
+		g_get_num_processors (), TRUE, NULL);
+	if G_UNLIKELY (!g_thread_pool_get_num_threads (pool))
+	{
+		g_thread_pool_free (pool, TRUE, TRUE);
+		return app_load_dictionaries (self, e);
+	}
+
+	ctx.self = self;
+	ctx.error_queue = g_async_queue_new_full ((GDestroyNotify) g_error_free);
+	for (guint i = 0; i < self->dictionaries->len; i++)
+		g_thread_pool_push (pool, GUINT_TO_POINTER (i) + 1, NULL);
+
+	g_thread_pool_free (pool, FALSE, TRUE);
+
+	gboolean result = TRUE;
+	if ((*e = g_async_queue_try_pop (ctx.error_queue)))
+		result = FALSE;
+
+	g_async_queue_unref (ctx.error_queue);
+	return result;
+}
+
+#define app_load_dictionaries app_load_dictionaries_parallel
+#endif  // GLib >= 2.36
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 /// Initialize the application core.
 static void
 app_init (Application *self, char **filenames)
@@ -598,15 +661,11 @@ app_init (Application *self, char **filenames)
 		}
 	}
 
-	for (guint i = 0; i < self->dictionaries->len && dictionary_load
-		(&g_array_index (self->dictionaries, Dictionary, i), &error); i++)
-		;
-	if (error)
+	if (!app_load_dictionaries (self, &error))
 	{
 		g_printerr ("%s: %s\n", _("Error loading dictionary"), error->message);
 		exit (EXIT_FAILURE);
 	}
-
 	if (!self->dictionaries->len)
 	{
 		g_printerr ("%s\n", _("No dictionaries found either in "
