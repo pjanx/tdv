@@ -994,11 +994,10 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 		if (x < 0)
 			x = 0;
 
-		move (TOP_BAR_CUTOFF + i, x);
-
 		RowBuffer buf;
 		row_buffer_init (&buf, self);
 		row_buffer_append (&buf, *lines, 0);
+		move (TOP_BAR_CUTOFF + i, x);
 		row_buffer_finish (&buf, -1, 0);
 
 		lines++;
@@ -1964,6 +1963,7 @@ log_handler_curses (Application *self, const gchar *message)
 	RowBuffer buf;
 	row_buffer_init (&buf, self);
 	row_buffer_append (&buf, message, A_REVERSE);
+	move (0, 0);
 	row_buffer_finish (&buf, COLS, A_REVERSE);
 
 	RESTORE_CURSOR
