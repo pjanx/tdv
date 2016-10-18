@@ -1107,8 +1107,7 @@ static ViewEntry *
 append_entry (Application *self, guint32 position)
 {
 	ViewEntry *ve = NULL;
-	StardictIterator *iterator = stardict_iterator_new
-		(self->dict, position);
+	StardictIterator *iterator = stardict_iterator_new (self->dict, position);
 	if (stardict_iterator_is_valid (iterator))
 	{
 		ve = view_entry_new (iterator);
@@ -1184,10 +1183,9 @@ app_scroll_down (Application *self, guint n)
 			break;
 		}
 
+		// TODO: try to disallow scrolling past the end
 		ViewEntry *first_entry = g_ptr_array_index (self->entries, 0);
-		if (self->top_offset < first_entry->definitions_length - 1)
-			self->top_offset++;
-		else
+		if (++self->top_offset >= first_entry->definitions_length)
 		{
 			n_definitions -= first_entry->definitions_length;
 			g_ptr_array_remove_index (self->entries, 0);
@@ -1260,7 +1258,8 @@ app_one_entry_down (Application *self)
 			break;
 	}
 
-	if (first > LINES - TOP_BAR_CUTOFF - 1)
+	// FIXME: selection can still get past the end
+	if (first >= LINES - TOP_BAR_CUTOFF)
 	{
 		self->selected = LINES - TOP_BAR_CUTOFF - 1;
 		app_scroll_down (self, first - (LINES - TOP_BAR_CUTOFF - 1));
@@ -1298,6 +1297,10 @@ app_search_for_entry (Application *self)
 
 	self->show_help = FALSE;
 	app_reload_view (self);
+
+	// Don't let the iterator get past the end of the dictionary
+	if (!self->entries->len)
+		(void) app_scroll_up (self, 1);
 
 	// If the user wants it centered, just move the view up half a screen;
 	// actually, one third seems to be a better guess
@@ -1451,13 +1454,11 @@ app_process_user_action (Application *self, UserAction action)
 
 	case USER_ACTION_GOTO_PAGE_PREVIOUS:
 		app_scroll_up (self, LINES - TOP_BAR_CUTOFF);
-		// FIXME: selection
 		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
 	case USER_ACTION_GOTO_PAGE_NEXT:
 		app_scroll_down (self, LINES - TOP_BAR_CUTOFF);
-		// FIXME: selection
 		app_redraw_view (self);
 		RESTORE_CURSOR
 		return TRUE;
