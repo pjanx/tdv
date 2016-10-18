@@ -244,11 +244,12 @@ struct application
 static void
 view_entry_split_add (GPtrArray *out, const gchar *text)
 {
-	gchar **it, **tmp = g_strsplit (text, "\n", -1);
-	for (it = tmp; *it; it++)
-		if (**it)
-			g_ptr_array_add (out, g_strdup (*it));
-	g_strfreev (tmp);
+	const gchar *p = text, *nl;
+	for (; (nl = strchr (p, '\n')); p = nl + 1)
+		if (nl != p)
+			g_ptr_array_add (out, g_strndup (p, nl - p));
+	if (*p)
+		g_ptr_array_add (out, g_strdup (p));
 }
 
 /// Decomposes a dictionary entry into the format we want.
