@@ -1088,33 +1088,26 @@ done:
 	refresh ();
 }
 
+static ViewEntry *
+entry_for_position (Application *self, guint32 position)
+{
+	StardictIterator *iterator = stardict_iterator_new (self->dict, position);
+	ViewEntry *ve = NULL;
+	if (stardict_iterator_is_valid (iterator))
+		ve = view_entry_new (iterator);
+	g_object_unref (iterator);
+	return ve;
+}
+
 /// Just prepends a new view entry into the entries array.
 static ViewEntry *
 prepend_entry (Application *self, guint32 position)
 {
-	StardictIterator *iterator = stardict_iterator_new (self->dict, position);
-	ViewEntry *ve = view_entry_new (iterator);
-	g_object_unref (iterator);
-
+	ViewEntry *ve = entry_for_position (self, position);
 	g_ptr_array_add (self->entries, NULL);
 	memmove (self->entries->pdata + 1, self->entries->pdata,
 		sizeof ve * (self->entries->len - 1));
 	return g_ptr_array_index (self->entries, 0) = ve;
-}
-
-/// Just appends a new view entry to the entries array.
-static ViewEntry *
-append_entry (Application *self, guint32 position)
-{
-	ViewEntry *ve = NULL;
-	StardictIterator *iterator = stardict_iterator_new (self->dict, position);
-	if (stardict_iterator_is_valid (iterator))
-	{
-		ve = view_entry_new (iterator);
-		g_ptr_array_add (self->entries, ve);
-	}
-	g_object_unref (iterator);
-	return ve;
 }
 
 /// Counts the number of definitions available for seeing.
@@ -1134,7 +1127,6 @@ app_count_view_items (Application *self)
 static gboolean
 app_scroll_up (Application *self, guint n)
 {
-	gboolean success = TRUE;
 	guint n_definitions = app_count_view_items (self);
 	while (n--)
 	{
@@ -1146,10 +1138,7 @@ app_scroll_up (Application *self, guint n)
 
 		// We've reached the top
 		if (self->top_position == 0)
-		{
-			success = FALSE;
-			break;
-		}
+			return FALSE;
 
 		ViewEntry *ve = prepend_entry (self, --self->top_position);
 		self->top_offset = ve->definitions_length - 1;
@@ -1166,46 +1155,49 @@ app_scroll_up (Application *self, guint n)
 				(self->entries, self->entries->len - 1);
 		}
 	}
-	return success;
+	return TRUE;
 }
 
 /// Scroll down @a n entries.  Doesn't redraw.
 static gboolean
 app_scroll_down (Application *self, guint n)
 {
-	gboolean success = TRUE;
 	guint n_definitions = app_count_view_items (self);
 	while (n--)
 	{
 		if (self->entries->len == 0)
-		{
-			success = FALSE;
-			break;
-		}
+			return FALSE;
 
-		// TODO: try to disallow scrolling past the end
+		// Simulate the movement first to disallow scrolling past the end
+		guint to_be_offset = self->top_offset;
+		guint to_be_definitions = n_definitions;
+
 		ViewEntry *first_entry = g_ptr_array_index (self->entries, 0);
-		if (++self->top_offset >= first_entry->definitions_length)
+		if (++to_be_offset >= first_entry->definitions_length)
 		{
-			n_definitions -= first_entry->definitions_length;
+			to_be_definitions -= first_entry->definitions_length;
+			to_be_offset = 0;
+		}
+		if ((gint) (to_be_definitions - to_be_offset) < LINES - TOP_BAR_CUTOFF)
+		{
+			ViewEntry *new_entry = entry_for_position
+				(self, self->top_position + self->entries->len);
+			if (!new_entry)
+				return FALSE;
+
+			g_ptr_array_add (self->entries, new_entry);
+			to_be_definitions += new_entry->definitions_length;
+		}
+		if (to_be_offset == 0)
+		{
 			g_ptr_array_remove_index (self->entries, 0);
 			self->top_position++;
-			self->top_offset = 0;
 		}
 
-		if ((gint) (n_definitions - self->top_offset) < LINES - TOP_BAR_CUTOFF)
-		{
-			ViewEntry *ve = append_entry (self,
-				self->top_position + self->entries->len);
-			if (ve != NULL)
-				n_definitions += ve->definitions_length;
-		}
+		self->top_offset = to_be_offset;
+		n_definitions = to_be_definitions;
 	}
-
-	// Fix cursor to not point below the view items
-	if (self->selected >= n_definitions - self->top_offset)
-		self->selected  = n_definitions - self->top_offset - 1;
-	return success;
+	return TRUE;
 }
 
 /// Moves the selection one entry up.
@@ -1261,8 +1253,8 @@ app_one_entry_down (Application *self)
 	// FIXME: selection can still get past the end
 	if (first >= LINES - TOP_BAR_CUTOFF)
 	{
-		self->selected = LINES - TOP_BAR_CUTOFF - 1;
 		app_scroll_down (self, first - (LINES - TOP_BAR_CUTOFF - 1));
+		self->selected = LINES - TOP_BAR_CUTOFF - 1;
 	}
 	else
 		self->selected = first;
