@@ -1124,11 +1124,12 @@ app_count_view_items (Application *self)
 }
 
 /// Scroll up @a n entries.  Doesn't redraw.
-static gboolean
+static gint
 app_scroll_up (Application *self, guint n)
 {
 	guint n_definitions = app_count_view_items (self);
-	while (n--)
+	gint scrolled = 0;
+	for (; n--; scrolled++)
 	{
 		if (self->top_offset > 0)
 		{
@@ -1138,7 +1139,7 @@ app_scroll_up (Application *self, guint n)
 
 		// We've reached the top
 		if (self->top_position == 0)
-			return FALSE;
+			break;
 
 		ViewEntry *ve = prepend_entry (self, --self->top_position);
 		self->top_offset = ve->definitions_length - 1;
@@ -1155,18 +1156,19 @@ app_scroll_up (Application *self, guint n)
 				(self->entries, self->entries->len - 1);
 		}
 	}
-	return TRUE;
+	return scrolled;
 }
 
 /// Scroll down @a n entries.  Doesn't redraw.
-static gboolean
+static gint
 app_scroll_down (Application *self, guint n)
 {
 	guint n_definitions = app_count_view_items (self);
-	while (n--)
+	gint scrolled = 0;
+	for (; n--; scrolled++)
 	{
 		if (self->entries->len == 0)
-			return FALSE;
+			break;
 
 		// Simulate the movement first to disallow scrolling past the end
 		guint to_be_offset = self->top_offset;
@@ -1183,7 +1185,7 @@ app_scroll_down (Application *self, guint n)
 			ViewEntry *new_entry = entry_for_position
 				(self, self->top_position + self->entries->len);
 			if (!new_entry)
-				return FALSE;
+				break;
 
 			g_ptr_array_add (self->entries, new_entry);
 			to_be_definitions += new_entry->definitions_length;
@@ -1197,7 +1199,7 @@ app_scroll_down (Application *self, guint n)
 		self->top_offset = to_be_offset;
 		n_definitions = to_be_definitions;
 	}
-	return TRUE;
+	return scrolled;
 }
 
 /// Moves the selection one entry up.
@@ -1270,6 +1272,16 @@ app_redraw (Application *self)
 	app_redraw_top (self);
 }
 
+/// When dictionary contents are longer than the screen, eliminate empty space
+static void
+app_fill_view (Application *self)
+{
+	gint missing = LINES - TOP_BAR_CUTOFF
+		- (gint) (app_count_view_items (self) - self->top_offset);
+	if (missing > 0)
+		self->selected += app_scroll_up (self, missing);
+}
+
 /// Search for the current entry.
 static void
 app_search_for_entry (Application *self)
@@ -1298,13 +1310,12 @@ app_search_for_entry (Application *self)
 	// actually, one third seems to be a better guess
 	if (self->center_search)
 	{
-		for (int half = (LINES - TOP_BAR_CUTOFF) / 3; half > 0; half--)
-			if (app_scroll_up (self, 1))
-				self->selected++;
-			else
-				break;
+		gint half = (LINES - TOP_BAR_CUTOFF) / 3;
+		if (half > 0)
+			self->selected += app_scroll_up (self, half);
 	}
 
+	app_fill_view (self);
 	app_redraw_view (self);
 }
 
@@ -1327,11 +1338,11 @@ static gboolean
 app_process_resize (Application *self)
 {
 	app_reload_view (self);
+	app_fill_view (self);
 
 	guint n_visible = app_count_view_items (self) - self->top_offset;
 	if ((gint) n_visible > LINES - TOP_BAR_CUTOFF)
 		n_visible = LINES - TOP_BAR_CUTOFF;
-
 	if (self->selected >= n_visible)
 	{
 		app_scroll_down (self, self->selected - n_visible + 1);
