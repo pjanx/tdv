@@ -238,6 +238,30 @@ struct application
 /// Shortcut to retrieve named terminal attributes
 #define APP_ATTR(name) self->attrs[ATTRIBUTE_ ## name].attrs
 
+/// Returns if the Unicode character is representable in the current locale.
+static gboolean
+app_is_character_in_locale (Application *self, gunichar ch)
+{
+	// Avoid the overhead joined with calling iconv() for all characters
+	if (self->locale_is_utf8)
+		return TRUE;
+
+	gchar *tmp = g_convert_with_iconv ((const gchar *) &ch, sizeof ch,
+		self->ucs4_to_locale, NULL, NULL, NULL);
+	if (!tmp)
+		return FALSE;
+	g_free (tmp);
+	return TRUE;
+}
+
+static gsize
+app_char_width (Application *app, gunichar c)
+{
+	if (!app_is_character_in_locale (app, c))
+		return 1;
+	return unichar_width (c);
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /// Splits the entry and adds it to a pointer array.
@@ -321,7 +345,7 @@ view_entry_free (ViewEntry *ve)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 static gboolean
-dictionary_load (Dictionary *self, GError **e)
+dictionary_load (Dictionary *self, Application *app, GError **e)
 {
 	if (!(self->dict = stardict_dict_new (self->filename, e)))
 		return FALSE;
@@ -339,7 +363,7 @@ dictionary_load (Dictionary *self, GError **e)
 
 	gunichar *ucs4 = g_utf8_to_ucs4_fast (self->name, -1, NULL);
 	for (gunichar *it = ucs4; *it; it++)
-		self->name_width += unichar_width (*it);
+		self->name_width += app_char_width (app, *it);
 	g_free (ucs4);
 	return TRUE;
 }
@@ -530,7 +554,7 @@ app_load_dictionaries (Application *self, GError **e)
 {
 	for (guint i = 0; i < self->dictionaries->len; i++)
 		if (!dictionary_load (&g_array_index (self->dictionaries,
-			Dictionary, i), e))
+			Dictionary, i), self, e))
 			return FALSE;
 	return TRUE;
 }
@@ -548,8 +572,8 @@ app_load_worker (gpointer data, gpointer user_data)
 {
 	struct load_ctx *ctx = user_data;
 	GError *e = NULL;
-	dictionary_load (&g_array_index
-		(ctx->self->dictionaries, Dictionary, GPOINTER_TO_UINT (data) - 1), &e);
+	dictionary_load (&g_array_index (ctx->self->dictionaries, Dictionary,
+		GPOINTER_TO_UINT (data) - 1), ctx->self, &e);
 	if (e)
 		g_async_queue_push (ctx->error_queue, e);
 }
@@ -758,22 +782,6 @@ app_quit (Application *self)
 #endif  // WITH_GTK
 }
 
-/// Returns if the Unicode character is representable in the current locale.
-static gboolean
-app_is_character_in_locale (Application *self, gunichar ch)
-{
-	// Avoid the overhead joined with calling iconv() for all characters
-	if (self->locale_is_utf8)
-		return TRUE;
-
-	gchar *tmp = g_convert_with_iconv ((const gchar *) &ch, sizeof ch,
-		self->ucs4_to_locale, NULL, NULL, NULL);
-	if (!tmp)
-		return FALSE;
-	g_free (tmp);
-	return TRUE;
-}
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 // Necessary abstraction to simplify aligned, formatted character output
@@ -954,8 +962,8 @@ app_redraw_top (Application *self)
 
 	guint offset, i;
 	for (offset = i = 0; i < self->input_pos; i++)
-		// FIXME: this may be inconsistent with RowBuffer (locale)
-		offset += unichar_width (g_array_index (self->input, gunichar, i));
+		offset += app_char_width (self,
+			g_array_index (self->input, gunichar, i));
 
 	move (1, MIN ((gint) (indent + offset), COLS - 1));
 	refresh ();
@@ -1744,9 +1752,8 @@ app_process_left_mouse_click (Application *self, int line, int column)
 			guint offset, i;
 			for (offset = i = 0; i < self->input->len; i++)
 			{
-				// FIXME: this may be inconsistent with RowBuffer (locale)
-				size_t width = unichar_width
-					(g_array_index (self->input, gunichar, i));
+				size_t width = app_char_width
+					(self, g_array_index (self->input, gunichar, i));
 				if ((offset += width) > (guint) pos)
 					break;
 			}
