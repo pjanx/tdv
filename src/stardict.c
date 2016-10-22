@@ -379,6 +379,7 @@ struct stardict_dict_private
 	// The collated indexes are only permutations of their normal selves.
 
 	UCollator     * collator;           //!< ICU index collator
+	UCollator     * collator_root;      //!< ICU fallback root collator
 	GArray        * collated_synonyms;  //!< Sorted indexes into @a synonyms
 
 	// There are currently three ways the dictionary data can be read:
@@ -409,6 +410,8 @@ stardict_dict_finalize (GObject *self)
 
 	if (priv->collator)
 		ucol_close (priv->collator);
+	if (priv->collator_root)
+		ucol_close (priv->collator_root);
 	if (priv->collated_synonyms)
 		g_array_free (priv->collated_synonyms, TRUE);
 
@@ -836,8 +839,12 @@ stardict_dict_new_from_info (StardictInfo *sdi, GError **error)
 		(void) load_syn (sd, base_syn, NULL);
 	g_free (base_syn);
 
-	if (sdi->collation)
-		(void) stardict_dict_set_collation (sd, sdi->collation);
+	// We need a fallback collator to find common prefixes
+	if (!sdi->collation || !stardict_dict_set_collation (sd, sdi->collation))
+	{
+		UErrorCode error = U_ZERO_ERROR;
+		sd->priv->collator_root = ucol_open ("" /* root collator */, &error);
+	}
 
 	g_free (base);
 	return sd;
@@ -933,22 +940,21 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 	BINARY_SEARCH_END
 
 	// Try to find a longer common prefix with a preceding entry
-	// FIXME: this doesn't work well with diacritics, which are ignored when
-	//   reordering but can take us to an entry with a suboptimal prefix
-	//   while searching
 #define PREFIX(i) stardict_longest_common_collation_prefix \
 	(sd, word, g_array_index (index, StardictIndexEntry, i).name)
 
 	// We need to take care not to step through the entire dictionary
 	// if not a single character matches, because it can be quite costly
 	size_t probe, best = PREFIX (imin);
-
-	// XXX: only looking for _better_ backward matches here, since the
-	//   fallback common prefix searching algorithm doesn't ignore case
-	size_t needed_improvement = !sd->priv->collator;
-	while (best && imin > 0
-		&& (probe = PREFIX (imin - 1)) >= best + needed_improvement)
+	while (best && imin > 0 && (probe = PREFIX (imin - 1)) >= best)
 	{
+		// TODO: take more care to not screw up exact matches,
+		//   use several "best"s according to quality
+		//   (the most severe issue here is ignored diacritics)
+		if (!strcmp (word, g_array_index
+			(index, StardictIndexEntry, imin).name))
+			break;
+
 		best = probe;
 		imin--;
 	}
@@ -985,13 +991,14 @@ stardict_longest_common_collation_prefix (StardictDict *sd,
 	if (U_FAILURE (error))
 		return 0;
 
+	UCollator *collator = sd->priv->collator;
+	if (!collator && !(collator = sd->priv->collator_root))
+		return 0;
+
 	// ucol_getSortKey() can't be used for these purposes, so the only
 	// reasonable thing remaining is iterating by full graphemes.  It doesn't
 	// work entirely correctly (e.g. Czech "ch" should be regarded as a single
-	// unit, and punctuation could be ignored).  It's just good enough.
-	//
-	// In theory we could set the strength to UCOL_PRIMARY and ignore accents
-	// but that's likely not what the user wants most of the time.
+	// unit).  It's just good enough for most purposes.
 	//
 	// Locale shouldn't matter much with graphemes, let's use the default.
 	UBreakIterator *it1 =
@@ -999,23 +1006,21 @@ stardict_longest_common_collation_prefix (StardictDict *sd,
 	UBreakIterator *it2 =
 		ubrk_open (UBRK_CHARACTER, NULL, uc2, uc2_len, &error);
 
+	UCollationStrength prev_strength = ucol_getStrength (collator);
+	ucol_setStrength (collator, UCOL_PRIMARY);
+
 	int32_t longest = 0;
 	int32_t pos1, pos2;
 	while ((pos1 = ubrk_next (it1)) != UBRK_DONE
 		&& (pos2 = ubrk_next (it2)) != UBRK_DONE)
 	{
-		if (sd->priv->collator)
-		{
-			if (!ucol_strcoll (sd->priv->collator, uc1, pos1, uc2, pos2))
-				longest = pos1;
-		}
-		// XXX: I'd need a new collator, so just do the minimal working thing
-		else if (pos1 == pos2 && !memcmp (uc1, uc2, pos1 * sizeof *uc1))
+		if (!ucol_strcoll (collator, uc1, pos1, uc2, pos2))
 			longest = pos1;
 	}
 	ubrk_close (it1);
 	ubrk_close (it2);
 
+	ucol_setStrength (collator, prev_strength);
 	if (!longest)
 		return 0;
 
