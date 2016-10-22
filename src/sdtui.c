@@ -954,7 +954,7 @@ app_redraw_top (Application *self)
 
 	guint offset, i;
 	for (offset = i = 0; i < self->input_pos; i++)
-		// This may be inconsistent with RowBuffer
+		// FIXME: this may be inconsistent with RowBuffer (locale)
 		offset += unichar_width (g_array_index (self->input, gunichar, i));
 
 	move (1, MIN ((gint) (indent + offset), COLS - 1));
@@ -1741,9 +1741,18 @@ app_process_left_mouse_click (Application *self, int line, int column)
 		gint pos = column - label_len;
 		if (pos >= 0)
 		{
-			self->input_pos = MIN ((guint) pos, self->input->len);
-			move (1, label_len + self->input_pos);
-			refresh ();
+			guint offset, i;
+			for (offset = i = 0; i < self->input->len; i++)
+			{
+				// FIXME: this may be inconsistent with RowBuffer (locale)
+				size_t width = unichar_width
+					(g_array_index (self->input, gunichar, i));
+				if ((offset += width) > (guint) pos)
+					break;
+			}
+
+			self->input_pos = i;
+			app_redraw_top (self);
 		}
 	}
 	else if (line <= (int) (app_count_view_items (self) - self->top_offset))
