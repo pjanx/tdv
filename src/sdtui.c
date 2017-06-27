@@ -1486,14 +1486,18 @@ app_process_user_action (Application *self, UserAction action)
 	case USER_ACTION_INPUT_LEFT:
 		if (self->input_pos > 0)
 		{
-			self->input_pos--;
+			do self->input_pos--;
+			while (self->input_pos > 0 && g_unichar_ismark
+				(g_array_index (self->input, gunichar, self->input_pos)));
 			app_redraw_top (self);
 		}
 		return TRUE;
 	case USER_ACTION_INPUT_RIGHT:
 		if (self->input_pos < self->input->len)
 		{
-			self->input_pos++;
+			do self->input_pos++;
+			while (self->input_pos < self->input->len && g_unichar_ismark
+				(g_array_index (self->input, gunichar, self->input_pos)));
 			app_redraw_top (self);
 		}
 		return TRUE;
