@@ -1905,10 +1905,10 @@ on_terminated (gpointer user_data)
 
 #ifdef WITH_GTK
 static void
-app_set_input (Application *self, const gchar *input)
+app_set_input (Application *self, const gchar *text, gsize text_len)
 {
 	glong size;
-	gunichar *output = g_utf8_to_ucs4 (input, -1, NULL, &size, NULL);
+	gunichar *output = g_utf8_to_ucs4 (text, text_len, NULL, &size, NULL);
 
 	// XXX: signal invalid data?
 	if (!output)
@@ -1943,12 +1943,20 @@ on_selection_text_received (G_GNUC_UNUSED GtkClipboard *clipboard,
 
 	if (text)
 	{
-		if (app->selection_contents && !strcmp (app->selection_contents, text))
+		// Strip ASCII whitespace: this is compatible with UTF-8
+		while (g_ascii_isspace (*text))
+			text++;
+		gsize text_len = strlen (text);
+		while (text_len && g_ascii_isspace (text[text_len - 1]))
+			text_len--;
+
+		if (app->selection_contents &&
+			!strncmp (app->selection_contents, text, text_len))
 			return;
 
 		g_free (app->selection_contents);
-		app->selection_contents = g_strdup (text);
-		app_set_input (app, text);
+		app->selection_contents = g_strndup (text, text_len);
+		app_set_input (app, text, text_len);
 	}
 	else if (app->selection_contents)
 	{
