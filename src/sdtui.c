@@ -1787,6 +1787,38 @@ install_winch_handler (void)
 
 #ifdef WITH_X11
 
+static void
+app_set_input (Application *self, const gchar *text, gsize text_len)
+{
+	glong size;
+	gunichar *output = g_utf8_to_ucs4 (text, text_len, NULL, &size, NULL);
+
+	// XXX: signal invalid data?
+	if (!output)
+		return;
+
+	g_array_free (self->input, TRUE);
+	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
+	self->input_pos = 0;
+
+	gunichar *p = output;
+	while (size--)
+	{
+		// XXX: skip?
+		if (!g_unichar_isprint (*p))
+			break;
+
+		g_array_insert_val (self->input, self->input_pos++, *p++);
+	}
+	g_free (output);
+
+	self->input_confirmed = FALSE;
+	app_search_for_entry (self);
+	app_redraw_top (self);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 #include <xcb/xcb.h>
 #include <xcb/xfixes.h>
 
@@ -1830,12 +1862,18 @@ resolve_atom (xcb_connection_t *X, const char *atom)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 static void
-app_set_input (Application *self, const gchar *text, gsize text_len);
+on_selection_text_received (SelectionWatch *self, const gchar *text)
+{
+	// Strip ASCII whitespace: this is compatible with UTF-8
+	while (g_ascii_isspace (*text))
+		text++;
+	gsize text_len = strlen (text);
+	while (text_len && g_ascii_isspace (text[text_len - 1]))
+		text_len--;
 
-static void
-on_selection_text_received (SelectionWatch *self, const gchar *text);
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	if (text_len)
+		app_set_input (self->app, text, text_len);
+}
 
 static gboolean
 read_utf8_property (SelectionWatch *self, xcb_window_t wid, xcb_atom_t property,
@@ -2059,52 +2097,6 @@ on_terminated (gpointer user_data)
 	app_quit (user_data);
 	return TRUE;
 }
-
-#ifdef WITH_X11
-static void
-app_set_input (Application *self, const gchar *text, gsize text_len)
-{
-	glong size;
-	gunichar *output = g_utf8_to_ucs4 (text, text_len, NULL, &size, NULL);
-
-	// XXX: signal invalid data?
-	if (!output)
-		return;
-
-	g_array_free (self->input, TRUE);
-	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
-	self->input_pos = 0;
-
-	gunichar *p = output;
-	while (size--)
-	{
-		// XXX: skip?
-		if (!g_unichar_isprint (*p))
-			break;
-
-		g_array_insert_val (self->input, self->input_pos++, *p++);
-	}
-	g_free (output);
-
-	self->input_confirmed = FALSE;
-	app_search_for_entry (self);
-	app_redraw_top (self);
-}
-
-static void
-on_selection_text_received (SelectionWatch *self, const gchar *text)
-{
-	// Strip ASCII whitespace: this is compatible with UTF-8
-	while (g_ascii_isspace (*text))
-		text++;
-	gsize text_len = strlen (text);
-	while (text_len && g_ascii_isspace (text[text_len - 1]))
-		text_len--;
-
-	if (text_len)
-		app_set_input (self->app, text, text_len);
-}
-#endif  // WITH_X11
 
 static void
 log_handler_curses (Application *self, const gchar *message)
