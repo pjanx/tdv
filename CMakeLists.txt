@@ -74,19 +74,18 @@ else (USE_SYSTEM_TERMO)
 	set (Termo_LIBRARIES termo-static)
 endif (USE_SYSTEM_TERMO)
 
-# We actually don't care about the specific version
-pkg_search_module (gtk gtk+-3.0 gtk+-2.0)
-option (WITH_GTK "Compile with GTK+ support" ${gtk_FOUND})
+pkg_check_modules (xcb xcb xcb-xfixes)
+option (WITH_X11 "Compile with X11 selection support using XCB" ${xcb_FOUND})
 
-if (WITH_GTK)
-	if (NOT gtk_FOUND)
-		message (FATAL_ERROR "GTK+ library not found")
-	endif (NOT gtk_FOUND)
+if (WITH_X11)
+	if (NOT xcb_FOUND)
+		message (FATAL_ERROR "XCB not found")
+	endif (NOT xcb_FOUND)
 
-	list (APPEND dependencies_INCLUDE_DIRS ${gtk_INCLUDE_DIRS})
-	list (APPEND dependencies_LIBRARY_DIRS ${gtk_LIBRARY_DIRS})
-	list (APPEND dependencies_LIBRARIES ${gtk_LIBRARIES})
-endif (WITH_GTK)
+	list (APPEND dependencies_INCLUDE_DIRS ${xcb_INCLUDE_DIRS})
+	list (APPEND dependencies_LIBRARY_DIRS ${xcb_LIBRARY_DIRS})
+	list (APPEND dependencies_LIBRARIES ${xcb_LIBRARIES})
+endif (WITH_X11)
 
 link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}

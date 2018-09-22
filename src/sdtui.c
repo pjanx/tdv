@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013 - 2016, Přemysl Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2018, Přemysl Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -42,10 +42,6 @@
 #include "config.h"
 #include "stardict.h"
 #include "utils.h"
-
-#ifdef WITH_GTK
-#include <gtk/gtk.h>
-#endif  // WITH_GTK
 
 #define CTRL_KEY(x)  ((x) - 'A' + 1)
 
@@ -213,6 +209,7 @@ struct application
 	guint           center_search : 1;  ///< Whether to center the search
 	guint           underline_last : 1; ///< Underline the last definition
 	guint           hl_prefix : 1;      ///< Highlight the common prefix
+	guint           watch_x11_sel : 1;  ///< Requested X11 selection watcher
 
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
@@ -225,10 +222,6 @@ struct application
 	gboolean        input_confirmed;    ///< Input has been confirmed
 
 	gfloat          division;           ///< Position of the division column
-
-	guint           selection_timer;    ///< Selection watcher timeout timer
-	gint            selection_interval; ///< Selection watcher timer interval
-	gchar         * selection_contents; ///< Selection contents
 
 	struct attrs    attrs[ATTRIBUTE_COUNT];
 };
@@ -398,18 +391,6 @@ app_reload_view (Application *self)
 	g_object_unref (iterator);
 }
 
-#ifdef WITH_GTK
-static gboolean on_selection_timer (gpointer data);
-
-static void
-rearm_selection_watcher (Application *self)
-{
-	if (self->selection_interval > 0)
-		self->selection_timer = g_timeout_add
-			(self->selection_interval, on_selection_timer, self);
-}
-#endif  // WITH_GTK
-
 /// Load configuration for a color using a subset of git config colors.
 static void
 app_load_color (Application *self, GKeyFile *kf, const gchar *name, int id)
@@ -468,14 +449,8 @@ app_load_config_values (Application *self, GKeyFile *kf)
 		app_load_bool (kf, "underline-last", self->underline_last);
 	self->hl_prefix =
 		app_load_bool (kf, "hl-common-prefix", self->hl_prefix);
-
-	guint64 timer;
-	const gchar *watch_selection = "watch-selection";
-	if (app_load_bool (kf, watch_selection, FALSE))
-		self->selection_interval = 500;
-	else if ((timer = g_key_file_get_uint64
-		(kf, "Settings", watch_selection, NULL)) && timer <= G_MAXINT)
-		self->selection_interval = timer;
+	self->watch_x11_sel =
+		app_load_bool (kf, "watch-selection", self->watch_x11_sel);
 
 #define XX(name, config, fg_, bg_, attrs_) \
 	app_load_color (self, kf, config, ATTRIBUTE_ ## name);
@@ -613,9 +588,6 @@ static void
 app_init (Application *self, char **filenames)
 {
 	self->loop = NULL;
-	self->selection_interval = -1;
-	self->selection_timer = 0;
-	self->selection_contents = NULL;
 
 	self->tk = NULL;
 	self->tk_timer = 0;
@@ -624,6 +596,7 @@ app_init (Application *self, char **filenames)
 	self->center_search = TRUE;
 	self->underline_last = TRUE;
 	self->hl_prefix = TRUE;
+	self->watch_x11_sel = FALSE;
 
 	self->top_position = 0;
 	self->top_offset = 0;
@@ -660,18 +633,7 @@ app_init (Application *self, char **filenames)
 		exit (EXIT_FAILURE);
 	}
 
-	// Now we have settings for the clipboard watcher, we can arm the timer
-#ifdef WITH_GTK
-	if (gtk_init_check (0, NULL))
-	{
-		// So that we set the input only when it actually changes
-		GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
-		self->selection_contents = gtk_clipboard_wait_for_text (clipboard);
-		rearm_selection_watcher (self);
-	}
-	else
-#endif  // WITH_GTK
-		self->loop = g_main_loop_new (NULL, FALSE);
+	self->loop = g_main_loop_new (NULL, FALSE);
 
 	// Dictionaries given on the command line override the configuration
 	if (*filenames)
@@ -744,10 +706,6 @@ app_destroy (Application *self)
 	if (self->tk_timer)
 		g_source_remove (self->tk_timer);
 
-	if (self->selection_timer)
-		g_source_remove (self->selection_timer);
-	g_free (self->selection_contents);
-
 	g_ptr_array_free (self->entries, TRUE);
 	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
@@ -760,24 +718,14 @@ app_destroy (Application *self)
 static void
 app_run (Application *self)
 {
-	if (self->loop)
-		g_main_loop_run (self->loop);
-#ifdef WITH_GTK
-	else
-		gtk_main ();
-#endif  // WITH_GTK
+	g_main_loop_run (self->loop);
 }
 
 /// Quit the main event dispatch loop.
 static void
 app_quit (Application *self)
 {
-	if (self->loop)
-		g_main_loop_quit (self->loop);
-#ifdef WITH_GTK
-	else
-		gtk_main_quit ();
-#endif  // WITH_GTK
+	g_main_loop_quit (self->loop);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1023,7 +971,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013 - 2016, Přemysl Janouch",
+		"Copyright (c) 2013 - 2018, Přemysl Janouch",
 		"",
 		_("Type to search")
 	};
@@ -1835,6 +1783,215 @@ install_winch_handler (void)
 	sigaction (SIGWINCH, &act, &oldact);
 }
 
+// --- X11 selection watcher ---------------------------------------------------
+
+#ifdef WITH_X11
+
+#include <xcb/xcb.h>
+#include <xcb/xfixes.h>
+
+/// Data relating to one entry within the dictionary.
+typedef struct selection_watch          SelectionWatch;
+
+struct selection_watch
+{
+	Application *app;
+	xcb_connection_t *X;
+	const xcb_query_extension_reply_t *xfixes;
+
+	guint           watch;              ///< X11 connection watcher
+	xcb_window_t    wid;                ///< Withdrawn communications window
+	xcb_atom_t      atom_utf8_string;   ///< UTF8_STRING
+	xcb_timestamp_t in_progress;        ///< Timestamp of last processed event
+};
+
+static gboolean
+is_xcb_ok (xcb_connection_t *X)
+{
+	int xcb_error = xcb_connection_has_error (X);
+	if (xcb_error)
+	{
+		g_warning (_("X11 connection failed (error code %d)"), xcb_error);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static xcb_atom_t
+resolve_atom (xcb_connection_t *X, const char *atom)
+{
+	xcb_intern_atom_reply_t *iar = xcb_intern_atom_reply (X,
+		xcb_intern_atom (X, false, strlen (atom), atom), NULL);
+	xcb_atom_t result = iar ? iar->atom : XCB_NONE;
+	free (iar);
+	return result;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+static void
+app_set_input (Application *self, const gchar *text, gsize text_len);
+
+static void
+on_selection_text_received (SelectionWatch *self, const gchar *text);
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+static gboolean
+read_utf8_property (SelectionWatch *self, xcb_window_t wid, xcb_atom_t property,
+	GString *buf)
+{
+	guint32 offset = 0;
+	gboolean loop = TRUE, ok = TRUE;
+	while (ok && loop)
+	{
+		xcb_get_property_reply_t *gpr = xcb_get_property_reply (self->X,
+			xcb_get_property (self->X, FALSE /* delete */, wid,
+			property, XCB_GET_PROPERTY_TYPE_ANY, offset, 0x7fff), NULL);
+
+		if (!gpr || gpr->type != self->atom_utf8_string || gpr->format != 8)
+			ok = FALSE;
+		else
+		{
+			int len = xcb_get_property_value_length (gpr);
+			g_string_append_len (buf, xcb_get_property_value (gpr), len);
+			offset += len >> 2;
+			loop = gpr->bytes_after > 0;
+		}
+
+		free (gpr);
+	}
+	return ok;
+}
+
+static void
+process_x11_event (SelectionWatch *self, xcb_generic_event_t *event)
+{
+	xcb_generic_error_t *err = NULL;
+	int event_code = event->response_type & 0x7f;
+	if (event_code == 0)
+	{
+		err = (xcb_generic_error_t *) event;
+		g_warning (_("X11 request error (%d, major %d, minor %d)"),
+			err->error_code, err->major_code, err->minor_code);
+	}
+	else if (event_code ==
+		self->xfixes->first_event + XCB_XFIXES_SELECTION_NOTIFY)
+	{
+		xcb_xfixes_selection_notify_event_t *e =
+			(xcb_xfixes_selection_notify_event_t *) event;
+
+		// Not checking whether we should give up when this interrupts our
+		// current retrieval attempt--the timeout solves this
+		if (e->owner == XCB_NONE)
+			return;
+
+		// Don't try to process two things at once.  Each request gets a few
+		// seconds to finish, then we move on, hoping that a property race
+		// doesn't commence.  Ideally we'd set up a separate queue for these
+		// skipped requests and process them later.
+		if (self->in_progress != 0 && e->timestamp - self->in_progress < 5000)
+			return;
+
+		// ICCCM says we should ensure the named property doesn't exist
+		(void) xcb_delete_property (self->X, self->wid, XCB_ATOM_PRIMARY);
+
+		(void) xcb_convert_selection (self->X, self->wid, e->selection,
+			self->atom_utf8_string, XCB_ATOM_PRIMARY, e->timestamp);
+		self->in_progress = e->timestamp;
+	}
+	else if (event_code == XCB_SELECTION_NOTIFY)
+	{
+		xcb_selection_notify_event_t *e =
+			(xcb_selection_notify_event_t *) event;
+		if (e->time != self->in_progress)
+			return;
+
+		self->in_progress = 0;
+		if (e->property == XCB_ATOM_NONE)
+			return;
+
+		GString *buf = g_string_new (NULL);
+		if (read_utf8_property (self, e->requestor, e->property, buf))
+			on_selection_text_received (self, buf->str);
+		g_string_free (buf, TRUE);
+
+		(void) xcb_delete_property (self->X, self->wid, e->property);
+	}
+}
+
+static gboolean
+process_x11 (G_GNUC_UNUSED GIOChannel *source,
+	G_GNUC_UNUSED GIOCondition condition, gpointer data)
+{
+	SelectionWatch *self = data;
+
+	xcb_generic_event_t *event;
+	while ((event = xcb_poll_for_event (self->X)))
+	{
+		process_x11_event (self, event);
+		free (event);
+	}
+	(void) xcb_flush (self->X);
+	return is_xcb_ok (self->X);
+}
+
+static void
+selection_watch_init (SelectionWatch *self, Application *app)
+{
+	memset (self, 0, sizeof *self);
+	if (!app->watch_x11_sel)
+		return;
+	self->app = app;
+
+	int which_screen = -1;
+	self->X = xcb_connect (NULL, &which_screen);
+	if (!is_xcb_ok (self->X))
+		return;
+
+	// Most modern applications support this, though an XCB_ATOM_STRING
+	// fallback might be good to add (COMPOUND_TEXT is complex)
+	g_return_if_fail
+		((self->atom_utf8_string = resolve_atom (self->X, "UTF8_STRING")));
+
+	self->xfixes = xcb_get_extension_data (self->X, &xcb_xfixes_id);
+	g_return_if_fail (self->xfixes->present);
+
+	(void) xcb_xfixes_query_version_unchecked (self->X,
+		XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
+
+	const xcb_setup_t *setup = xcb_get_setup (self->X);
+	xcb_screen_iterator_t setup_iter = xcb_setup_roots_iterator (setup);
+	while (which_screen--)
+		xcb_screen_next (&setup_iter);
+
+	xcb_screen_t *screen = setup_iter.data;
+	self->wid = xcb_generate_id (self->X);
+	(void) xcb_create_window (self->X, screen->root_depth, self->wid,
+		screen->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		screen->root_visual, 0, NULL);
+
+	(void) xcb_xfixes_select_selection_input (self->X, self->wid,
+		XCB_ATOM_PRIMARY, XCB_XFIXES_SELECTION_EVENT_MASK_SET_SELECTION_OWNER |
+		XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_WINDOW_DESTROY |
+		XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_CLIENT_CLOSE);
+
+	(void) xcb_flush (self->X);
+	self->watch = g_io_add_watch (g_io_channel_unix_new
+		(xcb_get_file_descriptor (self->X)), G_IO_IN, process_x11, self);
+}
+
+static void
+selection_watch_destroy (SelectionWatch *self)
+{
+	if (self->X)
+		xcb_disconnect (self->X);
+	if (self->watch)
+		g_source_remove (self->watch);
+}
+
+#endif  // WITH_X11
+
 // --- Initialisation, event handling ------------------------------------------
 
 static gboolean on_stdin_input_timeout (gpointer data);
@@ -1903,7 +2060,7 @@ on_terminated (gpointer user_data)
 	return TRUE;
 }
 
-#ifdef WITH_GTK
+#ifdef WITH_X11
 static void
 app_set_input (Application *self, const gchar *text, gsize text_len)
 {
@@ -1935,47 +2092,19 @@ app_set_input (Application *self, const gchar *text, gsize text_len)
 }
 
 static void
-on_selection_text_received (G_GNUC_UNUSED GtkClipboard *clipboard,
-	const gchar *text, gpointer data)
+on_selection_text_received (SelectionWatch *self, const gchar *text)
 {
-	Application *app = data;
-	rearm_selection_watcher (app);
+	// Strip ASCII whitespace: this is compatible with UTF-8
+	while (g_ascii_isspace (*text))
+		text++;
+	gsize text_len = strlen (text);
+	while (text_len && g_ascii_isspace (text[text_len - 1]))
+		text_len--;
 
-	if (text)
-	{
-		// Strip ASCII whitespace: this is compatible with UTF-8
-		while (g_ascii_isspace (*text))
-			text++;
-		gsize text_len = strlen (text);
-		while (text_len && g_ascii_isspace (text[text_len - 1]))
-			text_len--;
-
-		if (app->selection_contents &&
-			!strncmp (app->selection_contents, text, text_len))
-			return;
-
-		g_free (app->selection_contents);
-		app->selection_contents = g_strndup (text, text_len);
-		app_set_input (app, text, text_len);
-	}
-	else if (app->selection_contents)
-	{
-		g_free (app->selection_contents);
-		app->selection_contents = NULL;
-	}
+	if (text_len)
+		app_set_input (self->app, text, text_len);
 }
-
-static gboolean
-on_selection_timer (gpointer data)
-{
-	Application *app = data;
-	GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
-	gtk_clipboard_request_text (clipboard, on_selection_text_received, app);
-
-	app->selection_timer = 0;
-	return FALSE;
-}
-#endif  // WITH_GTK
+#endif  // WITH_X11
 
 static void
 log_handler_curses (Application *self, const gchar *message)
@@ -2091,7 +2220,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	// g_unix_signal_add() cannot handle SIGWINCH
 	install_winch_handler ();
 
-	// GtkClipboard can internally issue some rather disruptive warnings
+	// Avoid disruptive warnings
 	g_log_set_default_handler (log_handler, &app);
 
 	// Message loop
@@ -2102,7 +2231,16 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	guint watch_winch = g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
 		G_IO_IN, process_winch_input, &app);
 
+#ifdef WITH_X11
+	SelectionWatch sw;
+	selection_watch_init (&sw, &app);
+#endif  // WITH_X11
+
 	app_run (&app);
+
+#ifdef WITH_X11
+	selection_watch_destroy (&sw);
+#endif  // WITH_X11
 
 	g_source_remove (watch_term);
 	g_source_remove (watch_int);

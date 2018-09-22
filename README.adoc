@@ -7,7 +7,7 @@ dictionary software of this kind, GUI or not, and thus decided to write my own.
 
 The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
-software.  I wasn't able to reuse _anything_.
+software.  I wasn't able to reuse _anything_ for StarDict.
 
 Further Development
 -------------------
@@ -32,12 +32,12 @@ Building and Running
 --------------------
 Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included),
-                      glib-2.0, pango, gtk+ (optional, any version)
+                      glib-2.0, pango, xcb and xcb-xfixes (optional)
 
  $ git clone --recursive https://git.janouch.name/p/sdtui.git
  $ mkdir sdtui/build
  $ cd sdtui/build
- $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DWITH_GTK=ON
+ $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DWITH_X11=ON
  $ make
 
 To install the application, you can do either the usual:
@@ -85,7 +85,7 @@ odd = 16 255
 
 The `watch-selection` option makes the application watch the X11 primary
 selection for changes and automatically search for selected text.
-This feature requires GTK+ and it will never work on Wayland by its design.
+This feature requires XCB and it will never work on Wayland by its design.
 
 You can also set up some dictionaries to be loaded at startup automatically:
 
