@@ -58,6 +58,15 @@ unichar_width (gunichar ch)
 	return 1 + g_unichar_iswide (ch);
 }
 
+static guint
+add_read_watch (int fd, GIOFunc func, gpointer user_data)
+{
+	GIOChannel *channel = g_io_channel_unix_new (fd);
+	guint res = g_io_add_watch (channel, G_IO_IN, func, user_data);
+	g_io_channel_unref (channel);
+	return res;
+}
+
 // At times, GLib even with its sheer size is surprisingly useless,
 // and I need to port some code over from "liberty".
 
@@ -2083,8 +2092,8 @@ selection_watch_init (SelectionWatch *self, Application *app)
 		XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_CLIENT_CLOSE);
 
 	(void) xcb_flush (self->X);
-	self->watch = g_io_add_watch (g_io_channel_unix_new
-		(xcb_get_file_descriptor (self->X)), G_IO_IN, process_x11, self);
+	self->watch = add_read_watch
+		(xcb_get_file_descriptor (self->X), process_x11, self);
 
 	// Never NULL so that we don't need to care about pointer validity
 	self->buffer = g_string_new (NULL);
@@ -2291,10 +2300,10 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	// Message loop
 	guint watch_term  = g_unix_signal_add (SIGTERM, on_terminated, &app);
 	guint watch_int   = g_unix_signal_add (SIGINT,  on_terminated, &app);
-	guint watch_stdin = g_io_add_watch (g_io_channel_unix_new (STDIN_FILENO),
-		G_IO_IN, process_stdin_input, &app);
-	guint watch_winch = g_io_add_watch (g_io_channel_unix_new (g_winch_pipe[0]),
-		G_IO_IN, process_winch_input, &app);
+	guint watch_stdin = add_read_watch
+		(STDIN_FILENO, process_stdin_input, &app);
+	guint watch_winch = add_read_watch
+		(g_winch_pipe[0], process_winch_input, &app);
 
 #ifdef WITH_X11
 	SelectionWatch sw;
