@@ -1833,8 +1833,13 @@ struct selection_watch
 
 	guint           watch;              ///< X11 connection watcher
 	xcb_window_t    wid;                ///< Withdrawn communications window
+	xcb_atom_t      atom_incr;          ///< INCR
 	xcb_atom_t      atom_utf8_string;   ///< UTF8_STRING
 	xcb_timestamp_t in_progress;        ///< Timestamp of last processed event
+	GString       * buffer;             ///< UTF-8 text buffer
+
+	gboolean        incr;               ///< INCR running
+	gboolean        incr_failure;       ///< INCR failure indicator
 };
 
 static gboolean
@@ -1877,85 +1882,145 @@ on_selection_text_received (SelectionWatch *self, const gchar *text)
 
 static gboolean
 read_utf8_property (SelectionWatch *self, xcb_window_t wid, xcb_atom_t property,
-	GString *buf)
+	gboolean *empty)
 {
 	guint32 offset = 0;
-	gboolean loop = TRUE, ok = TRUE;
-	while (ok && loop)
+	gboolean more_data = TRUE, ok = TRUE;
+	xcb_get_property_reply_t *gpr;
+	while (ok && more_data)
 	{
-		xcb_get_property_reply_t *gpr = xcb_get_property_reply (self->X,
+		if (!(gpr = xcb_get_property_reply (self->X,
 			xcb_get_property (self->X, FALSE /* delete */, wid,
-			property, XCB_GET_PROPERTY_TYPE_ANY, offset, 0x7fff), NULL);
+			property, XCB_GET_PROPERTY_TYPE_ANY, offset, 0x8000), NULL)))
+			return FALSE;
 
-		if (!gpr || gpr->type != self->atom_utf8_string || gpr->format != 8)
-			ok = FALSE;
-		else
+		int len = xcb_get_property_value_length (gpr);
+		if (offset == 0 && len == 0 && empty)
+			*empty = TRUE;
+
+		ok = gpr->type == self->atom_utf8_string && gpr->format == 8;
+		more_data = gpr->bytes_after != 0;
+		if (ok)
 		{
-			int len = xcb_get_property_value_length (gpr);
-			g_string_append_len (buf, xcb_get_property_value (gpr), len);
 			offset += len >> 2;
-			loop = gpr->bytes_after > 0;
+			g_string_append_len (self->buffer,
+				xcb_get_property_value (gpr), len);
 		}
-
 		free (gpr);
 	}
 	return ok;
 }
 
 static void
+on_x11_selection_change (SelectionWatch *self,
+	xcb_xfixes_selection_notify_event_t *e)
+{
+	// Not checking whether we should give up when this interrupts our
+	// current retrieval attempt--the timeout mostly solves this for all cases
+	if (e->owner == XCB_NONE)
+		return;
+
+	// Don't try to process two things at once.  Each request gets a few seconds
+	// to finish, then we move on, hoping that a property race doesn't commence.
+	// Ideally we'd set up a separate queue for these skipped requests and
+	// process them later.
+	if (self->in_progress != 0 && e->timestamp - self->in_progress < 5000)
+		return;
+
+	// ICCCM says we should ensure the named property doesn't exist
+	(void) xcb_delete_property (self->X, self->wid, XCB_ATOM_PRIMARY);
+
+	(void) xcb_convert_selection (self->X, self->wid, e->selection,
+		self->atom_utf8_string, XCB_ATOM_PRIMARY, e->timestamp);
+
+	self->in_progress = e->timestamp;
+	self->incr = FALSE;
+}
+
+static void
+on_x11_selection_receive (SelectionWatch *self,
+	xcb_selection_notify_event_t *e)
+{
+	if (e->requestor != self->wid
+	 || e->time != self->in_progress)
+		return;
+
+	self->in_progress = 0;
+	if (e->property == XCB_ATOM_NONE)
+		return;
+
+	xcb_get_property_reply_t *gpr = xcb_get_property_reply (self->X,
+		xcb_get_property (self->X, FALSE /* delete */, e->requestor,
+		e->property, XCB_GET_PROPERTY_TYPE_ANY, 0, 0), NULL);
+	if (!gpr)
+		return;
+
+	// Garbage collection, GString only ever expands in size
+	g_string_free (self->buffer, TRUE);
+	self->buffer = g_string_new (NULL);
+
+	// When you select a lot of text in VIM, it starts the ICCCM INCR mechanism,
+	// from which there is no opt-out
+	if (gpr->type == self->atom_incr)
+	{
+		self->in_progress = e->time;
+		self->incr = TRUE;
+		self->incr_failure = FALSE;
+	}
+	else if (read_utf8_property (self, e->requestor, e->property, NULL))
+		on_selection_text_received (self, self->buffer->str);
+
+	free (gpr);
+	(void) xcb_delete_property (self->X, self->wid, e->property);
+}
+
+static void
+on_x11_property_notify (SelectionWatch *self, xcb_property_notify_event_t *e)
+{
+	if (!self->incr
+	 || e->window != self->wid
+	 || e->state != XCB_PROPERTY_NEW_VALUE
+	 || e->atom != XCB_ATOM_PRIMARY)
+		return;
+
+	gboolean empty = FALSE;
+	if (!read_utf8_property (self, e->window, e->atom, &empty))
+		// We need to keep deleting the property
+		self->incr_failure = TRUE;
+
+	// Once it's empty, we've consumed everything and can move on undisturbed
+	if (empty)
+	{
+		if (!self->incr_failure)
+			on_selection_text_received (self, self->buffer->str);
+
+		self->in_progress = 0;
+		self->incr = FALSE;
+	}
+
+	(void) xcb_delete_property (self->X, e->window, e->atom);
+}
+
+static void
 process_x11_event (SelectionWatch *self, xcb_generic_event_t *event)
 {
-	xcb_generic_error_t *err = NULL;
 	int event_code = event->response_type & 0x7f;
 	if (event_code == 0)
 	{
-		err = (xcb_generic_error_t *) event;
+		xcb_generic_error_t *err = (xcb_generic_error_t *) event;
 		g_warning (_("X11 request error (%d, major %d, minor %d)"),
 			err->error_code, err->major_code, err->minor_code);
 	}
 	else if (event_code ==
 		self->xfixes->first_event + XCB_XFIXES_SELECTION_NOTIFY)
-	{
-		xcb_xfixes_selection_notify_event_t *e =
-			(xcb_xfixes_selection_notify_event_t *) event;
-
-		// Not checking whether we should give up when this interrupts our
-		// current retrieval attempt--the timeout solves this
-		if (e->owner == XCB_NONE)
-			return;
-
-		// Don't try to process two things at once.  Each request gets a few
-		// seconds to finish, then we move on, hoping that a property race
-		// doesn't commence.  Ideally we'd set up a separate queue for these
-		// skipped requests and process them later.
-		if (self->in_progress != 0 && e->timestamp - self->in_progress < 5000)
-			return;
-
-		// ICCCM says we should ensure the named property doesn't exist
-		(void) xcb_delete_property (self->X, self->wid, XCB_ATOM_PRIMARY);
-
-		(void) xcb_convert_selection (self->X, self->wid, e->selection,
-			self->atom_utf8_string, XCB_ATOM_PRIMARY, e->timestamp);
-		self->in_progress = e->timestamp;
-	}
+		on_x11_selection_change (self,
+			(xcb_xfixes_selection_notify_event_t *) event);
 	else if (event_code == XCB_SELECTION_NOTIFY)
-	{
-		xcb_selection_notify_event_t *e =
-			(xcb_selection_notify_event_t *) event;
-		if (e->time != self->in_progress)
-			return;
-
-		self->in_progress = 0;
-		if (e->property == XCB_ATOM_NONE)
-			return;
-
-		GString *buf = g_string_new (NULL);
-		if (read_utf8_property (self, e->requestor, e->property, buf))
-			on_selection_text_received (self, buf->str);
-		g_string_free (buf, TRUE);
-
-		(void) xcb_delete_property (self->X, self->wid, e->property);
-	}
+		on_x11_selection_receive (self,
+			(xcb_selection_notify_event_t *) event);
+	else if (event_code == XCB_PROPERTY_NOTIFY)
+		on_x11_property_notify (self,
+			(xcb_property_notify_event_t *) event);
 }
 
 static gboolean
@@ -1991,6 +2056,8 @@ selection_watch_init (SelectionWatch *self, Application *app)
 	// fallback might be good to add (COMPOUND_TEXT is complex)
 	g_return_if_fail
 		((self->atom_utf8_string = resolve_atom (self->X, "UTF8_STRING")));
+	g_return_if_fail
+		((self->atom_incr = resolve_atom (self->X, "INCR")));
 
 	self->xfixes = xcb_get_extension_data (self->X, &xcb_xfixes_id);
 	g_return_if_fail (self->xfixes->present);
@@ -2005,9 +2072,10 @@ selection_watch_init (SelectionWatch *self, Application *app)
 
 	xcb_screen_t *screen = setup_iter.data;
 	self->wid = xcb_generate_id (self->X);
+	const uint32_t values[] = {XCB_EVENT_MASK_PROPERTY_CHANGE};
 	(void) xcb_create_window (self->X, screen->root_depth, self->wid,
 		screen->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-		screen->root_visual, 0, NULL);
+		screen->root_visual, XCB_CW_EVENT_MASK, values);
 
 	(void) xcb_xfixes_select_selection_input (self->X, self->wid,
 		XCB_ATOM_PRIMARY, XCB_XFIXES_SELECTION_EVENT_MASK_SET_SELECTION_OWNER |
@@ -2017,6 +2085,9 @@ selection_watch_init (SelectionWatch *self, Application *app)
 	(void) xcb_flush (self->X);
 	self->watch = g_io_add_watch (g_io_channel_unix_new
 		(xcb_get_file_descriptor (self->X)), G_IO_IN, process_x11, self);
+
+	// Never NULL so that we don't need to care about pointer validity
+	self->buffer = g_string_new (NULL);
 }
 
 static void
@@ -2026,6 +2097,8 @@ selection_watch_destroy (SelectionWatch *self)
 		xcb_disconnect (self->X);
 	if (self->watch)
 		g_source_remove (self->watch);
+	if (self->buffer)
+		g_string_free (self->buffer, TRUE);
 }
 
 #endif  // WITH_X11
