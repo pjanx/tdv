@@ -294,6 +294,7 @@ struct dictzip_input_stream_private
 
 G_DEFINE_TYPE_EXTENDED (DictzipInputStream, dictzip_input_stream,
 	G_TYPE_FILTER_INPUT_STREAM, 0,
+	G_ADD_PRIVATE (DictzipInputStream)
 	G_IMPLEMENT_INTERFACE (G_TYPE_SEEKABLE, dictzip_input_stream_seekable_init))
 
 static gboolean seekable_true  (G_GNUC_UNUSED GSeekable *x) { return TRUE;  }
@@ -312,8 +313,6 @@ dictzip_input_stream_seekable_init
 static void
 dictzip_input_stream_class_init (DictzipInputStreamClass *klass)
 {
-	g_type_class_add_private (klass, sizeof (DictzipInputStreamPrivate));
-
 	GInputStreamClass *stream_class = G_INPUT_STREAM_CLASS (klass);
 	stream_class->read_fn  = dictzip_input_stream_read;
 	stream_class->skip     = dictzip_input_stream_skip;
@@ -325,8 +324,7 @@ dictzip_input_stream_class_init (DictzipInputStreamClass *klass)
 static void
 dictzip_input_stream_init (DictzipInputStream *self)
 {
-	self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-		DICTZIP_TYPE_INPUT_STREAM, DictzipInputStreamPrivate);
+	self->priv = dictzip_input_stream_get_instance_private (self);
 }
 
 static void

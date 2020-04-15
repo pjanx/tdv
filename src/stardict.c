@@ -392,7 +392,8 @@ struct stardict_dict_private
 	gsize           dict_length;        //!< Length of the dict data in bytes
 };
 
-G_DEFINE_TYPE (StardictDict, stardict_dict, G_TYPE_OBJECT)
+G_DEFINE_TYPE_WITH_CODE (StardictDict, stardict_dict, G_TYPE_OBJECT,
+	G_ADD_PRIVATE (StardictDict))
 
 static void
 stardict_dict_finalize (GObject *self)
@@ -426,15 +427,13 @@ stardict_dict_finalize (GObject *self)
 static void
 stardict_dict_class_init (StardictDictClass *klass)
 {
-	g_type_class_add_private (klass, sizeof (StardictDictPrivate));
 	G_OBJECT_CLASS (klass)->finalize = stardict_dict_finalize;
 }
 
 static void
 stardict_dict_init (StardictDict *self)
 {
-	self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-		STARDICT_TYPE_DICT, StardictDictPrivate);
+	self->priv = stardict_dict_get_instance_private (self);
 }
 
 /// Load a StarDict dictionary.
