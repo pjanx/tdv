@@ -174,6 +174,7 @@ set (project_headers
 	${project_common_headers})
 
 # Build the main executable and link it
+add_definitions (-DGLIB_DISABLE_DEPRECATION_WARNINGS)
 add_executable (${PROJECT_NAME}
 	${project_sources} ${project_headers} ${project_common_sources})
 target_link_libraries (${PROJECT_NAME} ${project_common_libraries})
