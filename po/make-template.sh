@@ -42,6 +42,6 @@ fi
 # Finally make the template
 xgettext -LC -k_ -kN_ $SOURCES -o "$DIR/$PACKAGE.pot" \
 	--package-name="$PACKAGE" --package-version="$VERSION" \
-	--copyright-holder="Přemysl Janouch" \
+	--copyright-holder="Přemysl Eric Janouch" \
 	--msgid-bugs-address="https://github.com/pjanouch/$PACKAGE/issues"
 

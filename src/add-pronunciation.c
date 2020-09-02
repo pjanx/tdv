@@ -4,7 +4,7 @@
  * Here I use the `espeak' process rather than libespeak because of the GPL.
  * It's far from ideal, rather good as a starting point.
  *
- * Copyright (c) 2013, Přemysl Janouch <p@janouch.name>
+ * Copyright (c) 2013, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.

@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013 - 2018, Přemysl Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2018, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -980,7 +980,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013 - 2018, Přemysl Janouch",
+		"Copyright (c) 2013 - 2018, Přemysl Eric Janouch",
 		"",
 		_("Type to search")
 	};

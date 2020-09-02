@@ -1,5 +1,5 @@
 # SOME DESCRIPTIVE TITLE.
-# Copyright (C) 2013 Přemysl Janouch
+# Copyright (C) 2013 Přemysl Eric Janouch
 # This file is distributed under the same license as the sdtui package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
@@ -9,7 +9,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
 "POT-Creation-Date: 2016-09-28 16:12+0200\n"
 "PO-Revision-Date: 2016-09-28 16:15+0200\n"
-"Last-Translator: Přemysl Janouch <p@janouch.name>\n"
+"Last-Translator: Přemysl Eric Janouch <p@janouch.name>\n"
 "Language-Team: Czech <translation-team-cs@lists.sourceforge.net>\n"
 "Language: cs\n"
 "MIME-Version: 1.0\n"

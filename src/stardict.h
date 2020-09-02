@@ -5,7 +5,7 @@
  * dictionaries, it should however be good enough for most of them that are
  * freely available on the Internet.
  *
- * Copyright (c) 2013 - 2016, Přemysl Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2016, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.

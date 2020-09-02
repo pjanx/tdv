@@ -8,7 +8,7 @@
  * So far only the `m' field is supported.  Feel free to extend the program
  * according to your needs, it's not very complicated.
  *
- * Copyright (c) 2013, Přemysl Janouch <p@janouch.name>
+ * Copyright (c) 2013, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
