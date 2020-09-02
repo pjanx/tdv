@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013 - 2018, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -1296,6 +1296,22 @@ app_goto_dictionary (Application *self, guint n)
 	return TRUE;
 }
 
+/// Switch to a different dictionary by delta.
+static gboolean
+app_goto_dictionary_delta (Application *self, gint n)
+{
+	GArray *dicts = self->dictionaries;
+	if (dicts->len <= 1)
+		return FALSE;
+
+	guint i = 0;
+	while (i < dicts->len &&
+		g_array_index (dicts, Dictionary, i).dict != self->dict)
+		i++;
+
+	return app_goto_dictionary (self, (i + dicts->len + n) % dicts->len);
+}
+
 /// The terminal has been resized, make appropriate changes.
 static gboolean
 app_process_resize (Application *self)
@@ -1337,6 +1353,8 @@ enum user_action
 	USER_ACTION_GOTO_DEFINITION_NEXT,
 	USER_ACTION_GOTO_PAGE_PREVIOUS,
 	USER_ACTION_GOTO_PAGE_NEXT,
+	USER_ACTION_GOTO_DICTIONARY_PREVIOUS,
+	USER_ACTION_GOTO_DICTIONARY_NEXT,
 
 	USER_ACTION_INPUT_CONFIRM,
 	USER_ACTION_INPUT_HOME,
@@ -1427,6 +1445,15 @@ app_process_user_action (Application *self, UserAction action)
 		app_scroll_down (self, LINES - TOP_BAR_CUTOFF);
 		app_redraw_view (self);
 		RESTORE_CURSOR
+		return TRUE;
+
+	case USER_ACTION_GOTO_DICTIONARY_PREVIOUS:
+		if (!app_goto_dictionary_delta (self, -1))
+			beep ();
+		return TRUE;
+	case USER_ACTION_GOTO_DICTIONARY_NEXT:
+		if (!app_goto_dictionary_delta (self, +1))
+			beep ();
 		return TRUE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1593,6 +1620,10 @@ app_process_keysym (Application *self, termo_key_t *event)
 	{
 		[TERMO_SYM_UP]        = USER_ACTION_GOTO_ENTRY_PREVIOUS,
 		[TERMO_SYM_DOWN]      = USER_ACTION_GOTO_ENTRY_NEXT,
+		[TERMO_SYM_LEFT]      = USER_ACTION_GOTO_DICTIONARY_PREVIOUS,
+		[TERMO_SYM_RIGHT]     = USER_ACTION_GOTO_DICTIONARY_NEXT,
+		[TERMO_SYM_PAGEUP]    = USER_ACTION_GOTO_DICTIONARY_PREVIOUS,
+		[TERMO_SYM_PAGEDOWN]  = USER_ACTION_GOTO_DICTIONARY_NEXT,
 	};
 
 	if (!event->modifiers)
