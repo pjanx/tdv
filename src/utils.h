@@ -1,7 +1,7 @@
 /*
  * utils.h: miscellaneous utilities
  *
- * Copyright (c) 2013 - 2015, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -40,5 +40,6 @@ gboolean stream_read_all (GByteArray *ba, GInputStream *is, GError **error);
 gchar *stream_read_string (GDataInputStream *dis, GError **error);
 gboolean xstrtoul (unsigned long *out, const char *s, int base);
 void update_curses_terminal_size (void);
+void fatal (const gchar *format, ...) G_GNUC_PRINTF (1, 2) G_GNUC_NORETURN;
 
 #endif  // ! UTILS_H

@@ -1,7 +1,7 @@
 /*
  * utils.c: miscellaneous utilities
  *
- * Copyright (c) 2013 - 2015, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -20,6 +20,7 @@
 #include <gio/gio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdarg.h>
 
 #include <curses.h>
 #include <termios.h>
@@ -98,4 +99,15 @@ update_curses_terminal_size (void)
 	endwin ();
 	refresh ();
 #endif  // HAVE_RESIZETERM && TIOCGWINSZ
+}
+
+/// Print a fatal error message and terminate the process immediately.
+void
+fatal (const gchar *format, ...)
+{
+	va_list ap;
+	va_start (ap, format);
+	vfprintf (stderr, format, ap);
+	exit (EXIT_FAILURE);
+	va_end (ap);
 }

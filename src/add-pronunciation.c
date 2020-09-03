@@ -30,6 +30,7 @@
 #include "stardict.h"
 #include "stardict-private.h"
 #include "generator.h"
+#include "utils.h"
 
 
 // --- Pronunciation generator -------------------------------------------------
@@ -149,7 +150,7 @@ worker_writer (WorkerData *data)
 
 		stardict_iterator_next (data->iterator);
 		if (fprintf (data->child_stdin, "%s\n", x) < 0)
-			g_error ("write to eSpeak failed: %s", strerror (errno));
+			fatal ("write to eSpeak failed: %s\n", strerror (errno));
 
 		g_free (x);
 	}
@@ -169,16 +170,10 @@ get_void_entry (gchar *cmdline[])
 	if (!g_spawn_sync (NULL, cmdline, NULL,
 		G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
 		&output, NULL, &exit_status, &error))
-	{
-		g_printerr ("Error: couldn't spawn espeak: %s", error->message);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: couldn't spawn espeak: %s\n", error->message);
 
 	if (exit_status)
-	{
-		g_printerr ("Error: espeak returned %d\n", exit_status);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: espeak returned %d\n", exit_status);
 
 	return output;
 }
@@ -193,7 +188,7 @@ worker (WorkerData *data)
 	if (!g_spawn_async_with_pipes (NULL, data->cmdline, NULL,
 		G_SPAWN_SEARCH_PATH, NULL, NULL,
 		NULL, &child_in, &child_out, NULL, &error))
-		g_error ("g_spawn() failed: %s", error->message);
+		fatal ("g_spawn: %s\n", error->message);
 
 	data->child_stdin = fdopen (child_in, "wb");
 	if (!data->child_stdin)
@@ -228,7 +223,7 @@ worker (WorkerData *data)
 		while ((c = fgetc (child_stdout)) != EOF && c != '\n')
 			g_string_append_c (s, c);
 		if (c == EOF)
-			g_error ("eSpeak process died too soon");
+			fatal ("eSpeak process died too soon\n");
 
 		gchar *translation = g_string_free (s, FALSE);
 		*output_end = translation;
@@ -246,11 +241,8 @@ worker (WorkerData *data)
 	}
 
 	if (fgetc (child_stdout) != EOF)
-	{
-		g_printerr ("Error: eSpeak has written more lines than it should. "
+		fatal ("Error: eSpeak has written more lines than it should. "
 			"The output would be corrupt, aborting.\n");
-		exit (EXIT_FAILURE);
-	}
 
 	fclose (child_stdout);
 	return g_thread_join (writer);
@@ -313,18 +305,10 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		("input.ifo output-basename - add pronunciation to dictionaries");
 	g_option_context_add_main_entries (ctx, entries, NULL);
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
-	{
-		g_printerr ("Error: option parsing failed: %s\n", error->message);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: option parsing failed: %s\n", error->message);
 
 	if (argc != 3)
-	{
-		gchar *help = g_option_context_get_help (ctx, TRUE, FALSE);
-		g_printerr ("%s", help);
-		g_free (help);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
 
 	g_option_context_free (ctx);
 
@@ -343,20 +327,13 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	printf ("Loading the original dictionary...\n");
 	StardictDict *dict = stardict_dict_new (argv[1], &error);
 	if (!dict)
-	{
-		g_printerr ("Error: opening the dictionary failed: %s\n",
-			error->message);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: opening the dictionary failed: %s\n", error->message);
 
 	gsize n_words = stardict_info_get_word_count
 		(stardict_dict_get_info (dict));
 
 	if (n_processes <= 0)
-	{
-		g_printerr ("Error: there must be at least one process\n");
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: there must be at least one process\n");
 
 	if ((gsize) n_processes > n_words * 1024)
 	{
@@ -435,11 +412,8 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 	// Put extended entries into a new dictionary
 	Generator *generator = generator_new (argv[2], &error);
 	if (!generator)
-	{
-		g_printerr ("Error: failed to create the output dictionary: %s\n",
+		fatal ("Error: failed to create the output dictionary: %s\n",
 			error->message);
-		exit (EXIT_FAILURE);
-	}
 
 	StardictInfo *info = generator->info;
 	stardict_info_copy (info, stardict_dict_get_info (dict));
@@ -493,10 +467,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 			if (!generator_write_fields (generator, &start_link, &error)
 			 || !generator_finish_entry (generator,
 					stardict_iterator_get_word (iterator), &error))
-			{
-				g_printerr ("Error: write failed: %s\n", error->message);
-				exit (EXIT_FAILURE);
-			}
+				fatal ("Error: write failed: %s\n", error->message);
 
 			g_object_unref (entry);
 
@@ -513,11 +484,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	putchar ('\n');
 	if (!generator_finish (generator, &error))
-	{
-		g_printerr ("Error: failed to write the dictionary: %s\n",
-			error->message);
-		exit (EXIT_FAILURE);
-	}
+		fatal ("Error: failed to write the dictionary: %s\n", error->message);
 
 	generator_free (generator);
 	g_object_unref (dict);
