@@ -282,32 +282,6 @@ stardict_info_copy (StardictInfo *dest, const StardictInfo *src)
 	}
 }
 
-/// Write a list of data fields back to a dictionary.
-static gboolean
-write_fields (Generator *generator, GList *fields, gboolean sts, GError **error)
-{
-	while (fields)
-	{
-		StardictEntryField *field = fields->data;
-		if (!sts && !generator_write_type (generator, field->type, error))
-			return FALSE;
-
-		gboolean mark_end = !sts || fields->next != NULL;
-		if (g_ascii_islower (field->type))
-		{
-			if (!generator_write_string (generator,
-				field->data, mark_end, error))
-				return FALSE;
-		}
-		else if (!generator_write_raw (generator,
-			field->data, field->data_size, mark_end, error))
-			return FALSE;
-
-		fields = fields->next;
-	}
-	return TRUE;
-}
-
 int
 main (int argc, char *argv[])
 {
@@ -516,8 +490,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 			start_link.next = entry->fields;
 			start_link.data = &field;
 
-			if (!write_fields (generator, &start_link,
-					info->same_type_sequence != NULL, &error)
+			if (!generator_write_fields (generator, &start_link, &error)
 			 || !generator_finish_entry (generator,
 					stardict_iterator_get_word (iterator), &error))
 			{

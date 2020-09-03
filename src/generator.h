@@ -4,7 +4,7 @@
  * Nothing fancy.  Just something moved out off the `stardict' test to be
  * conveniently reused by the included tools.
  *
- * Copyright (c) 2013, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -42,12 +42,15 @@ Generator *generator_new (const gchar *base, GError **error);
 gboolean generator_finish (Generator *self, GError **error);
 void generator_free (Generator *self);
 
-void generator_begin_entry (Generator *self);
 gboolean generator_write_type (Generator *self, gchar type, GError **error);
 gboolean generator_write_raw (Generator *self,
 	gpointer data, gsize data_size, gboolean mark_end, GError **error);
 gboolean generator_write_string (Generator *self,
 	const gchar *s, gboolean mark_end, GError **error);
+
+void generator_begin_entry (Generator *self);
+gboolean generator_write_fields (Generator *self,
+	const GList *fields, GError **error);
 gboolean generator_finish_entry (Generator *self,
 	const gchar *word, GError **error);
 

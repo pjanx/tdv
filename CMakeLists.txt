@@ -180,15 +180,14 @@ add_executable (${PROJECT_NAME}
 target_link_libraries (${PROJECT_NAME} ${project_common_libraries})
 
 # Tools
-add_executable (query-tool EXCLUDE_FROM_ALL
-	src/query-tool.c ${project_common_sources})
-target_link_libraries (query-tool ${project_common_libraries})
+set (tools add-pronunciation query-tool transform)
+foreach (tool ${tools})
+	add_executable (${tool} EXCLUDE_FROM_ALL
+		src/${tool}.c ${project_common_sources})
+	target_link_libraries (${tool} ${project_common_libraries})
+endforeach (tool)
 
-add_executable (add-pronunciation EXCLUDE_FROM_ALL
-	src/add-pronunciation.c ${project_common_sources})
-target_link_libraries (add-pronunciation ${project_common_libraries})
-
-add_custom_target (tools DEPENDS add-pronunciation query-tool)
+add_custom_target (tools DEPENDS ${tools})
 
 # The files to be installed
 include (GNUInstallDirs)

@@ -1,7 +1,7 @@
 /*
  * generator.c: dictionary generator
  *
- * Copyright (c) 2013, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -167,6 +167,34 @@ generator_write_string (Generator *self,
 	 || (mark_end && !g_data_output_stream_put_byte
 			(self->dict_data, '\0', NULL, error)))
 		return FALSE;
+	return TRUE;
+}
+
+/// Write a list of data fields back to a dictionary.  The list has to be
+/// acceptable for the generated dictionary's sametypesequence (or lack of).
+gboolean
+generator_write_fields (Generator *self, const GList *fields, GError **error)
+{
+	gboolean sts = self->info->same_type_sequence != NULL;
+	while (fields)
+	{
+		StardictEntryField *field = fields->data;
+		if (!sts && !generator_write_type (self, field->type, error))
+			return FALSE;
+
+		gboolean mark_end = !sts || fields->next != NULL;
+		if (g_ascii_islower (field->type))
+		{
+			if (!generator_write_string (self,
+				field->data, mark_end, error))
+				return FALSE;
+		}
+		else if (!generator_write_raw (self,
+			field->data, field->data_size, mark_end, error))
+			return FALSE;
+
+		fields = fields->next;
+	}
 	return TRUE;
 }
 
