@@ -192,7 +192,7 @@ struct stardict_entry_field
 {
 	gchar           type;               ///< Type of entry (EntryFieldType)
 	gpointer        data;               ///< Raw data or null-terminated string
-	gsize           data_size;          ///< Size of data, includding any \0
+	gsize           data_size;          ///< Size of data, including any \0
 };
 
 struct stardict_entry
