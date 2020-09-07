@@ -915,6 +915,15 @@ stardict_dict_cmp_index (StardictDict *sd, const gchar *word, gint i)
 	return g_ascii_strcasecmp (word, target);
 }
 
+static size_t
+prefix (StardictDict *sd, const gchar *word, gint i)
+{
+	GArray *index = sd->priv->index;
+	return (guint) i >= index->len ? 0 :
+		stardict_longest_common_collation_prefix
+			(sd, word, g_array_index (index, StardictIndexEntry, i).name);
+}
+
 /// Search for a word.  The search is ASCII-case-insensitive.
 /// @param[in] word  The word in utf-8 encoding
 /// @param[out] success  TRUE if found
@@ -936,14 +945,11 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 
 	BINARY_SEARCH_END
 
-	// Try to find a longer common prefix with a preceding entry
-#define PREFIX(i) stardict_longest_common_collation_prefix \
-	(sd, word, g_array_index (index, StardictIndexEntry, i).name)
-
+	// Try to find a longer common prefix with a preceding entry.
 	// We need to take care not to step through the entire dictionary
-	// if not a single character matches, because it can be quite costly
-	size_t probe, best = PREFIX (imin);
-	while (best && imin > 0 && (probe = PREFIX (imin - 1)) >= best)
+	// if not a single character matches, because it can be quite costly.
+	size_t probe, best = prefix (sd, word, imin);
+	while (best && imin > 0 && (probe = prefix (sd, word, imin - 1)) >= best)
 	{
 		// TODO: take more care to not screw up exact matches,
 		//   use several "best"s according to quality
@@ -955,8 +961,6 @@ stardict_dict_search (StardictDict *sd, const gchar *word, gboolean *success)
 		best = probe;
 		imin--;
 	}
-
-#undef PREFIX
 
 	if (success) *success = FALSE;
 	return stardict_iterator_new (sd, imin);
