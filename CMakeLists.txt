@@ -89,12 +89,12 @@ endif (WITH_X11)
 
 link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
-	${dependencies_INCLUDE_DIRS} ${NCURSESW_INCLUDE_DIRS}
+	${dependencies_INCLUDE_DIRS} ${Ncursesw_INCLUDE_DIRS}
 	${Termo_INCLUDE_DIRS})
 
 # Configuration
 include (CheckFunctionExists)
-set (CMAKE_REQUIRED_LIBRARIES ${NCURSESW_LIBRARIES})
+set (CMAKE_REQUIRED_LIBRARIES ${Ncursesw_LIBRARIES})
 CHECK_FUNCTION_EXISTS ("resizeterm" HAVE_RESIZETERM)
 
 # Localization
@@ -145,7 +145,7 @@ set (project_common_headers
 
 # Project libraries
 set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
-	${dependencies_LIBRARIES} ${NCURSESW_LIBRARIES} termo-static)
+	${dependencies_LIBRARIES} ${Ncursesw_LIBRARIES} termo-static)
 
 # Create a common project library so that source files are only compiled once
 if (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
