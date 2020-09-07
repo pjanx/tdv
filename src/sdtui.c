@@ -980,7 +980,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013 - 2018, Přemysl Eric Janouch",
+		"Copyright (c) 2013 - 2020, Přemysl Eric Janouch",
 		"",
 		_("Type to search")
 	};
