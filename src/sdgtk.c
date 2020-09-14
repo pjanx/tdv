@@ -214,6 +214,7 @@ on_selection (GtkClipboard *clipboard, GdkEvent *event,
 	G_GNUC_UNUSED gpointer data)
 {
 	if (g.watch_selection
+	 && !gtk_window_has_toplevel_focus (GTK_WINDOW (g.window))
 	 && event->owner_change.owner != NULL)
 		gtk_clipboard_request_text (clipboard, on_selection_received, NULL);
 }
