@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #define PROJECT_NAME "${PROJECT_NAME}"
-#define PROJECT_VERSION "${project_VERSION}"
+#define PROJECT_VERSION "${PROJECT_VERSION}"
 #define PROJECT_URL "${project_URL}"
 
 #define GETTEXT_PACKAGE PROJECT_NAME

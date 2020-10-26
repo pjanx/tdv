@@ -1,5 +1,5 @@
-project (sdtui C)
-cmake_minimum_required (VERSION 2.8.5)
+cmake_minimum_required (VERSION 3.0)
+project (sdtui VERSION 0.1.0 LANGUAGES C)
 
 # Moar warnings
 if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
@@ -7,15 +7,6 @@ if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS_DEBUG
 		"${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -Wno-missing-field-initializers")
 endif ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
-
-# Version
-set (project_VERSION_MAJOR "0")
-set (project_VERSION_MINOR "1")
-set (project_VERSION_PATCH "0")
-
-set (project_VERSION "${project_VERSION_MAJOR}")
-set (project_VERSION "${project_VERSION}.${project_VERSION_MINOR}")
-set (project_VERSION "${project_VERSION}.${project_VERSION_PATCH}")
 
 # For custom modules
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -129,12 +120,10 @@ endforeach (page)
 
 add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES_OUTPUT})
 
-# Project source files
-set (project_common_sources
-	src/dictzip-input-stream.c
-	src/generator.c
-	src/stardict.c
-	src/utils.c)
+# Project libraries
+set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
+	${dependencies_LIBRARIES} ${Ncursesw_LIBRARIES} termo-static)
+
 set (project_common_headers
 	${PROJECT_BINARY_DIR}/config.h
 	src/dictzip-input-stream.h
@@ -143,24 +132,14 @@ set (project_common_headers
 	src/generator.h
 	src/utils.h)
 
-# Project libraries
-set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
-	${dependencies_LIBRARIES} ${Ncursesw_LIBRARIES} termo-static)
-
 # Create a common project library so that source files are only compiled once
-if (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
-	add_library (stardict OBJECT
-		${project_common_sources}
-		${project_common_headers})
-	set (project_common_sources $<TARGET_OBJECTS:stardict>)
-else (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
-	add_library (stardict STATIC
-		${project_common_sources}
-		${project_common_headers})
-	target_link_libraries (stardict ${project_common_libraries})
-	list (APPEND project_common_libraries stardict)
-	set (project_common_sources)
-endif (${CMAKE_VERSION} VERSION_GREATER "2.8.7")
+add_library (stardict OBJECT
+	${project_common_headers}
+	src/dictzip-input-stream.c
+	src/generator.c
+	src/stardict.c
+	src/utils.c)
+set (project_common_sources $<TARGET_OBJECTS:stardict>)
 
 # Generate a configuration file
 configure_file (${PROJECT_SOURCE_DIR}/config.h.in
@@ -229,16 +208,13 @@ set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict terminal UI")
 set (CPACK_PACKAGE_VENDOR "Premysl Eric Janouch")
 set (CPACK_PACKAGE_CONTACT "Přemysl Eric Janouch <p@janouch.name>")
 set (CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
-set (CPACK_PACKAGE_VERSION_MAJOR ${project_VERSION_MAJOR})
-set (CPACK_PACKAGE_VERSION_MINOR ${project_VERSION_MINOR})
-set (CPACK_PACKAGE_VERSION_PATCH ${project_VERSION_PATCH})
 set (CPACK_GENERATOR "TGZ;ZIP")
 set (CPACK_PACKAGE_FILE_NAME
-	"${PROJECT_NAME}-${project_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-set (CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}-${project_VERSION}")
+	"${PROJECT_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set (CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}-${PROJECT_VERSION}")
 set (CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set (CPACK_SOURCE_IGNORE_FILES "/\\\\.git;/build;/CMakeLists.txt.user")
-set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${project_VERSION}")
+set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}")
 
 include (CPack)
 
