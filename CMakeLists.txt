@@ -96,29 +96,24 @@ GETTEXT_CREATE_TRANSLATIONS (
 	ALL ${project_PO_FILES})
 
 # Documentation
-find_program (XSLTPROC_EXECUTABLE xsltproc)
-if (NOT XSLTPROC_EXECUTABLE)
-	message (FATAL_ERROR "xsltproc not found")
-endif (NOT XSLTPROC_EXECUTABLE)
+find_program (ASCIIDOCTOR_EXECUTABLE asciidoctor)
+if (NOT ASCIIDOCTOR_EXECUTABLE)
+	message (FATAL_ERROR "asciidoctor not found")
+endif (NOT ASCIIDOCTOR_EXECUTABLE)
 
-set (project_MAN_PAGES "${PROJECT_NAME}.1")
-foreach (page ${project_MAN_PAGES})
+foreach (page "${PROJECT_NAME}.1")
 	set (page_output "${PROJECT_BINARY_DIR}/${page}")
-	list (APPEND project_MAN_PAGES_OUTPUT "${page_output}")
+	list (APPEND project_MAN_PAGES "${page_output}")
 	add_custom_command (OUTPUT ${page_output}
-		COMMAND ${XSLTPROC_EXECUTABLE}
-			--nonet
-			--param make.year.ranges 1
-			--param make.single.year.ranges 1
-			--param man.charmap.use.subset 0
-			--param man.authors.section.enabled 0
-			http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
-			"${PROJECT_SOURCE_DIR}/docs/${page}.xml"
-		DEPENDS "docs/${page}.xml"
+		COMMAND ${ASCIIDOCTOR_EXECUTABLE} -b manpage
+			-a release-version=${PROJECT_VERSION}
+			"${PROJECT_SOURCE_DIR}/docs/${page}.adoc"
+			-o "${page_output}"
+		DEPENDS "docs/${page}.adoc"
 		COMMENT "Generating man page for ${page}" VERBATIM)
 endforeach (page)
 
-add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES_OUTPUT})
+add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 
 # Project libraries
 set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
@@ -182,7 +177,7 @@ include (GNUInstallDirs)
 install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
-foreach (page ${project_MAN_PAGES_OUTPUT})
+foreach (page ${project_MAN_PAGES})
 	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
 	install (FILES "${page}"
 		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")

@@ -1,0 +1,45 @@
+sdtui(1)
+========
+:doctype: manpage
+:manmanual: sdtui Manual
+:mansource: sdtui {release-version}
+
+Name
+----
+sdtui - StarDict terminal UI
+
+Synopsis
+--------
+*sdtui* [_OPTION_]... [_DICTIONARY_.ifo]...
+
+Description
+-----------
+*sdtui* is a StarDict dictionary viewer custom tailored for viewing translation
+dictionaries, using a simple curses-based terminal UI.
+
+The program expects to find on its command line the path to a dictionary's
+_.ifo_ file, which contains further information required to load the dictionary.
+
+Some options as well as dictionaries to load on start-up by default can be
+specified in a configuration file.  See the README for an example.
+
+// FIXME: the README isn't even installed, so this manual isn't very useful
+
+Options
+-------
+*-h*, *--help*::
+	Display a help message and exit.
+
+*-V*, *--version*::
+	Output version information and exit.
+
+Files
+-----
+_~/.config/sdtui/sdtui.conf_::
+	The configuration file, in which you can configure some settings, terminal
+	colours and the set of dictionaries to be loaded automatically on start-up.
+
+Reporting bugs
+--------------
+Use https://git.janouch.name/p/sdtui to report bugs, request features,
+or submit pull requests.

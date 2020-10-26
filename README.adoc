@@ -30,7 +30,7 @@ a package with the latest development version from Archlinux's AUR.
 
 Building and Running
 --------------------
-Build dependencies: CMake, pkg-config, xsltproc, docbook-xsl +
+Build dependencies: CMake, pkg-config, asciidoctor +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included),
                       glib-2.0, pango, xcb and xcb-xfixes (optional)
 
