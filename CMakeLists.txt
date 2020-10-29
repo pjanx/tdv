@@ -6,7 +6,7 @@ if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 	set (CMAKE_C_FLAGS_DEBUG
 		"${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -Wno-missing-field-initializers")
-endif ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
+endif ()
 
 # For custom modules
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -22,7 +22,7 @@ if (NOT icu_FOUND)
 	find_program (icu_CONFIG_EXECUTABLE icu-config)
 	if (NOT icu_CONFIG_EXECUTABLE)
 		message (FATAL_ERROR "ICU not found")
-	endif (NOT icu_CONFIG_EXECUTABLE)
+	endif ()
 
 	execute_process (COMMAND ${icu_CONFIG_EXECUTABLE} --cppflags
 		OUTPUT_VARIABLE icu_CPPFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -38,11 +38,11 @@ if (NOT icu_FOUND)
 	foreach (flag ${icu_CPPFLAGS})
 		if (flag MATCHES "^-I(.*)")
 			list (APPEND icu_INCLUDE_DIRS "${CMAKE_MATCH_1}")
-		endif (flag MATCHES "^-I(.*)")
-	endforeach (flag)
+		endif ()
+	endforeach ()
 
 	# This should suffice most of the time, don't care about the rest
-endif (NOT icu_FOUND)
+endif ()
 
 find_package (Termo QUIET NO_MODULE)
 option (USE_SYSTEM_TERMO
@@ -51,8 +51,8 @@ option (USE_SYSTEM_TERMO
 if (USE_SYSTEM_TERMO)
 	if (NOT Termo_FOUND)
 		message (FATAL_ERROR "System termo library not found")
-	endif (NOT Termo_FOUND)
-else (USE_SYSTEM_TERMO)
+	endif ()
+else ()
 	# We don't want the library to install, even though EXCLUDE_FROM_ALL
 	# sabotages CTest -- those unbuilt tests need to be excluded in CTest runs
 	add_subdirectory (termo EXCLUDE_FROM_ALL)
@@ -63,7 +63,7 @@ else (USE_SYSTEM_TERMO)
 	get_directory_property (Termo_INCLUDE_DIRS
 		DIRECTORY termo INCLUDE_DIRECTORIES)
 	set (Termo_LIBRARIES termo-static)
-endif (USE_SYSTEM_TERMO)
+endif ()
 
 pkg_check_modules (xcb xcb xcb-xfixes)
 option (WITH_X11 "Compile with X11 selection support using XCB" ${xcb_FOUND})
@@ -71,12 +71,12 @@ option (WITH_X11 "Compile with X11 selection support using XCB" ${xcb_FOUND})
 if (WITH_X11)
 	if (NOT xcb_FOUND)
 		message (FATAL_ERROR "XCB not found")
-	endif (NOT xcb_FOUND)
+	endif ()
 
 	list (APPEND dependencies_INCLUDE_DIRS ${xcb_INCLUDE_DIRS})
 	list (APPEND dependencies_LIBRARY_DIRS ${xcb_LIBRARY_DIRS})
 	list (APPEND dependencies_LIBRARIES ${xcb_LIBRARIES})
-endif (WITH_X11)
+endif ()
 
 link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
@@ -99,7 +99,7 @@ GETTEXT_CREATE_TRANSLATIONS (
 find_program (ASCIIDOCTOR_EXECUTABLE asciidoctor)
 if (NOT ASCIIDOCTOR_EXECUTABLE)
 	message (FATAL_ERROR "asciidoctor not found")
-endif (NOT ASCIIDOCTOR_EXECUTABLE)
+endif ()
 
 foreach (page "${PROJECT_NAME}.1")
 	set (page_output "${PROJECT_BINARY_DIR}/${page}")
@@ -111,7 +111,7 @@ foreach (page "${PROJECT_NAME}.1")
 			-o "${page_output}"
 		DEPENDS "docs/${page}.adoc"
 		COMMENT "Generating man page for ${page}" VERBATIM)
-endforeach (page)
+endforeach ()
 
 add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 
@@ -160,7 +160,7 @@ if (gtk_FOUND)
 		src/sdgtk.c ${project_common_sources})
 	target_include_directories (sdgtk PUBLIC ${gtk_INCLUDE_DIRS})
 	target_link_libraries (sdgtk ${gtk_LIBRARIES} ${project_common_libraries})
-endif (gtk_FOUND)
+endif ()
 
 # Tools
 set (tools add-pronunciation query-tool transform)
@@ -168,7 +168,7 @@ foreach (tool ${tools})
 	add_executable (${tool} EXCLUDE_FROM_ALL
 		src/${tool}.c ${project_common_sources})
 	target_link_libraries (${tool} ${project_common_libraries})
-endforeach (tool)
+endforeach ()
 
 add_custom_target (tools DEPENDS ${tools})
 
@@ -181,7 +181,7 @@ foreach (page ${project_MAN_PAGES})
 	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
 	install (FILES "${page}"
 		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
-endforeach (page)
+endforeach ()
 
 # Do some unit tests
 option (BUILD_TESTING "Build tests" OFF)
@@ -195,8 +195,8 @@ if (BUILD_TESTING)
 			src/test-${name}.c ${project_common_sources})
 		target_link_libraries (test-${name} ${project_common_libraries})
 		add_test (test-${name} test-${name})
-	endforeach (name)
-endif (BUILD_TESTING)
+	endforeach ()
+endif ()
 
 # CPack
 set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict terminal UI")
