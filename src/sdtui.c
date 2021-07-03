@@ -157,12 +157,14 @@ resolve_filename (const gchar *filename, gchar *(*relative_cb) (const char *))
 
 // --- Application -------------------------------------------------------------
 
-#define ATTRIBUTE_TABLE(XX)                            \
-	XX( HEADER, "header",        -1, -1, A_REVERSE   ) \
-	XX( ACTIVE, "header-active", -1, -1, A_UNDERLINE ) \
-	XX( SEARCH, "search",        -1, -1, A_UNDERLINE ) \
-	XX( EVEN,   "even",          -1, -1, 0           ) \
-	XX( ODD,    "odd",           -1, -1, 0           )
+#define ATTRIBUTE_TABLE(XX)                               \
+	XX( HEADER,    "header",        -1, -1, A_REVERSE   ) \
+	XX( ACTIVE,    "header-active", -1, -1, A_UNDERLINE ) \
+	XX( SEARCH,    "search",        -1, -1, A_UNDERLINE ) \
+	XX( EVEN,      "even",          -1, -1, 0           ) \
+	XX( ODD,       "odd",           -1, -1, 0           ) \
+	XX( SELECTION, "selection",     -1, -1, A_REVERSE   ) \
+	XX( DEFOCUSED, "defocused",     -1, -1, A_REVERSE   )
 
 enum
 {
@@ -210,6 +212,7 @@ struct application
 	guint           tk_timer;           ///< termo timeout timer
 	GIConv          ucs4_to_locale;     ///< UTF-32 -> locale conversion
 	gboolean        locale_is_utf8;     ///< The locale is Unicode
+	gboolean        focused;            ///< Whether the terminal has focus
 
 	GArray        * dictionaries;       ///< All loaded dictionaries
 
@@ -628,6 +631,7 @@ app_init (Application *self, char **filenames)
 #else // G_BYTE_ORDER != G_LITTLE_ENDIAN
 	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32BE");
 #endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
+	self->focused = TRUE;
 
 	app_init_attrs (self);
 	self->dictionaries = g_array_new (FALSE, TRUE, sizeof (Dictionary));
@@ -688,6 +692,10 @@ app_init_terminal (Application *self)
 	gboolean failed = FALSE;
 	for (int a = 0; a < ATTRIBUTE_COUNT; a++)
 	{
+		if (self->attrs[a].fg == -1 &&
+			self->attrs[a].bg == -1)
+			continue;
+
 		if (self->attrs[a].fg >= COLORS || self->attrs[a].fg < -1
 		 || self->attrs[a].bg >= COLORS || self->attrs[a].bg < -1)
 		{
@@ -988,6 +996,16 @@ app_show_help (Application *self)
 	app_show_message (self, lines, G_N_ELEMENTS (lines));
 }
 
+/// Combine attributes, taking care to replace colour bits entirely
+static void
+app_merge_attributes (int *target, int merged)
+{
+	if (merged & A_COLOR)
+		*target = (*target & ~A_COLOR) | merged;
+	else
+		*target |= merged;
+}
+
 /// Redraw the dictionary view.
 static void
 app_redraw_view (Application *self)
@@ -1014,9 +1032,14 @@ app_redraw_view (Application *self)
 		{
 			int attrs = ((self->top_position + i) & 1)
 				? APP_ATTR (ODD) : APP_ATTR (EVEN);
-			if (shown == self->selected)      attrs |= A_REVERSE;
+
+			if (shown == self->selected)
+				app_merge_attributes (&attrs, self->focused
+					? APP_ATTR (SELECTION) : APP_ATTR (DEFOCUSED));
+
 			gboolean last = k + 1 == ve->definitions_length;
-			if (last && self->underline_last) attrs |= A_UNDERLINE;
+			if (last && self->underline_last)
+				attrs |= A_UNDERLINE;
 
 			RowBuffer buf;
 			row_buffer_init (&buf, self);
@@ -1793,6 +1816,14 @@ app_process_termo_event (Application *self, termo_key_t *event)
 		return app_process_key (self, event);
 	case TERMO_TYPE_KEYSYM:
 		return app_process_keysym (self, event);
+	case TERMO_TYPE_FOCUS:
+	{
+		SAVE_CURSOR
+		self->focused = !!event->code.focused;
+		app_redraw_view (self);
+		RESTORE_CURSOR
+		return TRUE;
+	}
 	default:
 		return TRUE;
 	}
