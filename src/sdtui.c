@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2021, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -980,7 +980,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013 - 2020, Přemysl Eric Janouch",
+		"Copyright (c) 2013 - 2021, Přemysl Eric Janouch",
 		"",
 		_("Type to search")
 	};
@@ -1842,13 +1842,26 @@ app_set_input (Application *self, const gchar *text, gsize text_len)
 	self->input_pos = 0;
 
 	gunichar *p = output;
+	gboolean last_was_space = false;
 	while (size--)
 	{
-		// XXX: skip?
-		if (!g_unichar_isprint (*p))
+		// Normalize whitespace, to cover OCR anomalies
+		gunichar c = *p++;
+		if (!g_unichar_isspace (c))
+			last_was_space = FALSE;
+		else if (last_was_space)
+			continue;
+		else
+		{
+			c = ' ';
+			last_was_space = TRUE;
+		}
+
+		// XXX: skip?  Might be some binary nonsense.
+		if (!g_unichar_isprint (c))
 			break;
 
-		g_array_insert_val (self->input, self->input_pos++, *p++);
+		g_array_insert_val (self->input, self->input_pos++, c);
 	}
 	g_free (output);
 
