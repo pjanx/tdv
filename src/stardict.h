@@ -198,7 +198,7 @@ struct stardict_entry_field
 struct stardict_entry
 {
 	GObject         parent_instance;
-	GList         * fields;             ///< List of StardictEntryField's
+	GList         * fields;             ///< List of StardictEntryField-s
 };
 
 struct stardict_entry_class
@@ -209,4 +209,4 @@ struct stardict_entry_class
 GType stardict_entry_get_type (void);
 const GList *stardict_entry_get_fields (StardictEntry *sde) G_GNUC_PURE;
 
- #endif  // ! STARDICT_H
+#endif  // ! STARDICT_H

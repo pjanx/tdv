@@ -230,7 +230,7 @@ struct application
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
 	guint           selected;           ///< Offset to the selected definition
-	GPtrArray     * entries;            ///< ViewEntry's within the view
+	GPtrArray     * entries;            ///< ViewEntry-s within the view
 
 	gchar         * search_label;       ///< Text of the "Search" label
 	GArray        * input;              ///< The current search input
@@ -386,6 +386,7 @@ view_entry_new (StardictIterator *iterator)
 			found_anything_displayable = TRUE;
 			break;
 		case STARDICT_FIELD_PHONETIC:
+			// FIXME this makes it highlightable
 			g_string_append_printf (word, " /%s/", (const gchar *) field->data);
 			break;
 		default:

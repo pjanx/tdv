@@ -157,7 +157,9 @@ target_link_libraries (${PROJECT_NAME} ${project_common_libraries})
 pkg_check_modules (gtk gtk+-3.0)
 if (gtk_FOUND)
 	add_executable (sdgtk EXCLUDE_FROM_ALL
-		src/sdgtk.c ${project_common_sources})
+		src/sdgtk.c
+		src/stardict-view.c
+		${project_common_sources})
 	target_include_directories (sdgtk PUBLIC ${gtk_INCLUDE_DIRS})
 	target_link_libraries (sdgtk ${gtk_LIBRARIES} ${project_common_libraries})
 endif ()
