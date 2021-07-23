@@ -2,12 +2,15 @@ StarDict Terminal UI
 ====================
 
 'sdtui' aims to provide an easy way of viewing translation as well as other
-kinds of dictionaries in your terminal.  I wasn't successful in finding any free
-dictionary software of this kind, GUI or not, and thus decided to write my own.
+kinds of dictionaries in your terminal, and is inspired by the dictionary
+component of PC Translator.  I wasn't successful in finding any free software
+of this kind, GUI or not, and thus decided to write my own.
 
 The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
 software.  I wasn't able to reuse _anything_ for StarDict.
+
+image::sdtui.png[align="center"]
 
 Further Development
 -------------------
@@ -17,11 +20,8 @@ Linux and/or BSD distributions.  Help is much appreciated.
 
 An approximate list of things that need to be resolved:
 
- - rewrite the frontend using a proper TUI framework
- - possibly make it work better with multiple dictionaries as now it's only
-   acceptable if you give them short names in the configuration so that they
-   all fit in the header
- - figure out a way to become capable of displaying most dictionaries
+ - the tab bar and the text input field don't handle overflows well
+ - figure out a way to become capable of displaying most StarDict dictionaries
 
 Packages
 --------
@@ -32,7 +32,7 @@ Building and Running
 --------------------
 Build dependencies: CMake, pkg-config, asciidoctor +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included),
-                      glib-2.0, pango, xcb and xcb-xfixes (optional)
+                      glib-2.0, pango, xcb, xcb-xfixes (the latter two optional)
 
  $ git clone --recursive https://git.janouch.name/p/sdtui.git
  $ mkdir sdtui/build
@@ -82,7 +82,8 @@ odd = 16 255
 
 The `watch-selection` option makes the application watch the X11 primary
 selection for changes and automatically search for selected text.
-This feature requires XCB and it will never work on Wayland by its design.
+This feature requires XCB.  Wayland is currently unsupported, but would require
+a compositor supporting the wlr-data-control protocol.
 
 You can also set up some dictionaries to be loaded at startup automatically:
 
@@ -91,6 +92,8 @@ You can also set up some dictionaries to be loaded at startup automatically:
 name1 = ~/path/to/dict.ifo
 name2 = ~/another/dict.ifo
 ....
+
+The names define how they will appear in the tab bar.
 
 Dictionaries
 ------------
