@@ -81,9 +81,10 @@ odd = 16 255
 ....
 
 The `watch-selection` option makes the application watch the X11 primary
-selection for changes and automatically search for selected text.
-This feature requires XCB.  Wayland is currently unsupported, but would require
-a compositor supporting the wlr-data-control protocol.
+selection for changes and automatically search for selected text.  This feature
+requires XCB.  Wayland is currently unsupported, but would require a compositor
+supporting the wlr-data-control protocol.  Luckily, some compositors, such as
+Sway, synchronize selections with Xwayland.
 
 You can also set up some dictionaries to be loaded at startup automatically:
 
