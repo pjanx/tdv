@@ -31,7 +31,7 @@
 #include "utils.h"
 
 static gboolean
-set_data_error (GError **error, const char *message)
+set_data_error (GError **error, const gchar *message)
 {
 	g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, message);
 	return FALSE;
@@ -40,11 +40,11 @@ set_data_error (GError **error, const char *message)
 static const gchar escapes[256] = { ['n'] = '\n', ['t'] = '\t', ['\\'] = '\\' };
 
 static gboolean
-inplace_unescape (char *line, GError **error)
+inplace_unescape (gchar *line, GError **error)
 {
 	gboolean escape = FALSE;
-	char *dest = line;
-	for (char *src = line; *src; src++)
+	gchar *dest = line;
+	for (gchar *src = line; *src; src++)
 	{
 		if (escape)
 		{
@@ -65,12 +65,14 @@ inplace_unescape (char *line, GError **error)
 }
 
 static gboolean
-import_line (Generator *generator, char *line, size_t len, GError **error)
+import_line (Generator *generator, gchar *line, gsize len, GError **error)
 {
 	if (!len)
 		return TRUE;
+	if (!g_utf8_validate_len (line, len, NULL))
+		return set_data_error (error, "not valid UTF-8");
 
-	char *separator = strchr (line, '\t');
+	gchar *separator = strchr (line, '\t');
 	if (!separator)
 		return set_data_error (error, "keyword separator not found");
 
@@ -79,7 +81,7 @@ import_line (Generator *generator, char *line, size_t len, GError **error)
 		// The index wouldn't be sorted correctly with our method
 		return set_data_error (error, "escapes not allowed in keywords");
 
-	char *newline = strpbrk (separator, "\r\n");
+	gchar *newline = strpbrk (separator, "\r\n");
 	if (newline)
 		*newline = 0;
 
@@ -95,8 +97,8 @@ import_line (Generator *generator, char *line, size_t len, GError **error)
 static gboolean
 transform (FILE *fsorted, Generator *generator, GError **error)
 {
-	char *line = NULL;
-	size_t size = 0, ln = 1;
+	gchar *line = NULL;
+	gsize size = 0, ln = 1;
 	for (ssize_t read; (read = getline (&line, &size, fsorted)) >= 0; ln++)
 		if (!import_line (generator, line, read, error))
 			break;
