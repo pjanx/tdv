@@ -15,7 +15,7 @@ set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package (ZLIB REQUIRED)
 find_package (Ncursesw REQUIRED)
 find_package (PkgConfig REQUIRED)
-pkg_check_modules (dependencies REQUIRED glib-2.0 gio-2.0 pango)
+pkg_check_modules (dependencies REQUIRED glib-2.0>=2.38 gio-2.0 pango)
 
 pkg_check_modules (icu icu-uc icu-i18n)
 if (NOT icu_FOUND)

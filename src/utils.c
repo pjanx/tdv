@@ -17,6 +17,7 @@
  */
 
 #include <glib.h>
+#include <glib/gprintf.h>
 #include <gio/gio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -107,7 +108,7 @@ fatal (const gchar *format, ...)
 {
 	va_list ap;
 	va_start (ap, format);
-	vfprintf (stderr, format, ap);
+	g_vfprintf (stderr, format, ap);
 	exit (EXIT_FAILURE);
 	va_end (ap);
 }

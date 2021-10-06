@@ -76,8 +76,8 @@ write_to_filter (StardictDict *dict, gint fd, GError **error)
 			if (write (fd, field->data, field->data_size)
 				!= (ssize_t) field->data_size)
 			{
-				g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-					"%s", strerror (errno));
+				g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
+					"%s", g_strerror (errno));
 				return FALSE;
 			}
 		}
@@ -117,7 +117,7 @@ update_from_filter (StardictDict *dict, Generator *generator,
 			gchar *end = memchr (filtered, 0, filtered_end - filtered);
 			if (!end)
 			{
-				g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+				g_set_error (error, G_IO_ERROR, G_IO_ERROR_PARTIAL_INPUT,
 					"filter seems to have ended too early");
 				return FALSE;
 			}
@@ -176,7 +176,6 @@ main (int argc, char *argv[])
 		("input.ifo output-basename -- FILTER [ARG...]");
 	g_option_context_set_summary
 		(ctx, "Transform dictionaries using a filter program.");
-	g_option_context_set_description (ctx, "Test?");
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
 		fatal ("Error: option parsing failed: %s\n", error->message);
 
@@ -202,7 +201,7 @@ main (int argc, char *argv[])
 
 	FILE *child_out = tmpfile ();
 	if (!child_out)
-		fatal ("tmpfile: %s\n", strerror (errno));
+		fatal ("tmpfile: %s\n", g_strerror (errno));
 
 	GPid pid = -1;
 	if (!g_spawn_async_with_fds (NULL /* working_directory */,
@@ -221,7 +220,7 @@ main (int argc, char *argv[])
 	int wstatus = errno = 0;
 	if (waitpid (pid, &wstatus, 0) < 1
 	 || !WIFEXITED (wstatus) || WEXITSTATUS (wstatus) > 0)
-		fatal ("Filter failed (%s, status %d)\n", strerror (errno), wstatus);
+		fatal ("Filter failed (%s, status %d)\n", g_strerror (errno), wstatus);
 
 	GMappedFile *filtered = g_mapped_file_new_from_fd (fileno (child_out),
 		FALSE /* writable */, &error);

@@ -150,7 +150,7 @@ worker_writer (WorkerData *data)
 
 		stardict_iterator_next (data->iterator);
 		if (fprintf (data->child_stdin, "%s\n", x) < 0)
-			fatal ("write to eSpeak failed: %s\n", strerror (errno));
+			fatal ("write to eSpeak failed: %s\n", g_strerror (errno));
 
 		g_free (x);
 	}

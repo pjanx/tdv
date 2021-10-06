@@ -31,8 +31,8 @@ a package with the latest development version from Archlinux's AUR.
 Building and Running
 --------------------
 Build dependencies: CMake, pkg-config, asciidoctor +
-Runtime dependencies: ncursesw, zlib, ICU, termo (included),
-                      glib-2.0, pango, xcb, xcb-xfixes (the latter two optional)
+Runtime dependencies: ncursesw, zlib, ICU, termo (included), glib-2.0 >= 2.38,
+                      pango, xcb, xcb-xfixes (the latter two optional)
 
  $ git clone --recursive https://git.janouch.name/p/sdtui.git
  $ mkdir sdtui/build
