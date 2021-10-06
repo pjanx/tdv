@@ -1305,6 +1305,77 @@ app_search_for_entry (Application *self)
 	app_redraw_view (self);
 }
 
+static void
+app_set_input (Application *self, const gchar *text, gsize text_len)
+{
+	glong size;
+	gunichar *output = g_utf8_to_ucs4 (text, text_len, NULL, &size, NULL);
+
+	// XXX: signal invalid data?
+	if (!output)
+		return;
+
+	g_array_free (self->input, TRUE);
+	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
+	self->input_pos = 0;
+
+	gunichar *p = output;
+	gboolean last_was_space = false;
+	while (size--)
+	{
+		// Normalize whitespace, to cover OCR anomalies
+		gunichar c = *p++;
+		if (!g_unichar_isspace (c))
+			last_was_space = FALSE;
+		else if (last_was_space)
+			continue;
+		else
+		{
+			c = ' ';
+			last_was_space = TRUE;
+		}
+
+		// XXX: skip?  Might be some binary nonsense.
+		if (!g_unichar_isprint (c))
+			break;
+
+		g_array_insert_val (self->input, self->input_pos++, c);
+	}
+	g_free (output);
+
+	self->input_confirmed = FALSE;
+	app_search_for_entry (self);
+	app_redraw_top (self);
+}
+
+static void
+app_set_trimmed_input_if_not_empty (Application *self, const gchar *text)
+{
+	// Strip ASCII whitespace: this is compatible with UTF-8
+	while (g_ascii_isspace (*text))
+		text++;
+	gsize text_len = strlen (text);
+	while (text_len && g_ascii_isspace (text[text_len - 1]))
+		text_len--;
+
+	if (text_len)
+		app_set_input (self, text, text_len);
+}
+
+static const gchar *
+app_get_current_definition (Application *self)
+{
+	guint offset = self->top_offset + self->selected;
+	for (guint i = 0; i < self->entries->len; i++)
+	{
+		ViewEntry *ve = g_ptr_array_index (self->entries, i);
+		if (offset < ve->definitions_length)
+			return ve->definitions[offset];
+		offset -= ve->definitions_length;
+	}
+	return NULL;
+}
+
 /// Switch to a different dictionary by number.
 static gboolean
 app_goto_dictionary (Application *self, guint n)
@@ -1378,6 +1449,8 @@ enum user_action
 	USER_ACTION_GOTO_PAGE_NEXT,
 	USER_ACTION_GOTO_DICTIONARY_PREVIOUS,
 	USER_ACTION_GOTO_DICTIONARY_NEXT,
+
+	USER_ACTION_FLIP,
 
 	USER_ACTION_INPUT_CONFIRM,
 	USER_ACTION_INPUT_HOME,
@@ -1477,6 +1550,18 @@ app_process_user_action (Application *self, UserAction action)
 	case USER_ACTION_GOTO_DICTIONARY_NEXT:
 		if (!app_goto_dictionary_delta (self, +1))
 			beep ();
+		return TRUE;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	case USER_ACTION_FLIP:
+		{
+			const gchar *definition = app_get_current_definition (self);
+			if (!definition)
+				beep ();
+			else
+				app_set_trimmed_input_if_not_empty (self, definition);
+		}
 		return TRUE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1623,6 +1708,7 @@ app_process_keysym (Application *self, termo_key_t *event)
 		[TERMO_SYM_PAGEUP]    = USER_ACTION_GOTO_PAGE_PREVIOUS,
 		[TERMO_SYM_PAGEDOWN]  = USER_ACTION_GOTO_PAGE_NEXT,
 
+		[TERMO_SYM_TAB]       = USER_ACTION_FLIP,
 		[TERMO_SYM_ENTER]     = USER_ACTION_INPUT_CONFIRM,
 
 		[TERMO_SYM_HOME]      = USER_ACTION_INPUT_HOME,
@@ -1858,51 +1944,6 @@ install_winch_handler (void)
 
 #ifdef WITH_X11
 
-static void
-app_set_input (Application *self, const gchar *text, gsize text_len)
-{
-	glong size;
-	gunichar *output = g_utf8_to_ucs4 (text, text_len, NULL, &size, NULL);
-
-	// XXX: signal invalid data?
-	if (!output)
-		return;
-
-	g_array_free (self->input, TRUE);
-	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
-	self->input_pos = 0;
-
-	gunichar *p = output;
-	gboolean last_was_space = false;
-	while (size--)
-	{
-		// Normalize whitespace, to cover OCR anomalies
-		gunichar c = *p++;
-		if (!g_unichar_isspace (c))
-			last_was_space = FALSE;
-		else if (last_was_space)
-			continue;
-		else
-		{
-			c = ' ';
-			last_was_space = TRUE;
-		}
-
-		// XXX: skip?  Might be some binary nonsense.
-		if (!g_unichar_isprint (c))
-			break;
-
-		g_array_insert_val (self->input, self->input_pos++, c);
-	}
-	g_free (output);
-
-	self->input_confirmed = FALSE;
-	app_search_for_entry (self);
-	app_redraw_top (self);
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 #include <xcb/xcb.h>
 #include <xcb/xfixes.h>
 
@@ -1949,20 +1990,6 @@ resolve_atom (xcb_connection_t *X, const char *atom)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-static void
-on_selection_text_received (SelectionWatch *self, const gchar *text)
-{
-	// Strip ASCII whitespace: this is compatible with UTF-8
-	while (g_ascii_isspace (*text))
-		text++;
-	gsize text_len = strlen (text);
-	while (text_len && g_ascii_isspace (text[text_len - 1]))
-		text_len--;
-
-	if (text_len)
-		app_set_input (self->app, text, text_len);
-}
 
 static gboolean
 read_utf8_property (SelectionWatch *self, xcb_window_t wid, xcb_atom_t property,
@@ -2052,7 +2079,7 @@ on_x11_selection_receive (SelectionWatch *self,
 		self->incr_failure = FALSE;
 	}
 	else if (read_utf8_property (self, e->requestor, e->property, NULL))
-		on_selection_text_received (self, self->buffer->str);
+		app_set_trimmed_input_if_not_empty (self->app, self->buffer->str);
 
 	free (gpr);
 	(void) xcb_delete_property (self->X, self->wid, e->property);
@@ -2076,7 +2103,7 @@ on_x11_property_notify (SelectionWatch *self, xcb_property_notify_event_t *e)
 	if (empty)
 	{
 		if (!self->incr_failure)
-			on_selection_text_received (self, self->buffer->str);
+			app_set_trimmed_input_if_not_empty (self->app, self->buffer->str);
 
 		self->in_progress = 0;
 		self->incr = FALSE;
