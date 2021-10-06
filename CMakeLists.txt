@@ -163,7 +163,7 @@ if (gtk_FOUND)
 endif ()
 
 # Tools
-set (tools add-pronunciation query-tool transform)
+set (tools tabfile add-pronunciation query-tool transform)
 foreach (tool ${tools})
 	add_executable (${tool} EXCLUDE_FROM_ALL
 		src/${tool}.c ${project_common_sources})

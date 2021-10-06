@@ -3,7 +3,7 @@
  *
  * The external filter needs to process NUL-separated textual entries.
  *
- * Example: transform input.info output -- perl -p0e s/bullshit/soykaf/g
+ * Example: transform input.ifo output -- perl -p0e s/bullshit/soykaf/g
  *
  * Copyright (c) 2020, Přemysl Eric Janouch <p@janouch.name>
  *
