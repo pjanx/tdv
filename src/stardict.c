@@ -867,11 +867,12 @@ stardict_dict_cmp_synonym (StardictDict *sd, const gchar *word, gint i)
 		g_array_index (synonyms, StardictSynonymEntry, i).word);
 }
 
-/// Return words for which the argument is a synonym of or NULL
+/// Return words of which the argument is a synonym or NULL
 /// if there are no such words.
 gchar **
 stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 {
+	GArray *collated = sd->priv->collated_synonyms;
 	GArray *synonyms = sd->priv->synonyms;
 	GArray *index = sd->priv->index;
 
@@ -879,26 +880,32 @@ stardict_dict_get_synonyms (StardictDict *sd, const gchar *word)
 		stardict_dict_cmp_synonym (sd, word, imid))
 
 	// Back off to the first matching entry
-	while (imid > 0 && !stardict_dict_cmp_synonym (sd, word, --imid))
-		;
+	while (imid > 0 && !stardict_dict_cmp_synonym (sd, word, imid - 1))
+		imid--;
 
 	GPtrArray *array = g_ptr_array_new ();
 
 	// And add all matching entries from that position on to the array
 	do
 	{
-		guint32 i = g_array_index
-			(synonyms, StardictSynonymEntry, ++imid).original_word;
+		guint32 i = sd->priv->collator
+			? g_array_index (synonyms, StardictSynonymEntry,
+				g_array_index (collated, guint32, imid)).original_word
+			: g_array_index (synonyms, StardictSynonymEntry,
+				imid).original_word;
+
 		// When we use a collator this will point to the original entry,
 		// otherwise it points to itself and this changes nothing
-		i = g_array_index
-			(sd->priv->index, StardictIndexEntry, i).reverse_index;
-		g_ptr_array_add (array, g_strdup (g_array_index
-			(index, StardictIndexEntry, i).name));
-	}
-	while ((guint) imid < synonyms->len - 1 && !stardict_strcmp (word,
-		g_array_index (synonyms, StardictSynonymEntry, imid + 1).word));
+		i = g_array_index (sd->priv->index, StardictIndexEntry,
+			i).reverse_index;
 
+		g_ptr_array_add (array,
+			g_strdup (g_array_index (index, StardictIndexEntry, i).name));
+	}
+	while ((guint) ++imid < synonyms->len
+		&& !stardict_dict_cmp_synonym (sd, word, imid));
+
+	g_ptr_array_add (array, NULL);
 	return (gchar **) g_ptr_array_free (array, FALSE);
 
 	BINARY_SEARCH_END
