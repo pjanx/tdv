@@ -25,10 +25,14 @@
 #include <glib.h>
 #include <gio/gio.h>
 
+#include <unicode/ucol.h>
+
+#include "config.h"
 #include "stardict.h"
 #include "stardict-private.h"
 #include "generator.h"
 #include "utils.h"
+
 
 static gboolean
 set_data_error (GError **error, const gchar *message)
@@ -119,6 +123,17 @@ transform (FILE *fsorted, Generator *generator, GError **error)
 	return TRUE;
 }
 
+static void
+validate_collation_locale (const gchar *locale)
+{
+	UErrorCode error = U_ZERO_ERROR;
+	UCollator *collator = ucol_open (locale, &error);
+	if (!collator)
+		fatal ("failed to create a collator for %s: %s\n",
+			locale, u_errorName (error));
+	ucol_close (collator);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -129,12 +144,49 @@ main (int argc, char *argv[])
 	GOptionContext *ctx = g_option_context_new ("output-basename < input");
 	g_option_context_set_summary (ctx,
 		"Create a StarDict dictionary from plaintext.");
+
+	StardictInfo template =
+	{
+		.same_type_sequence = "m",
+	};
+	GOptionEntry entries[] =
+	{
+		{ "book-name",   'b', 0, G_OPTION_ARG_STRING, &template.book_name,
+		  "Set the book name field", "TEXT" },
+		{ "author",      'a', 0, G_OPTION_ARG_STRING, &template.author,
+		  "Set the author field ", "NAME" },
+		{ "e-mail",      'e', 0, G_OPTION_ARG_STRING, &template.email,
+		  "Set the e-mail field", "ADDRESS" },
+		{ "website",     'w', 0, G_OPTION_ARG_STRING, &template.website,
+		  "Set the website field", "LINK" },
+		{ "description", 'd', 0, G_OPTION_ARG_STRING, &template.description,
+		  "Set the description field (newlines supported)", "TEXT" },
+		{ "date",        'D', 0, G_OPTION_ARG_STRING, &template.date,
+		  "Set the date field", "DATE" },
+		{ "collation",   'c', 0, G_OPTION_ARG_STRING, &template.collation,
+		  "Set the collation field (for ICU)", "LOCALE" },
+		{ }
+	};
+
+	g_option_context_add_main_entries (ctx, entries, GETTEXT_PACKAGE);
 	if (!g_option_context_parse (ctx, &argc, &argv, &error))
 		fatal ("Error: option parsing failed: %s\n", error->message);
-
 	if (argc != 2)
 		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
 	g_option_context_free (ctx);
+
+	if (!template.book_name)
+		template.book_name = argv[1];
+	if (template.description)
+	{
+		gchar **lines = g_strsplit (template.description, "\n", -1);
+		g_free (template.description);
+		gchar *in_one_line = g_strjoinv ("<br>", lines);
+		g_strfreev (lines);
+		template.description = in_one_line;
+	}
+	if (template.collation)
+		validate_collation_locale (template.collation);
 
 	// This actually implements stardict_strcmp(), POSIX-compatibly.
 	// Your sort(1) is not expected to be stable by default, like bsdsort is.
@@ -149,11 +201,7 @@ main (int argc, char *argv[])
 
 	StardictInfo *info = generator->info;
 	info->version = SD_VERSION_3_0_0;
-	info->book_name = g_strdup (argv[1]);
-	info->same_type_sequence = g_strdup ("m");
-
-	// This gets incremented each time an entry is finished
-	info->word_count = 0;
+	stardict_info_copy (info, &template);
 
 	if (!transform (fsorted, generator, &error)
 	 || !generator_finish (generator, &error))

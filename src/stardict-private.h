@@ -79,4 +79,6 @@ extern const struct stardict_ifo_key _stardict_ifo_keys[];
 /// Denotes the length of _stardict_ifo_keys.
 extern gsize _stardict_ifo_keys_length;
 
+void stardict_info_copy (StardictInfo *dest, const StardictInfo *src);
+
 #endif  // ! STARDICTPRIVATE_H

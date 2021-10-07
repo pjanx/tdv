@@ -250,30 +250,6 @@ worker (WorkerData *data)
 
 // --- Main --------------------------------------------------------------------
 
-/// Copy the contents of one StardictInfo object into another.  Ignores path.
-static void
-stardict_info_copy (StardictInfo *dest, const StardictInfo *src)
-{
-	dest->version = src->version;
-
-	guint i;
-	for (i = 0; i < _stardict_ifo_keys_length; i++)
-	{
-		const struct stardict_ifo_key *key = &_stardict_ifo_keys[i];
-		if (key->type == IFO_STRING)
-		{
-			gchar **p = &G_STRUCT_MEMBER (gchar *, dest, key->offset);
-			gchar  *q =  G_STRUCT_MEMBER (gchar *, src,  key->offset);
-
-			g_free (*p);
-			*p = q ? g_strdup (q) : NULL;
-		}
-		else
-			G_STRUCT_MEMBER (gulong, dest, key->offset) =
-				G_STRUCT_MEMBER (gulong, src, key->offset);
-	}
-}
-
 int
 main (int argc, char *argv[])
 {
