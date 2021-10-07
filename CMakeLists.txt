@@ -172,6 +172,21 @@ endforeach ()
 
 add_custom_target (tools DEPENDS ${tools})
 
+# Example dictionaries
+file (GLOB dicts_scripts "${PROJECT_SOURCE_DIR}/dicts/*.sh")
+set (dicts_targets)
+foreach (dict_script ${dicts_scripts})
+	get_filename_component (dict_name "${dict_script}" NAME_WE)
+	list (APPEND dicts_targets "dicts-${dict_name}")
+	add_custom_target (dicts-${dict_name}
+		COMMAND sh -c "PATH=.:$PATH \"$0\"" "${dict_script}"
+		DEPENDS tabfile
+		COMMENT "Generating sample dictionary ${dict_name}"
+		VERBATIM)
+endforeach ()
+
+add_custom_target (dicts DEPENDS ${dicts_targets})
+
 # The files to be installed
 include (GNUInstallDirs)
 install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -212,4 +227,3 @@ set (CPACK_SOURCE_IGNORE_FILES "/\\\\.git;/build;/CMakeLists.txt.user")
 set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}")
 
 include (CPack)
-

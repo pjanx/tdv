@@ -101,13 +101,14 @@ Dictionaries
 Unfortunately this application only really works with specific dictionaries.
 Word definitions have to be in plain text, separated by newlines.
 
+The `make dicts` command will build some examples from freely available sources.
+
 You may use the included transform tool to transform existing dictionaries that
 are almost useful as they are, e.g. after stripping XML tags.  You might want to
 fix up the `sametypesequence` of the resulting '.ifo' file afterwards, and run
 dictzip on the resulting '.dict' file.
 
-https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[
-CZ <--> { EN, DE, PL, RU } dictionaries]
+https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--> EN/DE/PL/RU dictionaries]
 
 Contributing and Support
 ------------------------
