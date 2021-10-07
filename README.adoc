@@ -8,25 +8,19 @@ of this kind, GUI or not, and thus decided to write my own.
 
 The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
-software.  I wasn't able to reuse _anything_ for StarDict.
+software.
 
 image::sdtui.png[align="center"]
-
-Further Development
--------------------
-While I've been successfully using sdtui for a long time now, some work has to
-be done yet before the software can be considered fit for inclusion in regular
-Linux and/or BSD distributions.  Help is much appreciated.
-
-An approximate list of things that need to be resolved:
-
- - the tab bar and the text input field don't handle overflows well
- - figure out a way to become capable of displaying most StarDict dictionaries
 
 Packages
 --------
 Regular releases are sporadic.  git master should be stable enough.  You can get
 a package with the latest development version from Archlinux's AUR.
+
+Documentation
+-------------
+See the link:docs/sdtui.1.adoc[man page] for information about usage.
+The rest of this README will concern itself with externalities.
 
 Building and Running
 --------------------
@@ -49,66 +43,38 @@ Or you can try telling CMake to make a package for you.  For Debian it is:
  $ cpack -G DEB
  # dpkg -i sdtui-*.deb
 
-Having the program installed, simply run it with a StarDict '.ifo' file as an
-argument.  It is however highly recommended to configure it, see below.
-
-Extensions
-----------
-As the original StarDict is a bit of a clusterfuck with regard to collation of
-dictionary entries, I had to introduce an additional `collation` field into the
-'.ifo' file.  When sdtui discovers this field while reading the dictionary, it
-automatically reorders the index according to that locale (e.g. "cs_CZ").
-This operation may take a little while, in the order of seconds.
-
-Configuration
--------------
-To get a nicer look in 256color terminals, create _~/.config/sdtui/sdtui.conf_
-with the following.  Note that it is intended for black-on-white terminals.
-
-....
-[Settings]
-center-search = true
-underline-last = false
-hl-common-prefix = true
-watch-selection = true
-
-[Colors]
-header = reverse
-header-active = ul
-search = ul
-even = 16 231
-odd = 16 255
-....
-
-The `watch-selection` option makes the application watch the X11 primary
-selection for changes and automatically search for selected text.  This feature
-requires XCB.  Wayland is currently unsupported, but would require a compositor
-supporting the wlr-data-control protocol.  Luckily, some compositors, such as
-Sway, synchronize selections with Xwayland.
-
-You can also set up some dictionaries to be loaded at startup automatically:
-
-....
-[Dictionaries]
-name1 = ~/path/to/dict.ifo
-name2 = ~/another/dict.ifo
-....
-
-The names define how they will appear in the tab bar.
+Having the program installed, simply run it with a StarDict '.ifo' file as
+an argument.  It is, however, preferable to
+link:docs/sdtui.1.adoc#_configuration[configure it] to load your dictionaries
+automatically.
 
 Dictionaries
 ------------
-Unfortunately this application only really works with specific dictionaries.
+Unfortunately, this application only really works with specific dictionaries.
 Word definitions have to be in plain text, separated by newlines.
 
 The `make dicts` command will build some examples from freely available sources.
 
-You may use the included transform tool to transform existing dictionaries that
-are almost useful as they are, e.g. after stripping XML tags.  You might want to
-fix up the `sametypesequence` of the resulting '.ifo' file afterwards, and run
-dictzip on the resulting '.dict' file.
+You may use the included 'transform' tool to convert already existing
+dictionaries that are almost good as they are, e.g., after stripping XML tags.
+You might want to fix up the `sametypesequence` of the resulting '.ifo' file
+afterwards, and run 'dictzip' on the resulting '.dict' file to make it compact.
 
 https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--> EN/DE/PL/RU dictionaries]
+
+Further Development
+-------------------
+While I've been successfully using 'sdtui' for many years now, some work has to
+be done yet before the software can be considered fit for inclusion in regular
+Linux and/or BSD distributions.
+
+An approximate list of things that need to be resolved is as follows:
+
+ - the tab bar and the text input field don't handle overflows well,
+ - figure out a way to become capable of displaying most StarDict dictionaries.
+
+Given the entangledness of this codebase, issues with the file format,
+and general undesirability of terminal UIs, it might be better to start anew.
 
 Contributing and Support
 ------------------------

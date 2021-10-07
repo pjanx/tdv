@@ -14,16 +14,13 @@ Synopsis
 
 Description
 -----------
-*sdtui* is a StarDict dictionary viewer custom tailored for viewing translation
-dictionaries, using a simple curses-based terminal UI.
+*sdtui* is a StarDict dictionary viewer, custom-tailored for translation
+dictionaries, with a simple curses-based terminal UI.
 
-The program expects to find on its command line the path to a dictionary's
-_.ifo_ file, which contains further information required to load the dictionary.
-
-Some options as well as dictionaries to load on start-up by default can be
-specified in a configuration file.  See the README for an example.
-
-// FIXME: the README isn't even installed, so this manual isn't very useful
+Without any command line arguments, the program expects to find a list of
+dictionaries to load on start-up in its configuration file.  The _.ifo_ files
+contain information required to load dictionaries from their accompanying
+database files.
 
 Options
 -------
@@ -33,13 +30,65 @@ Options
 *-V*, *--version*::
 	Output version information and exit.
 
+Configuration
+-------------
+You can start your _sdtui.conf_ file with the following snippet:
+
+ [Settings]
+ center-search = true     # Ensure visibility of preceding entries?
+ underline-last = false   # Underline the last line of entries?
+ hl-common-prefix = true  # Highlight the longest common prefix?
+ watch-selection = true   # Watch X11 selection for changes?
+
+The _watch-selection_ option makes the application watch the X11 PRIMARY
+selection for changes and automatically search for any selected text.
+This feature requires XCB.  Wayland is currently unsupported,
+but would require a compositor supporting the wlr-data-control protocol.
+Luckily, some compositors, such as Sway, synchronize selections with Xwayland.
+
+To set up automatically loaded dictionaries, use the following scheme:
+
+[subs="normal"]
+ [Dictionaries]
+ _name 1_ = __~/path/to/dict.ifo__
+ _name 2_ = __~/another/dict.ifo__
+
+The left-hand side keys define their appearance in the tab bar.
+
+Finally, to make the program look nicer in 256color black-on-white terminals,
+rather than rely on the universal default, try:
+
+ [Colors]
+ header = reverse
+ header-active = ul
+ search = ul
+ even = 16 231
+ odd = 16 255
+
+Terminal attributes are accepted in a format similar to that of *git-config*(1),
+only named colours aren't supported.
+
+Extensions
+----------
+Because the StarDict file format is a bit of a clusterfuck with regard to
+collation of dictionary entries, this software introduces an additional,
+optional "collation" field into the '.ifo' file.  When *sdtui* discovers this
+field while reading a dictionary, it automatically reorders the index according
+to that locale (e.g., "cs_CZ").  This operation may take a little while,
+in the order of seconds.
+
 Files
 -----
+*sdtui* follows the XDG Base Directory Specification.
+
 _~/.config/sdtui/sdtui.conf_::
-	The configuration file, in which you can configure some settings, terminal
-	colours and the set of dictionaries to be loaded automatically on start-up.
+	The configuration file.
 
 Reporting bugs
 --------------
 Use https://git.janouch.name/p/sdtui to report bugs, request features,
 or submit pull requests.
+
+See also
+--------
+*dictzip*(1)
