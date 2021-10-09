@@ -182,6 +182,7 @@ main (int argc, char *argv[])
 		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
 	g_option_context_free (ctx);
 
+	template.version = SD_VERSION_3_0_0;
 	template.same_type_sequence = pango_markup
 		? (char[]) { STARDICT_FIELD_PANGO, 0 }
 		: (char[]) { STARDICT_FIELD_MEANING, 0 };
@@ -211,9 +212,7 @@ main (int argc, char *argv[])
 			error->message);
 
 	StardictInfo *info = generator->info;
-	info->version = SD_VERSION_3_0_0;
 	stardict_info_copy (info, &template);
-
 	if (!transform (fsorted, generator, &error)
 	 || !generator_finish (generator, &error))
 		fatal ("Error: failed to write the dictionary: %s\n", error->message);
