@@ -173,7 +173,7 @@ endforeach ()
 add_custom_target (tools DEPENDS ${tools})
 
 # Example dictionaries
-file (GLOB dicts_scripts "${PROJECT_SOURCE_DIR}/dicts/*.sh")
+file (GLOB dicts_scripts "${PROJECT_SOURCE_DIR}/dicts/*.*")
 set (dicts_targets)
 foreach (dict_script ${dicts_scripts})
 	get_filename_component (dict_name "${dict_script}" NAME_WE)
