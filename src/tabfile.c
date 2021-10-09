@@ -24,6 +24,7 @@
 
 #include <glib.h>
 #include <gio/gio.h>
+#include <pango/pango.h>
 
 #include <unicode/ucol.h>
 
@@ -93,6 +94,11 @@ import_line (Generator *generator, gchar *line, gsize len, GError **error)
 	 || !inplace_unescape (separator, error))
 		return FALSE;
 
+	if (generator->info->same_type_sequence
+	 && *generator->info->same_type_sequence == STARDICT_FIELD_PANGO
+	 && !pango_parse_markup (separator, -1, 0, NULL, NULL, NULL, error))
+		return FALSE;
+
 	generator_begin_entry (generator);
 	return generator_write_string (generator, separator, TRUE, error)
 		&& generator_finish_entry (generator, line, error);
@@ -145,12 +151,13 @@ main (int argc, char *argv[])
 	g_option_context_set_summary (ctx,
 		"Create a StarDict dictionary from plaintext.");
 
-	StardictInfo template =
-	{
-		.same_type_sequence = "m",
-	};
+	gboolean pango_markup = FALSE;
+	StardictInfo template = {};
 	GOptionEntry entries[] =
 	{
+		{ "pango",       'p', 0, G_OPTION_ARG_NONE,   &pango_markup,
+		  "Entries use Pango markup", NULL },
+
 		{ "book-name",   'b', 0, G_OPTION_ARG_STRING, &template.book_name,
 		  "Set the book name field", "TEXT" },
 		{ "author",      'a', 0, G_OPTION_ARG_STRING, &template.author,
@@ -174,6 +181,10 @@ main (int argc, char *argv[])
 	if (argc != 2)
 		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
 	g_option_context_free (ctx);
+
+	template.same_type_sequence = pango_markup
+		? (char[]) { STARDICT_FIELD_PANGO, 0 }
+		: (char[]) { STARDICT_FIELD_MEANING, 0 };
 
 	if (!template.book_name)
 		template.book_name = argv[1];
