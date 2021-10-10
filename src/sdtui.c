@@ -192,9 +192,8 @@ typedef struct application              Application;
 
 struct view_entry
 {
-	gchar   * word;                     ///< Word
-	gchar  ** definitions;              ///< Word definition entries
-	gsize     definitions_length;       ///< Length of the @a definitions array
+	gchar     * word;                   ///< Word
+	GPtrArray * definitions;            ///< Word definition entries (gchar *)
 };
 
 struct dictionary
@@ -269,14 +268,18 @@ app_char_width (Application *app, gunichar c)
 
 /// Splits the entry and adds it to a pointer array.
 static void
-view_entry_split_add (GPtrArray *out, const gchar *text)
+view_entry_split_add (ViewEntry *ve, const gchar *text)
 {
 	const gchar *p = text, *nl;
 	for (; (nl = strchr (p, '\n')); p = nl + 1)
 		if (nl != p)
-			g_ptr_array_add (out, g_strndup (p, nl - p));
+		{
+			g_ptr_array_add (ve->definitions, g_strndup (p, nl - p));
+		}
 	if (*p)
-		g_ptr_array_add (out, g_strdup (p));
+	{
+		g_ptr_array_add (ve->definitions, g_strdup (p));
+	}
 }
 
 /// Decomposes a dictionary entry into the format we want.
@@ -291,27 +294,26 @@ view_entry_new (StardictIterator *iterator)
 	StardictEntry *entry = stardict_iterator_get_entry (iterator);
 	g_return_val_if_fail (entry != NULL, NULL);
 
-	GPtrArray *definitions = g_ptr_array_new ();
-	const GList *fields = stardict_entry_get_fields (entry);
+	ve->definitions = g_ptr_array_new_with_free_func (g_free);
 	gboolean found_anything_displayable = FALSE;
-	while (fields)
+	for (const GList *fields = stardict_entry_get_fields (entry); fields; )
 	{
 		const StardictEntryField *field = fields->data;
 		switch (field->type)
 		{
 		case STARDICT_FIELD_MEANING:
-			view_entry_split_add (definitions, field->data);
+			view_entry_split_add (ve, field->data);
 			found_anything_displayable = TRUE;
 			break;
 		case STARDICT_FIELD_PANGO:
 		{
-			char *text;
+			gchar *text;
 			if (!pango_parse_markup (field->data, -1,
 				0, NULL, &text, NULL, NULL))
 				text = g_strdup_printf ("<%s>", _("error in entry"));
-			view_entry_split_add (definitions, text);
-			found_anything_displayable = TRUE;
+			view_entry_split_add (ve, text);
 			g_free (text);
+			found_anything_displayable = TRUE;
 			break;
 		}
 		case STARDICT_FIELD_PHONETIC:
@@ -326,13 +328,10 @@ view_entry_new (StardictIterator *iterator)
 	g_object_unref (entry);
 
 	if (!found_anything_displayable)
-		g_ptr_array_add (definitions,
+		g_ptr_array_add (ve->definitions,
 			g_strdup_printf ("<%s>", _("no usable field found")));
 
 	ve->word = g_string_free (word, FALSE);
-	ve->definitions_length = definitions->len;
-	g_ptr_array_add (definitions, NULL);
-	ve->definitions = (gchar **) g_ptr_array_free (definitions, FALSE);
 	return ve;
 }
 
@@ -341,7 +340,7 @@ static void
 view_entry_free (ViewEntry *ve)
 {
 	g_free (ve->word);
-	g_strfreev (ve->definitions);
+	g_ptr_array_free (ve->definitions, TRUE);
 	g_slice_free1 (sizeof *ve, ve);
 }
 
@@ -396,7 +395,7 @@ app_reload_view (Application *self)
 	while (remains > 0 && stardict_iterator_is_valid (iterator))
 	{
 		ViewEntry *entry = view_entry_new (iterator);
-		remains -= entry->definitions_length;
+		remains -= entry->definitions->len;
 		g_ptr_array_add (self->entries, entry);
 		stardict_iterator_next (iterator);
 	}
@@ -1028,7 +1027,7 @@ app_redraw_view (Application *self)
 	for (i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
-		for (; k < ve->definitions_length; k++)
+		for (; k < ve->definitions->len; k++)
 		{
 			int attrs = ((self->top_position + i) & 1)
 				? APP_ATTR (ODD) : APP_ATTR (EVEN);
@@ -1037,7 +1036,7 @@ app_redraw_view (Application *self)
 				app_merge_attributes (&attrs, self->focused
 					? APP_ATTR (SELECTION) : APP_ATTR (DEFOCUSED));
 
-			gboolean last = k + 1 == ve->definitions_length;
+			gboolean last = k + 1 == ve->definitions->len;
 			if (last && self->underline_last)
 				attrs |= A_UNDERLINE;
 
@@ -1059,7 +1058,8 @@ app_redraw_view (Application *self)
 
 			row_buffer_init (&buf, self);
 			row_buffer_append (&buf, " ", attrs);
-			row_buffer_append (&buf, ve->definitions[k], attrs);
+			row_buffer_append (&buf,
+				g_ptr_array_index (ve->definitions, k), attrs);
 			row_buffer_finish (&buf, COLS - left_width, attrs);
 
 			if ((gint) ++shown == LINES - TOP_BAR_CUTOFF)
@@ -1104,7 +1104,7 @@ app_count_view_items (Application *self)
 	for (i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *entry = g_ptr_array_index (self->entries, i);
-		n_definitions += entry->definitions_length;
+		n_definitions += entry->definitions->len;
 	}
 	return n_definitions;
 }
@@ -1128,16 +1128,16 @@ app_scroll_up (Application *self, guint n)
 			break;
 
 		ViewEntry *ve = prepend_entry (self, --self->top_position);
-		self->top_offset = ve->definitions_length - 1;
-		n_definitions += ve->definitions_length;
+		self->top_offset = ve->definitions->len - 1;
+		n_definitions += ve->definitions->len;
 
 		// Remove the last entry if not shown
 		ViewEntry *last_entry =
 			g_ptr_array_index (self->entries, self->entries->len - 1);
 		if ((gint) (n_definitions - self->top_offset
-			- last_entry->definitions_length) >= LINES - TOP_BAR_CUTOFF)
+			- last_entry->definitions->len) >= LINES - TOP_BAR_CUTOFF)
 		{
-			n_definitions -= last_entry->definitions_length;
+			n_definitions -= last_entry->definitions->len;
 			g_ptr_array_remove_index_fast
 				(self->entries, self->entries->len - 1);
 		}
@@ -1161,9 +1161,9 @@ app_scroll_down (Application *self, guint n)
 		guint to_be_definitions = n_definitions;
 
 		ViewEntry *first_entry = g_ptr_array_index (self->entries, 0);
-		if (++to_be_offset >= first_entry->definitions_length)
+		if (++to_be_offset >= first_entry->definitions->len)
 		{
-			to_be_definitions -= first_entry->definitions_length;
+			to_be_definitions -= first_entry->definitions->len;
 			to_be_offset = 0;
 		}
 		if ((gint) (to_be_definitions - to_be_offset) < LINES - TOP_BAR_CUTOFF)
@@ -1174,7 +1174,7 @@ app_scroll_down (Application *self, guint n)
 				break;
 
 			g_ptr_array_add (self->entries, new_entry);
-			to_be_definitions += new_entry->definitions_length;
+			to_be_definitions += new_entry->definitions->len;
 		}
 		if (to_be_offset == 0)
 		{
@@ -1205,7 +1205,7 @@ app_one_entry_up (Application *self)
 	for (i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
-		gint new_first = first + ve->definitions_length;
+		gint new_first = first + ve->definitions->len;
 		if (new_first >= (gint) self->selected)
 			break;
 		first = new_first;
@@ -1233,7 +1233,7 @@ app_one_entry_down (Application *self)
 	for (i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
-		first += ve->definitions_length;
+		first += ve->definitions->len;
 		if (first > (gint) self->selected)
 			break;
 	}
@@ -1369,9 +1369,9 @@ app_get_current_definition (Application *self)
 	for (guint i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
-		if (offset < ve->definitions_length)
-			return ve->definitions[offset];
-		offset -= ve->definitions_length;
+		if (offset < ve->definitions->len)
+			return g_ptr_array_index (ve->definitions, offset);
+		offset -= ve->definitions->len;
 	}
 	return NULL;
 }
