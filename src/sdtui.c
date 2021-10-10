@@ -349,6 +349,7 @@ view_entry_split_add_xdxf (ViewEntry *ve, const gchar *xml)
 {
 	// Trivially filter out all tags we can't quite handle,
 	// then parse the reduced XML as Pango markup--this seems to work well.
+	// Given the nature of our display, also skip keyword elements.
 	GString *filtered = g_string_new ("");
 	while (*xml)
 	{
@@ -356,7 +357,7 @@ view_entry_split_add_xdxf (ViewEntry *ve, const gchar *xml)
 		if (*xml != '<' || !*(p = xml + 1 + (xml[1] == '/'))
 		 || (strchr ("biu", *p) && p[1] == '>') || !(p = strchr (p, '>')))
 			g_string_append_c (filtered, *xml++);
-		else
+		else if (xml[1] != 'k' || xml[2] != '>' || !(xml = strstr (p, "</k>")))
 			xml = ++p;
 	}
 	view_entry_split_add_pango (ve, filtered->str);
