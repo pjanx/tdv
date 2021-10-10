@@ -48,6 +48,10 @@
 #define TOP_BAR_CUTOFF  2               ///< How many lines are reserved on top
 #define APP_TITLE  PROJECT_NAME " "     ///< Left top corner
 
+#ifndef A_ITALIC
+#define A_ITALIC 0
+#endif
+
 // --- Utilities ---------------------------------------------------------------
 
 static size_t
@@ -269,20 +273,75 @@ app_char_width (Application *app, gunichar c)
 
 /// Splits the entry and adds it to a pointer array.
 static void
-view_entry_split_add (ViewEntry *ve, const gchar *text)
+view_entry_split_add (ViewEntry *ve, const gchar *text, const chtype *attrs)
 {
 	const gchar *p = text, *nl;
 	for (; (nl = strchr (p, '\n')); p = nl + 1)
 		if (nl != p)
 		{
 			g_ptr_array_add (ve->definitions, g_strndup (p, nl - p));
-			g_ptr_array_add (ve->formatting, NULL);
+			g_ptr_array_add (ve->formatting, !attrs ? NULL
+				: g_memdup2 (attrs + (p - text), (nl - p) * sizeof *attrs));
 		}
 	if (*p)
 	{
 		g_ptr_array_add (ve->definitions, g_strdup (p));
-		g_ptr_array_add (ve->formatting, NULL);
+		g_ptr_array_add (ve->formatting, !attrs ? NULL
+			: g_memdup2 (attrs + (p - text), strlen (p) * sizeof *attrs));
 	}
+}
+
+static chtype
+app_pango_iterator_to_attrs (PangoAttrIterator *iterator)
+{
+	chtype attrs = 0;
+	PangoAttrInt *attr = NULL;
+	if ((attr = (PangoAttrInt *) pango_attr_iterator_get (iterator,
+			PANGO_ATTR_WEIGHT)) && attr->value >= PANGO_WEIGHT_BOLD)
+		attrs |= A_BOLD;
+	if ((attr = (PangoAttrInt *) pango_attr_iterator_get (iterator,
+			PANGO_ATTR_UNDERLINE)) && attr->value == PANGO_UNDERLINE_SINGLE)
+		attrs |= A_UNDERLINE;
+	if ((attr = (PangoAttrInt *) pango_attr_iterator_get (iterator,
+			PANGO_ATTR_STYLE)) && attr->value == PANGO_STYLE_ITALIC)
+		attrs |= A_ITALIC;
+	return attrs;
+}
+
+static void
+view_entry_split_add_pango (ViewEntry *ve, const gchar *markup)
+{
+	// This function skips leading whitespace, but it's the canonical one
+	gchar *text = NULL;
+	PangoAttrList *attrs = NULL;
+	if (!pango_parse_markup (markup, -1, 0, &attrs, &text, NULL, NULL))
+	{
+		gchar *replacement = g_strdup_printf ("<%s>", _("error in entry"));
+		view_entry_split_add (ve, replacement, NULL);
+		g_free (replacement);
+		return;
+	}
+
+	PangoAttrIterator *iterator = pango_attr_list_get_iterator (attrs);
+	chtype *formatting = g_malloc0_n (strlen (text), sizeof *formatting);
+	do
+	{
+		gint start = 0, end = 0;
+		pango_attr_iterator_range (iterator, &start, &end);
+		if (end == G_MAXINT)
+			end = strlen (text);
+
+		chtype attrs = app_pango_iterator_to_attrs (iterator);
+		while (start < end)
+			formatting[start++] = attrs;
+	}
+	while (pango_attr_iterator_next (iterator));
+
+	view_entry_split_add (ve, text, formatting);
+	g_free (formatting);
+	pango_attr_iterator_destroy (iterator);
+	pango_attr_list_unref (attrs);
+	g_free (text);
 }
 
 /// Decomposes a dictionary entry into the format we want.
@@ -306,20 +365,13 @@ view_entry_new (StardictIterator *iterator)
 		switch (field->type)
 		{
 		case STARDICT_FIELD_MEANING:
-			view_entry_split_add (ve, field->data);
+			view_entry_split_add (ve, field->data, NULL);
 			found_anything_displayable = TRUE;
 			break;
 		case STARDICT_FIELD_PANGO:
-		{
-			gchar *text;
-			if (!pango_parse_markup (field->data, -1,
-				0, NULL, &text, NULL, NULL))
-				text = g_strdup_printf ("<%s>", _("error in entry"));
-			view_entry_split_add (ve, text);
-			g_free (text);
+			view_entry_split_add_pango (ve, field->data);
 			found_anything_displayable = TRUE;
 			break;
-		}
 		case STARDICT_FIELD_PHONETIC:
 			g_string_append_printf (word, " /%s/", (const gchar *) field->data);
 			break;
@@ -433,9 +485,7 @@ app_load_color (Application *self, GKeyFile *kf, const gchar *name, int id)
 		else if (!strcmp (*it, "ul"))      attrs.attrs |= A_UNDERLINE;
 		else if (!strcmp (*it, "blink"))   attrs.attrs |= A_BLINK;
 		else if (!strcmp (*it, "reverse")) attrs.attrs |= A_REVERSE;
-#ifdef A_ITALIC
 		else if (!strcmp (*it, "italic"))  attrs.attrs |= A_ITALIC;
-#endif  // A_ITALIC
 	}
 	g_strfreev (values);
 
