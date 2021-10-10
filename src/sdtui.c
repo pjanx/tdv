@@ -344,6 +344,25 @@ view_entry_split_add_pango (ViewEntry *ve, const gchar *markup)
 	g_free (text);
 }
 
+static void
+view_entry_split_add_xdxf (ViewEntry *ve, const gchar *xml)
+{
+	// Trivially filter out all tags we can't quite handle,
+	// then parse the reduced XML as Pango markup--this seems to work well.
+	GString *filtered = g_string_new ("");
+	while (*xml)
+	{
+		const gchar *p = NULL;
+		if (*xml != '<' || !*(p = xml + 1 + (xml[1] == '/'))
+		 || (strchr ("biu", *p) && p[1] == '>') || !(p = strchr (p, '>')))
+			g_string_append_c (filtered, *xml++);
+		else
+			xml = ++p;
+	}
+	view_entry_split_add_pango (ve, filtered->str);
+	g_string_free (filtered, TRUE);
+}
+
 /// Decomposes a dictionary entry into the format we want.
 static ViewEntry *
 view_entry_new (StardictIterator *iterator)
@@ -370,6 +389,10 @@ view_entry_new (StardictIterator *iterator)
 			break;
 		case STARDICT_FIELD_PANGO:
 			view_entry_split_add_pango (ve, field->data);
+			found_anything_displayable = TRUE;
+			break;
+		case STARDICT_FIELD_XDXF:
+			view_entry_split_add_xdxf (ve, field->data);
 			found_anything_displayable = TRUE;
 			break;
 		case STARDICT_FIELD_PHONETIC:
