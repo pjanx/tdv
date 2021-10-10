@@ -194,6 +194,7 @@ struct view_entry
 {
 	gchar     * word;                   ///< Word
 	GPtrArray * definitions;            ///< Word definition entries (gchar *)
+	GPtrArray * formatting;             ///< chtype * or NULL per definition
 };
 
 struct dictionary
@@ -275,10 +276,12 @@ view_entry_split_add (ViewEntry *ve, const gchar *text)
 		if (nl != p)
 		{
 			g_ptr_array_add (ve->definitions, g_strndup (p, nl - p));
+			g_ptr_array_add (ve->formatting, NULL);
 		}
 	if (*p)
 	{
 		g_ptr_array_add (ve->definitions, g_strdup (p));
+		g_ptr_array_add (ve->formatting, NULL);
 	}
 }
 
@@ -295,6 +298,7 @@ view_entry_new (StardictIterator *iterator)
 	g_return_val_if_fail (entry != NULL, NULL);
 
 	ve->definitions = g_ptr_array_new_with_free_func (g_free);
+	ve->formatting = g_ptr_array_new_with_free_func (g_free);
 	gboolean found_anything_displayable = FALSE;
 	for (const GList *fields = stardict_entry_get_fields (entry); fields; )
 	{
@@ -341,6 +345,7 @@ view_entry_free (ViewEntry *ve)
 {
 	g_free (ve->word);
 	g_ptr_array_free (ve->definitions, TRUE);
+	g_ptr_array_free (ve->formatting, TRUE);
 	g_slice_free1 (sizeof *ve, ve);
 }
 
@@ -777,10 +782,11 @@ row_buffer_init (RowBuffer *self, Application *app)
 
 /// Replace invalid chars and push all codepoints to the array w/ attributes.
 static void
-row_buffer_append (RowBuffer *self, const gchar *str, chtype attrs)
+row_buffer_append_length (RowBuffer *self,
+	const gchar *text, glong length, chtype attrs)
 {
 	glong ucs4_len;
-	gunichar *ucs4 = g_utf8_to_ucs4_fast (str, -1, &ucs4_len);
+	gunichar *ucs4 = g_utf8_to_ucs4_fast (text, length, &ucs4_len);
 	for (glong i = 0; i < ucs4_len; i++)
 	{
 		// XXX: this is very crude as it disrespects combining marks
@@ -791,6 +797,47 @@ row_buffer_append (RowBuffer *self, const gchar *str, chtype attrs)
 		self->total_width += rc.width;
 	}
 	g_free (ucs4);
+}
+
+static void
+row_buffer_append (RowBuffer *self, const gchar *text, chtype attrs)
+{
+	row_buffer_append_length (self, text, -1, attrs);
+}
+
+/// Combine attributes, taking care to replace colour bits entirely
+static void
+row_buffer_merge_attributes (chtype *target, int merged)
+{
+	if (merged & A_COLOR)
+		*target = (*target & ~A_COLOR) | merged;
+	else
+		*target |= merged;
+}
+
+static void
+row_buffer_append_with_formatting (RowBuffer *self,
+	const gchar *text, const chtype *formatting, chtype default_attrs)
+{
+	if (!formatting)
+	{
+		row_buffer_append (self, text, default_attrs);
+		return;
+	}
+
+	while (*text)
+	{
+		glong chunk_length = 1;
+		while (text[chunk_length] && formatting[chunk_length] == *formatting)
+			chunk_length++;
+
+		chtype merged = default_attrs;
+		row_buffer_merge_attributes (&merged, *formatting);
+		row_buffer_append_length (self, text, chunk_length, merged);
+
+		text += chunk_length;
+		formatting += chunk_length;
+	}
 }
 
 /// Pop as many codepoints as needed to free up "space" character cells.
@@ -995,16 +1042,6 @@ app_show_help (Application *self)
 	app_show_message (self, lines, G_N_ELEMENTS (lines));
 }
 
-/// Combine attributes, taking care to replace colour bits entirely
-static void
-app_merge_attributes (int *target, int merged)
-{
-	if (merged & A_COLOR)
-		*target = (*target & ~A_COLOR) | merged;
-	else
-		*target |= merged;
-}
-
 /// Redraw the dictionary view.
 static void
 app_redraw_view (Application *self)
@@ -1029,11 +1066,11 @@ app_redraw_view (Application *self)
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
 		for (; k < ve->definitions->len; k++)
 		{
-			int attrs = ((self->top_position + i) & 1)
+			chtype attrs = ((self->top_position + i) & 1)
 				? APP_ATTR (ODD) : APP_ATTR (EVEN);
 
 			if (shown == self->selected)
-				app_merge_attributes (&attrs, self->focused
+				row_buffer_merge_attributes (&attrs, self->focused
 					? APP_ATTR (SELECTION) : APP_ATTR (DEFOCUSED));
 
 			gboolean last = k + 1 == ve->definitions->len;
@@ -1058,8 +1095,9 @@ app_redraw_view (Application *self)
 
 			row_buffer_init (&buf, self);
 			row_buffer_append (&buf, " ", attrs);
-			row_buffer_append (&buf,
-				g_ptr_array_index (ve->definitions, k), attrs);
+			row_buffer_append_with_formatting (&buf,
+				g_ptr_array_index (ve->definitions, k),
+				g_ptr_array_index (ve->formatting, k), attrs);
 			row_buffer_finish (&buf, COLS - left_width, attrs);
 
 			if ((gint) ++shown == LINES - TOP_BAR_CUTOFF)
