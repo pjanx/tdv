@@ -2,20 +2,28 @@
 # GNU/FDL English-Czech dictionary, see https://www.svobodneslovniky.cz/
 curl -Lo- https://www.svobodneslovniky.cz/data/en-cs.txt.gz | \
 zcat | grep -v ^# | sed 's/\\//g' | perl -CSD -F\\t -le '
-	sub e { shift =~ s/\\/\\\\/gr =~ s/\n/\\n/gr =~ s/\t/\\t/gr }
+	sub tabesc { shift =~ s/\\/\\\\/gr =~ s/\n/\\n/gr =~ s/\t/\\t/gr }
 	sub w {
-		open(my $f, "|-", "tabfile gnu-fdl-$_[0]") or die $!;
-		print $f e($k) . "\t" . e(join("\n", @$v))
-			while ($k, $v) = each %{$_[1]};
+		my ($name, $dict, $collation) = @_;
+		open(my $f, "|-", "tabfile", "--pango", "--collation=$collation",
+			"--website=https://www.svobodneslovniky.cz",
+			"gnu-fdl-$name") or die $!;
+		print $f tabesc($keyword) . "\t" . tabesc(join("\n", @$defs))
+			while ($keyword, $defs) = each %{$dict};
 		close($f);
 	}
-	my ($en, $cz, $notes, $special, $translator) = @F;
-	if ($cz) {
+	sub xmlesc { shift =~ s/&/&amp;/gr =~ s/</&lt;/gr =~ s/>/&gt;/gr }
+	sub entry {
+		my ($definition, $notes) = map {xmlesc($_)} @_;
+		$notes ? "$definition <i>$notes</i>" : $definition;
+	}
+	my ($en, $cs, $notes, $special, $translator) = @F;
+	if ($cs) {
 		$notes =~ s/\w+:\s?//g;          # remove word classes
 		$notes =~ s/(\w+\.)(?!])/($1)/;  # quote "pl."
-		push(@{$encz{$en}}, $notes ? "$cz " . $notes : $cz);
-		push(@{$czen{$cz}}, $notes ? "$en " . $notes : $en);
+		push(@{$encs{$en}}, entry($cs, $notes));
+		push(@{$csen{$cs}}, entry($en, $notes));
 	} END {
-		w("en-cz", \%encz);
-		w("cz-en", \%czen);
+		w("en-cz", \%encs, "en");
+		w("cz-en", \%csen, "cs");
 	}'
