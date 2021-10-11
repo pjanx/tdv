@@ -7,8 +7,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: sdtui 0.1.0\n"
-"Report-Msgid-Bugs-To: https://github.com/pjanouch/sdtui/issues\n"
-"POT-Creation-Date: 2016-09-28 16:12+0200\n"
+"Report-Msgid-Bugs-To: https://git.janouch.name/p/sdtui/issues\n"
+"POT-Creation-Date: 2021-10-11 21:10+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,115 +17,137 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ../src/sdtui.c:283
+#: ../src/sdgtk.c:289 ../src/sdtui.c:2481
+msgid "Warning"
+msgstr ""
+
+#: ../src/sdgtk.c:289 ../src/sdtui.c:2481
+msgid "failed to set the locale"
+msgstr ""
+
+#: ../src/sdgtk.c:299
+msgid "FILE..."
+msgstr ""
+
+#: ../src/sdgtk.c:304
+msgid "- StarDict GTK+ UI"
+msgstr ""
+
+#: ../src/sdgtk.c:355
+msgid "Follow selection"
+msgstr ""
+
+#: ../src/sdtui.c:320
 msgid "error in entry"
 msgstr ""
 
-#: ../src/sdtui.c:302
+#: ../src/sdtui.c:415
 msgid "no usable field found"
 msgstr ""
 
-#: ../src/sdtui.c:548
+#: ../src/sdtui.c:700
 msgid "Search"
 msgstr ""
 
-#: ../src/sdtui.c:573
+#: ../src/sdtui.c:726
 msgid "Cannot load configuration"
 msgstr ""
 
-#: ../src/sdtui.c:606
+#: ../src/sdtui.c:745
 msgid "Error loading dictionary"
 msgstr ""
 
-#: ../src/sdtui.c:612
+#: ../src/sdtui.c:750
 msgid ""
 "No dictionaries found either in the configuration or on the command line"
 msgstr ""
 
-#: ../src/sdtui.c:966
+#: ../src/sdtui.c:1114
 msgid "Terminal UI for StarDict dictionaries"
 msgstr ""
 
-#: ../src/sdtui.c:969
+#: ../src/sdtui.c:1117
 msgid "Type to search"
 msgstr ""
 
-#: ../src/sdtui.c:1976
+#: ../src/sdtui.c:2095
+#, c-format
+msgid "X11 connection failed (error code %d)"
+msgstr ""
+
+#: ../src/sdtui.c:2241
+#, c-format
+msgid "X11 request error (%d, major %d, minor %d)"
+msgstr ""
+
+#: ../src/sdtui.c:2476
 msgid "Output version information and exit"
 msgstr ""
 
-#: ../src/sdtui.c:1981
-msgid "Warning"
-msgstr ""
-
-#: ../src/sdtui.c:1981
-msgid "failed to set the locale"
-msgstr ""
-
-#: ../src/sdtui.c:1989
+#: ../src/sdtui.c:2489
 msgid "[dictionary.ifo...] - StarDict terminal UI"
 msgstr ""
 
-#: ../src/sdtui.c:1997
+#: ../src/sdtui.c:2497
 msgid "Error"
 msgstr ""
 
-#: ../src/sdtui.c:1997
+#: ../src/sdtui.c:2497
 msgid "option parsing failed"
 msgstr ""
 
-#: ../src/stardict.c:91
+#: ../src/stardict.c:89
 msgid "invalid header format"
 msgstr ""
 
-#: ../src/stardict.c:227
+#: ../src/stardict.c:249
 msgid "version not specified"
 msgstr ""
 
-#: ../src/stardict.c:238
+#: ../src/stardict.c:260
 msgid "invalid version"
 msgstr ""
 
-#: ../src/stardict.c:252
+#: ../src/stardict.c:274
 msgid "unknown key, ignoring"
 msgstr ""
 
-#: ../src/stardict.c:259
+#: ../src/stardict.c:281
 msgid "invalid encoding, must be valid UTF-8"
 msgstr ""
 
-#: ../src/stardict.c:276
+#: ../src/stardict.c:298
 msgid "invalid integer"
 msgstr ""
 
-#: ../src/stardict.c:286
+#: ../src/stardict.c:308
 msgid "option format error"
 msgstr ""
 
-#: ../src/stardict.c:296
+#: ../src/stardict.c:318
 msgid "no book name specified"
 msgstr ""
 
-#: ../src/stardict.c:302
+#: ../src/stardict.c:324
 msgid "word count not specified"
 msgstr ""
 
-#: ../src/stardict.c:308
+#: ../src/stardict.c:330
 msgid "index file size not specified"
 msgstr ""
 
-#: ../src/stardict.c:317
+#: ../src/stardict.c:339
 msgid "invalid index offset bits"
 msgstr ""
 
-#: ../src/stardict.c:812
+#: ../src/stardict.c:827
 msgid "cannot find .idx file"
 msgstr ""
 
-#: ../src/stardict.c:835
+#: ../src/stardict.c:850
 msgid "cannot find .dict file"
 msgstr ""
 
-#: ../src/stardict.c:1130 ../src/stardict.c:1155
+#: ../src/stardict.c:1153 ../src/stardict.c:1178
 msgid "invalid data entry"
 msgstr ""
