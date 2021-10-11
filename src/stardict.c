@@ -1354,7 +1354,7 @@ stardict_iterator_get_entry (StardictIterator *sdi)
 {
 	g_return_val_if_fail (STARDICT_IS_ITERATOR (sdi), NULL);
 	if (!stardict_iterator_is_valid (sdi))
-		return FALSE;
+		return NULL;
 	return stardict_dict_get_entry (sdi->owner, sdi->offset);
 }
 

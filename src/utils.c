@@ -33,6 +33,27 @@
 #include "utils.h"
 
 
+/// Trivially filter out all tags that aren't part of the Pango markup language,
+/// or no frontend can quite handle--this seems to work well.
+/// Given the nature of our display, also skip whole keyword elements.
+gchar *
+xdxf_to_pango_markup_with_reduced_effort (const gchar *xml)
+{
+	GString *filtered = g_string_new ("");
+	while (*xml)
+	{
+		// GMarkup can read some of the wilder XML constructs, Pango skips them
+		const gchar *p = NULL;
+		if (*xml != '<' || xml[1] == '!' || xml[1] == '?'
+		 || g_ascii_isspace (xml[1]) || !*(p = xml + 1 + (xml[1] == '/'))
+		 || (strchr ("biu", *p) && p[1] == '>') || !(p = strchr (p, '>')))
+			g_string_append_c (filtered, *xml++);
+		else if (xml[1] != 'k' || xml[2] != '>' || !(xml = strstr (p, "</k>")))
+			xml = ++p;
+	}
+	return g_string_free (filtered, FALSE);
+}
+
 /// Read the whole stream into a byte array.
 gboolean
 stream_read_all (GByteArray *ba, GInputStream *is, GError **error)

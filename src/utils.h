@@ -36,6 +36,8 @@
 		}                                                                     \
 	}
 
+gchar *xdxf_to_pango_markup_with_reduced_effort (const gchar *xml);
+
 gboolean stream_read_all (GByteArray *ba, GInputStream *is, GError **error);
 gchar *stream_read_string (GDataInputStream *dis, GError **error);
 gboolean xstrtoul (unsigned long *out, const char *s, int base);

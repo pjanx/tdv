@@ -348,23 +348,9 @@ view_entry_split_add_pango (ViewEntry *ve, const gchar *markup)
 static void
 view_entry_split_add_xdxf (ViewEntry *ve, const gchar *xml)
 {
-	// Trivially filter out all tags we can't quite handle,
-	// then parse the reduced XML as Pango markup--this seems to work well.
-	// Given the nature of our display, also skip keyword elements.
-	GString *filtered = g_string_new ("");
-	while (*xml)
-	{
-		// GMarkup can read some of the wilder XML constructs, Pango skips them
-		const gchar *p = NULL;
-		if (*xml != '<' || xml[1] == '!' || xml[1] == '?'
-		 || g_ascii_isspace (xml[1]) || !*(p = xml + 1 + (xml[1] == '/'))
-		 || (strchr ("biu", *p) && p[1] == '>') || !(p = strchr (p, '>')))
-			g_string_append_c (filtered, *xml++);
-		else if (xml[1] != 'k' || xml[2] != '>' || !(xml = strstr (p, "</k>")))
-			xml = ++p;
-	}
-	view_entry_split_add_pango (ve, filtered->str);
-	g_string_free (filtered, TRUE);
+	gchar *markup = xdxf_to_pango_markup_with_reduced_effort (xml);
+	view_entry_split_add_pango (ve, markup);
+	g_free (markup);
 }
 
 /// Decomposes a dictionary entry into the format we want.
