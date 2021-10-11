@@ -50,15 +50,20 @@ automatically.
 
 Dictionaries
 ------------
-Unfortunately, this application only really works with specific dictionaries.
-Word definitions have to be in plain text, separated by newlines.
+This application is intended for use with specific dictionaries: each line
+should contain one short word definition.  Moreover, the only supported content
+types are plain text, Pango markup, and XDXF (the visual format works better).
 
-The `make dicts` command will build some examples from freely available sources.
+The `make dicts` command will build some examples from freely available sources:
 
-You may use the included 'transform' tool to convert already existing
-dictionaries that are almost good as they are, e.g., after stripping XML tags.
-You might want to fix up the `sametypesequence` of the resulting '.ifo' file
-afterwards, and run 'dictzip' on the resulting '.dict' file to make it compact.
+ - GNU/FDL Czech-English dictionary
+ - Czech foreign words
+ - Czech WordNet 1.9 PDT (synonyms, hypernyms, hyponyms)
+
+You can use the included 'transform' tool to convert already existing StarDict
+dictionaries that are nearly good as they are.  Remember that you can change
+the `sametypesequence` of the resulting '.ifo' file to another format, or run
+'dictzip' on '.dict' files to make them compact.
 
 https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--> EN/DE/PL/RU dictionaries]
 
@@ -66,12 +71,10 @@ Further Development
 -------------------
 While I've been successfully using 'sdtui' for many years now, some work has to
 be done yet before the software can be considered fit for inclusion in regular
-Linux and/or BSD distributions.
+Linux and/or BSD distributions:
 
-An approximate list of things that need to be resolved is as follows:
-
- - the tab bar and the text input field don't handle overflows well,
- - figure out a way to become capable of displaying most StarDict dictionaries.
+ - The tab bar and the text input field don't handle overflows well.
+ - Lacking configuration, standard StarDict locations should be scanned.
 
 Given the entangledness of this codebase, issues with the file format,
 and general undesirability of terminal UIs, it might be better to start anew.
