@@ -242,8 +242,9 @@ struct application
 	struct attrs    attrs[ATTRIBUTE_COUNT];
 };
 
-/// Shortcut to retrieve named terminal attributes
+/// Shortcuts to retrieve named terminal attributes
 #define APP_ATTR(name) self->attrs[ATTRIBUTE_ ## name].attrs
+#define APP_ATTR_IF(b, name1, name2) ((b) ? APP_ATTR (name1) : APP_ATTR (name2))
 
 /// Returns if the Unicode character is representable in the current locale.
 static gboolean
@@ -846,12 +847,15 @@ struct row_buffer
 	int total_width;                    ///< Total width of all characters
 };
 
-static void
-row_buffer_init (RowBuffer *self, Application *app)
+static RowBuffer
+row_buffer_make (Application *app)
 {
-	self->app = app;
-	self->chars = g_array_new (FALSE, TRUE, sizeof (RowChar));
-	self->total_width = 0;
+	return (RowBuffer)
+	{
+		.app = app,
+		.chars = g_array_new (FALSE, TRUE, sizeof (RowChar)),
+		.total_width = 0,
+	};
 }
 
 #define row_buffer_free(self) g_array_unref ((self)->chars)
@@ -861,6 +865,9 @@ static void
 row_buffer_append_length (RowBuffer *self,
 	const gchar *text, glong length, chtype attrs)
 {
+	if (length == 0)
+		return;
+
 	glong ucs4_len;
 	gunichar *ucs4 = g_utf8_to_ucs4_fast (text, length, &ucs4_len);
 	for (glong i = 0; i < ucs4_len; i++)
@@ -1015,21 +1022,20 @@ row_buffer_finish (RowBuffer *self, int width, chtype attrs)
 static void
 app_redraw_top (Application *self)
 {
-	RowBuffer buf;
-	row_buffer_init (&buf, self);
+	RowBuffer buf = row_buffer_make (self);
 	row_buffer_append (&buf, APP_TITLE, APP_ATTR (HEADER) | A_BOLD);
 
 	for (guint i = 0; i < self->dictionaries->len; i++)
 	{
 		Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, i);
 		row_buffer_append (&buf, dict->name,
-			(self->dictionaries->len > 1 && self->dict == dict->dict)
-				? APP_ATTR (ACTIVE) : APP_ATTR (HEADER));
+			APP_ATTR_IF (self->dictionaries->len > 1
+				&& self->dict == dict->dict, ACTIVE, HEADER));
 	}
 	move (0, 0);
 	row_buffer_finish (&buf, COLS, APP_ATTR (HEADER));
 
-	row_buffer_init (&buf, self);
+	buf = row_buffer_make (self);
 	row_buffer_append (&buf, self->search_label, APP_ATTR (SEARCH));
 	gsize indent = buf.total_width;
 
@@ -1088,8 +1094,7 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 		if (x < 0)
 			x = 0;
 
-		RowBuffer buf;
-		row_buffer_init (&buf, self);
+		RowBuffer buf = row_buffer_make (self);
 		row_buffer_append (&buf, *lines, 0);
 		move (TOP_BAR_CUTOFF + i, x);
 		row_buffer_finish (&buf, -1, 0);
@@ -1118,6 +1123,28 @@ app_show_help (Application *self)
 	app_show_message (self, lines, G_N_ELEMENTS (lines));
 }
 
+static void
+app_draw_word (Application *self,
+	ViewEntry *ve, size_t common_prefix, int width, chtype attrs)
+{
+	RowBuffer buf = row_buffer_make (self);
+	row_buffer_append_length (&buf, ve->word, common_prefix, attrs | A_BOLD);
+	row_buffer_append (&buf, ve->word + common_prefix, attrs);
+	row_buffer_finish (&buf, width, attrs);
+}
+
+static void
+app_draw_definition (Application *self,
+	ViewEntry *ve, guint index, int width, chtype attrs)
+{
+	RowBuffer buf = row_buffer_make (self);
+	row_buffer_append (&buf, " ", attrs);
+	row_buffer_append_with_formatting (&buf,
+		g_ptr_array_index (ve->definitions, index),
+		g_ptr_array_index (ve->formatting, index), attrs);
+	row_buffer_finish (&buf, width, attrs);
+}
+
 /// Redraw the dictionary view.
 static void
 app_redraw_view (Application *self)
@@ -1131,56 +1158,37 @@ app_redraw_view (Application *self)
 	move (TOP_BAR_CUTOFF, 0);
 	clrtobot ();
 
-	// TODO: clean this stuff up a bit, it's all rather ugly
-	gchar *input_utf8 = g_ucs4_to_utf8
-		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
 	gint left_width = app_get_left_column_width (self);
+	gchar *input_utf8 = g_ucs4_to_utf8 ((gunichar *) self->input->data, -1,
+		NULL, NULL, NULL);
 
-	guint i, k = self->top_offset, shown = 0;
+	guint i, offset = self->top_offset, shown = 0;
 	for (i = 0; i < self->entries->len; i++)
 	{
 		ViewEntry *ve = g_ptr_array_index (self->entries, i);
-		for (; k < ve->definitions->len; k++)
+		size_t common_prefix = 0;
+		if (self->hl_prefix)
 		{
-			chtype attrs = ((self->top_position + i) & 1)
-				? APP_ATTR (ODD) : APP_ATTR (EVEN);
-
-			if (shown == self->selected)
-				row_buffer_merge_attributes (&attrs, self->focused
-					? APP_ATTR (SELECTION) : APP_ATTR (DEFOCUSED));
-
-			gboolean last = k + 1 == ve->definitions->len;
-			if (last && self->underline_last)
+			common_prefix = stardict_longest_common_collation_prefix
+				(self->dict, ve->word, input_utf8);
+		}
+		chtype ve_attrs = APP_ATTR_IF ((self->top_position + i) & 1, ODD, EVEN);
+		for (; offset < ve->definitions->len; offset++)
+		{
+			chtype attrs = ve_attrs;
+			if ((offset + 1 == ve->definitions->len) && self->underline_last)
 				attrs |= A_UNDERLINE;
+			if (shown == self->selected)
+				row_buffer_merge_attributes (&attrs,
+					APP_ATTR_IF (self->focused, SELECTION, DEFOCUSED));
 
-			RowBuffer buf;
-			row_buffer_init (&buf, self);
-
-			size_t common = 0;
-			if (self->hl_prefix)
-			{
-				common = stardict_longest_common_collation_prefix
-					(self->dict, ve->word, input_utf8);
-
-				gchar *prefix = g_strndup (ve->word, common);
-				row_buffer_append (&buf, prefix, attrs | A_BOLD);
-				g_free (prefix);
-			}
-			row_buffer_append (&buf, ve->word + common, attrs);
-			row_buffer_finish (&buf, left_width, attrs);
-
-			row_buffer_init (&buf, self);
-			row_buffer_append (&buf, " ", attrs);
-			row_buffer_append_with_formatting (&buf,
-				g_ptr_array_index (ve->definitions, k),
-				g_ptr_array_index (ve->formatting, k), attrs);
-			row_buffer_finish (&buf, COLS - left_width, attrs);
-
+			app_draw_word (self, ve, common_prefix, left_width, attrs);
+			app_draw_definition (self, ve, offset, COLS - left_width, attrs);
 			if ((gint) ++shown == LINES - TOP_BAR_CUTOFF)
 				goto done;
 		}
 
-		k = 0;
+		offset = 0;
 	}
 
 done:
@@ -2410,8 +2418,7 @@ log_handler_curses (Application *self, const gchar *message)
 	in_processing = TRUE;
 	SAVE_CURSOR
 
-	RowBuffer buf;
-	row_buffer_init (&buf, self);
+	RowBuffer buf = row_buffer_make (self);
 	row_buffer_append (&buf, message, A_REVERSE);
 	move (0, 0);
 	row_buffer_finish (&buf, COLS, A_REVERSE);
