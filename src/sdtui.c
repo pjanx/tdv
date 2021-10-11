@@ -1087,16 +1087,13 @@ app_show_message (Application *self, const gchar *lines[], gsize len)
 
 	while (len-- && i < LINES - TOP_BAR_CUTOFF)
 	{
-		move (TOP_BAR_CUTOFF + i, 0);
-		clrtoeol ();
-
-		gint x = (COLS - g_utf8_strlen (*lines, -1)) / 2;
-		if (x < 0)
-			x = 0;
-
 		RowBuffer buf = row_buffer_make (self);
 		row_buffer_append (&buf, *lines, 0);
-		move (TOP_BAR_CUTOFF + i, x);
+		gint x = (COLS - buf.total_width) / 2;
+
+		move (TOP_BAR_CUTOFF + i, 0);
+		clrtoeol ();
+		move (TOP_BAR_CUTOFF + i, MAX (x, 0));
 		row_buffer_finish (&buf, -1, 0);
 
 		lines++;
