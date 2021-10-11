@@ -353,8 +353,10 @@ view_entry_split_add_xdxf (ViewEntry *ve, const gchar *xml)
 	GString *filtered = g_string_new ("");
 	while (*xml)
 	{
+		// GMarkup can read some of the wilder XML constructs, Pango skips them
 		const gchar *p = NULL;
-		if (*xml != '<' || !*(p = xml + 1 + (xml[1] == '/'))
+		if (*xml != '<' || xml[1] == '!' || xml[1] == '?'
+		 || g_ascii_isspace (xml[1]) || !*(p = xml + 1 + (xml[1] == '/'))
 		 || (strchr ("biu", *p) && p[1] == '>') || !(p = strchr (p, '>')))
 			g_string_append_c (filtered, *xml++);
 		else if (xml[1] != 'k' || xml[2] != '>' || !(xml = strstr (p, "</k>")))
