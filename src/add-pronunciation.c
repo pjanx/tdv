@@ -284,7 +284,7 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 		fatal ("Error: option parsing failed: %s\n", error->message);
 
 	if (argc != 3)
-		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
+		fatal ("%s", g_option_context_get_help (ctx, TRUE, NULL));
 
 	g_option_context_free (ctx);
 

@@ -155,7 +155,7 @@ main (int argc, char *argv[])
 		fatal ("Error: option parsing failed: %s\n", error->message);
 
 	if (argc < 3)
-		fatal ("%s", g_option_context_get_help (ctx, TRUE, FALSE));
+		fatal ("%s", g_option_context_get_help (ctx, TRUE, NULL));
 
 	// GLib is bullshit, getopt_long() always correctly removes this
 	gint program_argv_start = 3;
