@@ -211,17 +211,56 @@ struct _StardictView
 	GList *entries;                     ///< ViewEntry-s within the view
 };
 
+static ViewEntry *
+make_entry (StardictView *self, StardictIterator *iterator)
+{
+	ViewEntry *ve =
+		view_entry_new (iterator, self->matched ? self->matched : "");
+
+	GtkWidget *widget = GTK_WIDGET (self);
+	view_entry_rebuild_layout (ve, gtk_widget_get_pango_context (widget),
+		gtk_widget_get_allocated_width (widget));
+	return ve;
+}
+
+static void
+adjust_for_height (StardictView *self)
+{
+	GtkWidget *widget = GTK_WIDGET (self);
+	StardictIterator *iterator =
+		stardict_iterator_new (self->dict, self->top_position);
+
+	gint missing = gtk_widget_get_allocated_height (widget) + self->top_offset;
+	for (GList *iter = self->entries, *next;
+		 next = g_list_next (iter), iter; iter = next)
+	{
+		if (missing > 0)
+			missing -= view_entry_height (iter->data, NULL, NULL);
+		else
+		{
+			view_entry_destroy (iter->data);
+			self->entries = g_list_delete_link (self->entries, iter);
+		}
+		stardict_iterator_next (iterator);
+	}
+
+	GList *append = NULL;
+	while (missing > 0 && stardict_iterator_is_valid (iterator))
+	{
+		ViewEntry *ve = make_entry (self, iterator);
+		missing -= view_entry_height (ve, NULL, NULL);
+		append = g_list_prepend (append, ve);
+		stardict_iterator_next (iterator);
+	}
+	g_object_unref (iterator);
+
+	self->entries = g_list_concat (self->entries, g_list_reverse (append));
+	gtk_widget_queue_draw (widget);
+}
+
 static void
 adjust_for_offset (StardictView *self)
 {
-	// FIXME: lots of code duplication with reload(), could be refactored
-	GtkWidget *widget = GTK_WIDGET (self);
-	PangoContext *pc = gtk_widget_get_pango_context (widget);
-	const gchar *matched = self->matched ? self->matched : "";
-
-	GtkAllocation allocation = {};
-	gtk_widget_get_allocation (widget, &allocation);
-
 	// If scrolled way up, prepend entries so long as it's possible
 	StardictIterator *iterator =
 		stardict_iterator_new (self->dict, self->top_position);
@@ -235,8 +274,7 @@ adjust_for_offset (StardictView *self)
 		}
 
 		self->top_position = stardict_iterator_get_offset (iterator);
-		ViewEntry *ve = view_entry_new (iterator, matched);
-		view_entry_rebuild_layout (ve, pc, allocation.width);
+		ViewEntry *ve = make_entry (self, iterator);
 		self->top_offset += view_entry_height (ve, NULL, NULL);
 		self->entries = g_list_prepend (self->entries, ve);
 	}
@@ -259,67 +297,20 @@ adjust_for_offset (StardictView *self)
 		self->top_offset = 0;
 
 	// Load replacement trailing entries, or drop those no longer visible
-	iterator = stardict_iterator_new (self->dict, self->top_position);
-	gint used = -self->top_offset;
-	for (GList *iter = self->entries, *next;
-		 next = g_list_next (iter), iter; iter = next)
-	{
-		if (used < allocation.height)
-			used += view_entry_height (iter->data, NULL, NULL);
-		else
-		{
-			view_entry_destroy (iter->data);
-			self->entries = g_list_delete_link (self->entries, iter);
-		}
-		stardict_iterator_next (iterator);
-	}
-	while (used < allocation.height && stardict_iterator_is_valid (iterator))
-	{
-		ViewEntry *ve = view_entry_new (iterator, matched);
-		view_entry_rebuild_layout (ve, pc, allocation.width);
-		used += view_entry_height (ve, NULL, NULL);
-		self->entries = g_list_append (self->entries, ve);
-		stardict_iterator_next (iterator);
-	}
-	g_object_unref (iterator);
-
-	gtk_widget_queue_draw (widget);
+	adjust_for_height (self);
 }
 
 static void
 reload (StardictView *self)
 {
+	GtkWidget *widget = GTK_WIDGET (self);
+
 	g_list_free_full (self->entries, (GDestroyNotify) view_entry_destroy);
 	self->entries = NULL;
-
-	GtkWidget *widget = GTK_WIDGET (self);
-	if (!gtk_widget_get_realized (widget) || !self->dict)
-		return;
-
-	GtkAllocation allocation = {};
-	gtk_widget_get_allocation (widget, &allocation);
-
-	PangoContext *pc = gtk_widget_get_pango_context (widget);
-	StardictIterator *iterator =
-		stardict_iterator_new (self->dict, self->top_position);
-
-	gint used = 0;
-	const gchar *matched = self->matched ? self->matched : "";
-	while (used < allocation.height && stardict_iterator_is_valid (iterator))
-	{
-		ViewEntry *ve = view_entry_new (iterator, matched);
-		view_entry_rebuild_layout (ve, pc, allocation.width);
-		used += view_entry_height (ve, NULL, NULL);
-		self->entries = g_list_prepend (self->entries, ve);
-		stardict_iterator_next (iterator);
-	}
-	g_object_unref (iterator);
-	self->entries = g_list_reverse (self->entries);
-
-	// Right now, we're being lazy--this could be integrated here
-	adjust_for_offset (self);
-
 	gtk_widget_queue_draw (widget);
+
+	if (gtk_widget_get_realized (widget) && self->dict)
+		adjust_for_height (self);
 }
 
 static gint
