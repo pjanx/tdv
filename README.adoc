@@ -79,6 +79,11 @@ Linux and/or BSD distributions:
 Given the entangledness of this codebase, issues with the file format,
 and general undesirability of terminal UIs, it might be better to start anew.
 
+Graphical UI
+------------
+With GTK+ 3 development packages installed, an alternative, work-in-progress
+frontend will be built and installed.
+
 Contributing and Support
 ------------------------
 Use https://git.janouch.name/p/sdtui to report any bugs, request features,

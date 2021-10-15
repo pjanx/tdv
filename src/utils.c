@@ -23,12 +23,6 @@
 #include <errno.h>
 #include <stdarg.h>
 
-#include <curses.h>
-#include <termios.h>
-#ifndef TIOCGWINSZ
-#include <sys/ioctl.h>
-#endif  // ! TIOCGWINSZ
-
 #include "config.h"
 #include "utils.h"
 
@@ -99,28 +93,6 @@ xstrtoul (unsigned long *out, const char *s, int base)
 	errno = 0;
 	*out = strtoul (s, &end, base);
 	return errno == 0 && !*end && end != s;
-}
-
-// Didn't want to have this ugly piece of code in the main source file;
-// the standard endwin/refresh sequence makes the terminal flicker.
-void
-update_curses_terminal_size (void)
-{
-#if defined (HAVE_RESIZETERM) && defined (TIOCGWINSZ)
-	struct winsize size;
-	if (!ioctl (STDOUT_FILENO, TIOCGWINSZ, (char *) &size))
-	{
-		char *row = getenv ("LINES");
-		char *col = getenv ("COLUMNS");
-		unsigned long tmp;
-		resizeterm (
-			(row && xstrtoul (&tmp, row, 10)) ? tmp : size.ws_row,
-			(col && xstrtoul (&tmp, col, 10)) ? tmp : size.ws_col);
-	}
-#else  // HAVE_RESIZETERM && TIOCGWINSZ
-	endwin ();
-	refresh ();
-#endif  // HAVE_RESIZETERM && TIOCGWINSZ
 }
 
 /// Print a fatal error message and terminate the process immediately.

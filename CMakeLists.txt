@@ -78,6 +78,9 @@ if (WITH_X11)
 	list (APPEND dependencies_LIBRARIES ${xcb_LIBRARIES})
 endif ()
 
+pkg_check_modules (gtk gtk+-3.0)
+option (WITH_GUI "Build a work-in-progress GTK+ UI" ${gtk_FOUND})
+
 link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
 	${dependencies_INCLUDE_DIRS} ${Ncursesw_INCLUDE_DIRS}
@@ -117,7 +120,7 @@ add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 
 # Project libraries
 set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
-	${dependencies_LIBRARIES} ${Ncursesw_LIBRARIES} termo-static)
+	${dependencies_LIBRARIES})
 
 set (project_common_headers
 	${PROJECT_BINARY_DIR}/config.h
@@ -151,17 +154,17 @@ set (project_headers
 add_definitions (-DGLIB_DISABLE_DEPRECATION_WARNINGS)
 add_executable (${PROJECT_NAME}
 	${project_sources} ${project_headers} ${project_common_sources})
-target_link_libraries (${PROJECT_NAME} ${project_common_libraries})
+target_link_libraries (${PROJECT_NAME} ${project_common_libraries}
+	${Ncursesw_LIBRARIES} termo-static)
 
-# Experimental GTK+ frontend, we link it with ncurses but we don't care
-pkg_check_modules (gtk gtk+-3.0)
-if (gtk_FOUND)
-	add_executable (sdgtk EXCLUDE_FROM_ALL
-		src/sdgtk.c
+# The same for the alternative GTK+ UI
+if (WITH_GUI)
+	add_executable (sdgui
+		src/sdgui.c
 		src/stardict-view.c
 		${project_common_sources})
-	target_include_directories (sdgtk PUBLIC ${gtk_INCLUDE_DIRS})
-	target_link_libraries (sdgtk ${gtk_LIBRARIES} ${project_common_libraries})
+	target_include_directories (sdgui PUBLIC ${gtk_INCLUDE_DIRS})
+	target_link_libraries (sdgui ${gtk_LIBRARIES} ${project_common_libraries})
 endif ()
 
 # Tools
@@ -193,6 +196,9 @@ add_custom_target (dicts DEPENDS ${dicts_targets})
 include (GNUInstallDirs)
 install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+if (WITH_GUI)
+	install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif ()
 
 foreach (page ${project_MAN_PAGES})
 	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")

@@ -41,7 +41,6 @@ gchar *xdxf_to_pango_markup_with_reduced_effort (const gchar *xml);
 gboolean stream_read_all (GByteArray *ba, GInputStream *is, GError **error);
 gchar *stream_read_string (GDataInputStream *dis, GError **error);
 gboolean xstrtoul (unsigned long *out, const char *s, int base);
-void update_curses_terminal_size (void);
 void fatal (const gchar *format, ...) G_GNUC_PRINTF (1, 2) G_GNUC_NORETURN;
 
 #endif  // ! UTILS_H

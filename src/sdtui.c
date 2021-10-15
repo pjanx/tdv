@@ -36,8 +36,12 @@
 #include <signal.h>
 #include <pwd.h>
 
-#include <termo.h> // input
-#include <ncurses.h> // output
+#include <termo.h>  // input
+#include <ncurses.h>  // output
+#include <termios.h>
+#ifndef TIOCGWINSZ
+#include <sys/ioctl.h>
+#endif  // ! TIOCGWINSZ
 
 #include "config.h"
 #include "stardict.h"
@@ -60,6 +64,27 @@ unichar_width (gunichar ch)
 	if (g_unichar_iszerowidth (ch))
 		return 0;
 	return 1 + g_unichar_iswide (ch);
+}
+
+void
+update_curses_terminal_size (void)
+{
+#if defined (HAVE_RESIZETERM) && defined (TIOCGWINSZ)
+	struct winsize size;
+	if (!ioctl (STDOUT_FILENO, TIOCGWINSZ, (char *) &size))
+	{
+		char *row = getenv ("LINES");
+		char *col = getenv ("COLUMNS");
+		unsigned long tmp;
+		resizeterm (
+			(row && xstrtoul (&tmp, row, 10)) ? tmp : size.ws_row,
+			(col && xstrtoul (&tmp, col, 10)) ? tmp : size.ws_col);
+	}
+#else  // HAVE_RESIZETERM && TIOCGWINSZ
+	// The standard endwin/refresh sequence makes the terminal flicker.
+	endwin ();
+	refresh ();
+#endif  // HAVE_RESIZETERM && TIOCGWINSZ
 }
 
 static guint
