@@ -53,9 +53,8 @@ g;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 static gboolean
-dictionary_load (Dictionary *self, gchar *filename, GError **e)
+dictionary_load (Dictionary *self, GError **e)
 {
-	self->filename = filename;
 	if (!(self->dict = stardict_dict_new (self->filename, e)))
 		return FALSE;
 
@@ -69,20 +68,60 @@ dictionary_load (Dictionary *self, gchar *filename, GError **e)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-static gboolean
-init (gchar **filenames, GError **e)
+static void
+init (gchar **filenames)
 {
 	while (filenames[g.dictionaries_len])
 		g.dictionaries_len++;
 
 	g.dictionaries = g_malloc0_n (sizeof *g.dictionaries, g.dictionaries_len);
 	for (gsize i = 0; i < g.dictionaries_len; i++)
+		g.dictionaries[i].filename = filenames[i];
+}
+
+// TODO: try to deduplicate, similar to app_load_config_values()
+static gboolean
+init_from_key_file (GKeyFile *kf, GError **error)
+{
+	const gchar *dictionaries = "Dictionaries";
+	gchar **names =
+		g_key_file_get_keys (kf, dictionaries, &g.dictionaries_len, NULL);
+	if (!names)
+		return TRUE;
+
+	g.dictionaries = g_malloc0_n (sizeof *g.dictionaries, g.dictionaries_len);
+	for (gsize i = 0; i < g.dictionaries_len; i++)
+		g.dictionaries[i].name = names[i];
+	g_free (names);
+
+	for (gsize i = 0; i < g.dictionaries_len; i++)
 	{
 		Dictionary *dict = &g.dictionaries[i];
-		if (!dictionary_load (dict, filenames[i], e))
+		gchar *path =
+			g_key_file_get_string (kf, dictionaries, dict->name, error);
+		if (!path)
 			return FALSE;
+
+		// Try to resolve relative paths and expand tildes
+		if (!(dict->filename =
+			resolve_filename (path, resolve_relative_config_filename)))
+			dict->filename = path;
+		else
+			g_free (path);
 	}
 	return TRUE;
+}
+
+static gboolean
+init_from_config (GError **error)
+{
+	GKeyFile *key_file = load_project_config_file (error);
+	if (!key_file)
+		return FALSE;
+
+	gboolean result = init_from_key_file (key_file, error);
+	g_key_file_free (key_file);
+	return result;
 }
 
 static void
@@ -203,7 +242,7 @@ main (int argc, char *argv[])
 	GOptionEntry option_entries[] =
 	{
 		{G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filenames,
-			NULL, N_("FILE...")},
+			NULL, N_("[FILE]...")},
 		{},
 	};
 
@@ -217,13 +256,17 @@ main (int argc, char *argv[])
 		return 1;
 	}
 
-	if (!filenames)
-	{
-		// TODO: eventually just load all dictionaries from configuration
-		die_with_dialog ("No arguments have been passed.");
-	}
-	if (!init (filenames, &error))
+	if (filenames)
+		init (filenames);
+	else if (!init_from_config (&error) && error)
 		die_with_dialog (error->message);
+
+	for (gsize i = 0; i < g.dictionaries_len; i++)
+		if (!dictionary_load (&g.dictionaries[i], &error))
+			die_with_dialog (error->message);
+	if (!g.dictionaries_len)
+		die_with_dialog (_("No dictionaries found either in "
+			"the configuration or on the command line"));
 
 	// Some Adwaita stupidity
 	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }";

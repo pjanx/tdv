@@ -19,9 +19,13 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gio/gio.h>
+#include <glib/gstdio.h>
+
 #include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
+
+#include <pwd.h>
 
 #include "config.h"
 #include "utils.h"
@@ -104,4 +108,118 @@ fatal (const gchar *format, ...)
 	g_vfprintf (stderr, format, ap);
 	exit (EXIT_FAILURE);
 	va_end (ap);
+}
+
+// At times, GLib even with its sheer size is surprisingly useless,
+// and I need to port some code over from "liberty".
+
+static gchar **
+get_xdg_config_dirs (void)
+{
+	GPtrArray *paths = g_ptr_array_new ();
+	g_ptr_array_add (paths, (gpointer) g_get_user_config_dir ());
+	for (const gchar *const *system = g_get_system_config_dirs ();
+		*system; system++)
+		g_ptr_array_add (paths, (gpointer) *system);
+	g_ptr_array_add (paths, NULL);
+	return (gchar **) g_ptr_array_free (paths, FALSE);
+}
+
+gchar *
+resolve_relative_filename_generic
+	(gchar **paths, const gchar *tail, const gchar *filename)
+{
+	for (; *paths; paths++)
+	{
+		// As per XDG spec, relative paths are ignored
+		if (**paths != '/')
+			continue;
+
+		gchar *file = g_build_filename (*paths, tail, filename, NULL);
+		GStatBuf st;
+		if (!g_stat (file, &st))
+			return file;
+		g_free (file);
+	}
+	return NULL;
+}
+
+gchar *
+resolve_relative_config_filename (const gchar *filename)
+{
+	gchar **paths = get_xdg_config_dirs ();
+	gchar *result = resolve_relative_filename_generic
+		(paths, PROJECT_NAME, filename);
+	g_strfreev (paths);
+	return result;
+}
+
+static gchar *
+try_expand_tilde (const gchar *filename)
+{
+	size_t until_slash = strcspn (filename, "/");
+	if (!until_slash)
+		return g_build_filename (g_get_home_dir () ?: "", filename, NULL);
+
+	long buf_len = sysconf (_SC_GETPW_R_SIZE_MAX);
+	if (buf_len < 0)
+		buf_len = 1024;
+	struct passwd pwd, *success = NULL;
+
+	gchar *user = g_strndup (filename, until_slash);
+	gchar *buf = g_malloc (buf_len);
+	while (getpwnam_r (user, &pwd, buf, buf_len, &success) == ERANGE)
+		buf = g_realloc (buf, buf_len <<= 1);
+	g_free (user);
+
+	gchar *result = NULL;
+	if (success)
+		result = g_strdup_printf ("%s%s", pwd.pw_dir, filename + until_slash);
+	g_free (buf);
+	return result;
+}
+
+gchar *
+resolve_filename (const gchar *filename, gchar *(*relative_cb) (const char *))
+{
+	// Absolute path is absolute
+	if (*filename == '/')
+		return g_strdup (filename);
+
+	// We don't want to use wordexp() for this as it may execute /bin/sh
+	if (*filename == '~')
+	{
+		// Paths to home directories ought to be absolute
+		char *expanded = try_expand_tilde (filename + 1);
+		if (expanded)
+			return expanded;
+		g_debug ("failed to expand the home directory in `%s'", filename);
+	}
+	return relative_cb (filename);
+}
+
+GKeyFile *
+load_project_config_file (GError **error)
+{
+	GKeyFile *key_file = g_key_file_new ();
+	gchar **paths = get_xdg_config_dirs ();
+	GError *e = NULL;
+
+	// XXX: if there are dashes in the final path component,
+	//   the function tries to replace them with directory separators,
+	//   which is completely undocumented
+	g_key_file_load_from_dirs (key_file,
+		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
+		(const gchar **) paths, NULL, 0, &e);
+	g_strfreev (paths);
+	if (!e)
+		return key_file;
+
+	if (e->code == G_KEY_FILE_ERROR_NOT_FOUND)
+		g_error_free (e);
+	else
+		g_propagate_error (error, e);
+
+	g_key_file_free (key_file);
+	return NULL;
 }
