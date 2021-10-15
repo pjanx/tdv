@@ -123,10 +123,10 @@ view_entry_height (ViewEntry *ve, gint *word_offset, gint *defn_offset)
 	pango_layout_get_pixel_size (ve->definition_layout, &defn_w, &defn_h);
 
 	// Align baselines, without further considerations
-	gint wb = pango_layout_get_baseline (ve->word_layout)       / PANGO_SCALE;
-	gint db = pango_layout_get_baseline (ve->definition_layout) / PANGO_SCALE;
-	gint word_y = MAX (0, db - wb);
-	gint defn_y = MAX (0, wb - db);
+	gint wb = pango_layout_get_baseline (ve->word_layout);
+	gint db = pango_layout_get_baseline (ve->definition_layout);
+	gint word_y = MAX (0, PANGO_PIXELS (db - wb));
+	gint defn_y = MAX (0, PANGO_PIXELS (wb - db));
 
 	if (word_offset)
 		*word_offset = word_y;
@@ -162,7 +162,7 @@ view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width, gboolean even)
 
 		PangoRectangle logical = {};
 		pango_layout_iter_get_line_extents (iter, NULL, &logical);
-		cairo_move_to (cr, PADDING, word_y + logical.y / PANGO_SCALE);
+		cairo_move_to (cr, PADDING, word_y + PANGO_PIXELS (logical.y));
 		pango_cairo_show_layout (cr, ve->word_layout);
 	}
 	while (pango_layout_iter_next_line (iter));
@@ -322,6 +322,16 @@ reload (StardictView *self)
 	gtk_widget_queue_draw (widget);
 }
 
+static gint
+natural_row_size (GtkWidget *widget)
+{
+	PangoLayout *layout = gtk_widget_create_pango_layout (widget, "X");
+	gint width = 0, height = 0;
+	pango_layout_get_pixel_size (layout, &width, &height);
+	g_object_unref (layout);
+	return height;
+}
+
 // --- Boilerplate -------------------------------------------------------------
 
 G_DEFINE_TYPE (StardictView, stardict_view, GTK_TYPE_WIDGET)
@@ -345,17 +355,11 @@ static void
 stardict_view_get_preferred_height (GtkWidget *widget,
 	gint *minimum, gint *natural)
 {
-	PangoLayout *layout = gtk_widget_create_pango_layout (widget, NULL);
-
-	gint width = 0, height = 0;
-	pango_layout_get_pixel_size (layout, &width, &height);
-	g_object_unref (layout);
-
 	// There isn't any value that would make any real sense
 	if (!STARDICT_VIEW (widget)->dict)
 		*natural = *minimum = 0;
 	else
-		*natural = *minimum = height;
+		*natural = *minimum = natural_row_size (widget);
 }
 
 static void
@@ -452,11 +456,11 @@ stardict_view_scroll_event (GtkWidget *widget, GdkEventScroll *event)
 	switch (event->direction)
 	{
 	case GDK_SCROLL_UP:
-		self->top_offset -= 50;
+		self->top_offset -= 3 * natural_row_size (widget);
 		adjust_for_offset (self);
 		return TRUE;
 	case GDK_SCROLL_DOWN:
-		self->top_offset += 50;
+		self->top_offset += 3 * natural_row_size (widget);
 		adjust_for_offset (self);
 		return TRUE;
 	default:
