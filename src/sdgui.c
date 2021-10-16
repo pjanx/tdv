@@ -33,7 +33,6 @@ struct dictionary
 	const gchar  *filename;          ///< Filename
 	StardictDict *dict;              ///< Stardict dictionary data
 	gchar        *name;              ///< Name to show
-	guint         position;          ///< Current position
 };
 
 static struct
@@ -94,11 +93,10 @@ search (Dictionary *dict)
 
 	StardictIterator *iterator =
 		stardict_dict_search (dict->dict, input_utf8, NULL);
-	dict->position = stardict_iterator_get_offset (iterator);
+	stardict_view_set_position (STARDICT_VIEW (g.view),
+		dict->dict, stardict_iterator_get_offset (iterator));
 	g_object_unref (iterator);
 
-	stardict_view_set_position (STARDICT_VIEW (g.view),
-		dict->dict, dict->position);
 	stardict_view_set_matched (STARDICT_VIEW (g.view), input_utf8);
 }
 
