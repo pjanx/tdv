@@ -198,6 +198,10 @@ install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 if (WITH_GUI)
 	install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
+	install (FILES sdgui.desktop
+		DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+	install (FILES sdgui.xml
+		DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
 endif ()
 
 foreach (page ${project_MAN_PAGES})

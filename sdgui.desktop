@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=sdgui
+GenericName=StarDict GUI
+Exec=sdgui %F
+StartupNotify=true
+MimeType=application/x-stardict-ifo;
+Categories=Office;Dictionary;GTK;

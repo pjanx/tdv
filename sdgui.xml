@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+	<mime-type type="application/x-stardict-ifo">
+		<comment>StarDict dictionary main file</comment>
+		<magic>
+			<match type="string" offset="0" value="StarDict's dict ifo file"/>
+		</magic>
+		<glob pattern="*.ifo"/>
+	</mime-type>
+</mime-info>
