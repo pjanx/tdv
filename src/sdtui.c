@@ -125,7 +125,7 @@ struct attrs
 /// Data relating to one entry within the dictionary.
 typedef struct view_entry               ViewEntry;
 /// Data relating to a dictionary file.
-typedef struct dictionary               Dictionary;
+typedef struct app_dictionary           AppDictionary;
 /// Encloses application data.
 typedef struct application              Application;
 
@@ -136,12 +136,10 @@ struct view_entry
 	GPtrArray * formatting;             ///< chtype * or NULL per definition
 };
 
-struct dictionary
+struct app_dictionary
 {
-	gchar         * name;               ///< Visible identifier
-	gsize           name_width;         ///< Visible width of the name
-	gchar         * filename;           ///< Path to the dictionary
-	StardictDict  * dict;               ///< Dictionary
+	Dictionary  super;                  ///< Superclass
+	gsize       name_width;             ///< Visible width of the name
 };
 
 struct application
@@ -153,7 +151,7 @@ struct application
 	gboolean        locale_is_utf8;     ///< The locale is Unicode
 	gboolean        focused;            ///< Whether the terminal has focus
 
-	GArray        * dictionaries;       ///< All loaded dictionaries
+	GPtrArray     * dictionaries;       ///< All loaded AppDictionaries
 
 	StardictDict  * dict;               ///< The current dictionary
 	guint           show_help : 1;      ///< Whether help can be shown
@@ -352,42 +350,6 @@ view_entry_free (ViewEntry *ve)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-static gboolean
-dictionary_load (Dictionary *self, Application *app, GError **e)
-{
-	if (!(self->dict = stardict_dict_new (self->filename, e)))
-		return FALSE;
-
-	if (!self->name)
-	{
-		self->name = g_strdup (stardict_info_get_book_name
-			(stardict_dict_get_info (self->dict)));
-	}
-
-	// Add some padding for decorative purposes
-	gchar *tmp = g_strdup_printf (" %s ", self->name);
-	g_free (self->name);
-	self->name = tmp;
-
-	gunichar *ucs4 = g_utf8_to_ucs4_fast (self->name, -1, NULL);
-	for (gunichar *it = ucs4; *it; it++)
-		self->name_width += app_char_width (app, *it);
-	g_free (ucs4);
-	return TRUE;
-}
-
-static void
-dictionary_free (Dictionary *self)
-{
-	g_free (self->name);
-	g_free (self->filename);
-
-	if (self->dict)
-		g_object_unref (self->dict);
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 /// Reload view items.
 static void
 app_reload_view (Application *self)
@@ -491,8 +453,10 @@ app_load_config_values (Application *self, GKeyFile *kf)
 		else
 			resolved = path;
 
-		Dictionary dict = { .name = g_strdup (*it), .filename = resolved };
-		g_array_append_val (self->dictionaries, dict);
+		AppDictionary *dict = g_malloc0 (sizeof *dict);
+		dict->super.name = g_strdup (*it);
+		dict->super.filename = resolved;
+		g_ptr_array_add (self->dictionaries, dict);
 	}
 	g_strfreev (names);
 }
@@ -521,66 +485,28 @@ app_init_attrs (Application *self)
 #undef XX
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 static gboolean
 app_load_dictionaries (Application *self, GError **e)
 {
-	for (guint i = 0; i < self->dictionaries->len; i++)
-		if (!dictionary_load (&g_array_index (self->dictionaries,
-			Dictionary, i), self, e))
-			return FALSE;
+	if (!load_dictionaries (self->dictionaries, e))
+		return FALSE;
+
+	for (gsize i = 0; i < self->dictionaries->len; i++)
+	{
+		AppDictionary *dict = g_ptr_array_index (self->dictionaries, i);
+
+		// Add some padding for decorative purposes
+		gchar *tmp = g_strdup_printf (" %s ", dict->super.name);
+		g_free (dict->super.name);
+		dict->super.name = tmp;
+
+		gunichar *ucs4 = g_utf8_to_ucs4_fast (dict->super.name, -1, NULL);
+		for (gunichar *it = ucs4; *it; it++)
+			dict->name_width += app_char_width (self, *it);
+		g_free (ucs4);
+	}
 	return TRUE;
 }
-
-// Parallelize dictionary loading if possible, because of collation reindexing
-#if GLIB_CHECK_VERSION (2, 36, 0)
-struct load_ctx
-{
-	Application *self;                  ///< Application context
-	GAsyncQueue *error_queue;           ///< Errors
-};
-
-static void
-app_load_worker (gpointer data, gpointer user_data)
-{
-	struct load_ctx *ctx = user_data;
-	GError *e = NULL;
-	dictionary_load (&g_array_index (ctx->self->dictionaries, Dictionary,
-		GPOINTER_TO_UINT (data) - 1), ctx->self, &e);
-	if (e)
-		g_async_queue_push (ctx->error_queue, e);
-}
-
-static gboolean
-app_load_dictionaries_parallel (Application *self, GError **e)
-{
-	struct load_ctx ctx;
-	GThreadPool *pool = g_thread_pool_new (app_load_worker, &ctx,
-		g_get_num_processors (), TRUE, NULL);
-	if G_UNLIKELY (!g_thread_pool_get_num_threads (pool))
-	{
-		g_thread_pool_free (pool, TRUE, TRUE);
-		return app_load_dictionaries (self, e);
-	}
-
-	ctx.self = self;
-	ctx.error_queue = g_async_queue_new_full ((GDestroyNotify) g_error_free);
-	for (guint i = 0; i < self->dictionaries->len; i++)
-		g_thread_pool_push (pool, GUINT_TO_POINTER (i + 1), NULL);
-
-	g_thread_pool_free (pool, FALSE, TRUE);
-
-	gboolean result = TRUE;
-	if ((*e = g_async_queue_try_pop (ctx.error_queue)))
-		result = FALSE;
-
-	g_async_queue_unref (ctx.error_queue);
-	return result;
-}
-
-#define app_load_dictionaries app_load_dictionaries_parallel
-#endif  // GLib >= 2.36
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -623,9 +549,8 @@ app_init (Application *self, char **filenames)
 	self->focused = TRUE;
 
 	app_init_attrs (self);
-	self->dictionaries = g_array_new (FALSE, TRUE, sizeof (Dictionary));
-	g_array_set_clear_func
-		(self->dictionaries, (GDestroyNotify) dictionary_free);
+	self->dictionaries =
+		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
 
 	GError *error = NULL;
 	app_load_config (self, &error);
@@ -640,11 +565,12 @@ app_init (Application *self, char **filenames)
 	// Dictionaries given on the command line override the configuration
 	if (*filenames)
 	{
-		g_array_set_size (self->dictionaries, 0);
+		g_ptr_array_set_size (self->dictionaries, 0);
 		while (*filenames)
 		{
-			Dictionary dict = { .filename = g_strdup (*filenames++) };
-			g_array_append_val (self->dictionaries, dict);
+			AppDictionary *dict = g_malloc0 (sizeof *dict);
+			dict->super.filename = g_strdup (*filenames++);
+			g_ptr_array_add (self->dictionaries, dict);
 		}
 	}
 
@@ -659,7 +585,8 @@ app_init (Application *self, char **filenames)
 			"the configuration or on the command line"));
 		exit (EXIT_FAILURE);
 	}
-	self->dict = g_array_index (self->dictionaries, Dictionary, 0).dict;
+	self->dict = ((AppDictionary *)
+		g_ptr_array_index (self->dictionaries, 0))->super.dict;
 	app_reload_view (self);
 }
 
@@ -715,7 +642,7 @@ app_destroy (Application *self)
 	g_ptr_array_free (self->entries, TRUE);
 	g_free (self->search_label);
 	g_array_free (self->input, TRUE);
-	g_array_free (self->dictionaries, TRUE);
+	g_ptr_array_free (self->dictionaries, TRUE);
 
 	g_iconv_close (self->ucs4_to_locale);
 }
@@ -935,7 +862,7 @@ app_redraw_top (Application *self)
 
 	for (guint i = 0; i < self->dictionaries->len; i++)
 	{
-		Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, i);
+		Dictionary *dict = g_ptr_array_index (self->dictionaries, i);
 		row_buffer_append (&buf, dict->name,
 			APP_ATTR_IF (self->dictionaries->len > 1
 				&& self->dict == dict->dict, ACTIVE, HEADER));
@@ -1410,7 +1337,7 @@ app_goto_dictionary (Application *self, guint n)
 	if (n >= self->dictionaries->len)
 		return FALSE;
 
-	Dictionary *dict = &g_array_index (self->dictionaries, Dictionary, n);
+	Dictionary *dict = g_ptr_array_index (self->dictionaries, n);
 	self->dict = dict->dict;
 	app_search_for_entry (self);
 	app_redraw_top (self);
@@ -1421,13 +1348,13 @@ app_goto_dictionary (Application *self, guint n)
 static gboolean
 app_goto_dictionary_delta (Application *self, gint n)
 {
-	GArray *dicts = self->dictionaries;
+	GPtrArray *dicts = self->dictionaries;
 	if (dicts->len <= 1)
 		return FALSE;
 
 	guint i = 0;
 	while (i < dicts->len &&
-		g_array_index (dicts, Dictionary, i).dict != self->dict)
+		((Dictionary *) g_ptr_array_index (dicts, i))->dict != self->dict)
 		i++;
 
 	return app_goto_dictionary (self, (i + dicts->len + n) % dicts->len);
@@ -1858,10 +1785,10 @@ app_process_left_mouse_click (Application *self, int line, int column)
 		if (column < indent)
 			return;
 
-		Dictionary *dicts = (Dictionary *) self->dictionaries->data;
 		for (guint i = 0; i < self->dictionaries->len; i++)
 		{
-			if (column < (indent += dicts[i].name_width))
+			AppDictionary *dict = g_ptr_array_index (self->dictionaries, i);
+			if (column < (indent += dict->name_width))
 			{
 				app_goto_dictionary (self, i);
 				return;

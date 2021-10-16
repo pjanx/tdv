@@ -26,15 +26,6 @@
 #include "utils.h"
 #include "stardict-view.h"
 
-typedef struct dictionary Dictionary;
-
-struct dictionary
-{
-	const gchar  *filename;          ///< Filename
-	StardictDict *dict;              ///< Stardict dictionary data
-	gchar        *name;              ///< Name to show
-};
-
 static struct
 {
 	GtkWidget    *window;            ///< Top-level window
@@ -43,8 +34,7 @@ static struct
 	GtkWidget    *view;              ///< Entries view
 
 	gint          dictionary;        ///< Index of the current dictionary
-	Dictionary   *dictionaries;      ///< All open dictionaries
-	gsize         dictionaries_len;  ///< Total number of dictionaries
+	GPtrArray    *dictionaries;      ///< All open dictionaries
 
 	gboolean      watch_selection;   ///< Following X11 PRIMARY?
 }
@@ -52,31 +42,15 @@ g;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-static gboolean
-dictionary_load (Dictionary *self, GError **e)
-{
-	if (!(self->dict = stardict_dict_new (self->filename, e)))
-		return FALSE;
-
-	if (!self->name)
-	{
-		self->name = g_strdup (stardict_info_get_book_name
-			(stardict_dict_get_info (self->dict)));
-	}
-	return TRUE;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
 static void
 init (gchar **filenames)
 {
-	while (filenames[g.dictionaries_len])
-		g.dictionaries_len++;
-
-	g.dictionaries = g_malloc0_n (sizeof *g.dictionaries, g.dictionaries_len);
-	for (gsize i = 0; i < g.dictionaries_len; i++)
-		g.dictionaries[i].filename = filenames[i];
+	for (gsize i = 0; filenames[i]; i++)
+	{
+		Dictionary *dict = g_malloc0 (sizeof *dict);
+		dict->filename = g_strdup (filenames[i]);
+		g_ptr_array_add (g.dictionaries, dict);
+	}
 }
 
 // TODO: try to deduplicate, similar to app_load_config_values()
@@ -84,19 +58,21 @@ static gboolean
 init_from_key_file (GKeyFile *kf, GError **error)
 {
 	const gchar *dictionaries = "Dictionaries";
-	gchar **names =
-		g_key_file_get_keys (kf, dictionaries, &g.dictionaries_len, NULL);
+	gchar **names = g_key_file_get_keys (kf, dictionaries, NULL, NULL);
 	if (!names)
 		return TRUE;
 
-	g.dictionaries = g_malloc0_n (sizeof *g.dictionaries, g.dictionaries_len);
-	for (gsize i = 0; i < g.dictionaries_len; i++)
-		g.dictionaries[i].name = names[i];
+	for (gsize i = 0; names[i]; i++)
+	{
+		Dictionary *dict = g_malloc0 (sizeof *dict);
+		dict->name = names[i];
+		g_ptr_array_add (g.dictionaries, dict);
+	}
 	g_free (names);
 
-	for (gsize i = 0; i < g.dictionaries_len; i++)
+	for (gsize i = 0; i < g.dictionaries->len; i++)
 	{
-		Dictionary *dict = &g.dictionaries[i];
+		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
 		gchar *path =
 			g_key_file_get_string (kf, dictionaries, dict->name, error);
 		if (!path)
@@ -142,7 +118,7 @@ search (Dictionary *dict)
 static void
 on_changed (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED gpointer data)
 {
-	search (&g.dictionaries[g.dictionary]);
+	search (g_ptr_array_index (g.dictionaries, g.dictionary));
 }
 
 static void
@@ -178,7 +154,7 @@ on_switch_page (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED GtkWidget *page,
 	guint page_num, G_GNUC_UNUSED gpointer data)
 {
 	g.dictionary = page_num;
-	search (&g.dictionaries[g.dictionary]);
+	search (g_ptr_array_index (g.dictionaries, g.dictionary));
 }
 
 static gboolean
@@ -256,17 +232,19 @@ main (int argc, char *argv[])
 		return 1;
 	}
 
+	g.dictionaries =
+		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
 	if (filenames)
 		init (filenames);
 	else if (!init_from_config (&error) && error)
 		die_with_dialog (error->message);
+	g_strfreev (filenames);
 
-	for (gsize i = 0; i < g.dictionaries_len; i++)
-		if (!dictionary_load (&g.dictionaries[i], &error))
-			die_with_dialog (error->message);
-	if (!g.dictionaries_len)
+	if (!g.dictionaries->len)
 		die_with_dialog (_("No dictionaries found either in "
 			"the configuration or on the command line"));
+	if (!load_dictionaries (g.dictionaries, &error))
+		die_with_dialog (error->message);
 
 	// Some Adwaita stupidity
 	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }";
@@ -331,9 +309,9 @@ main (int argc, char *argv[])
 	g.view = stardict_view_new ();
 	gtk_box_pack_end (GTK_BOX (superbox), g.view, TRUE, TRUE, 0);
 
-	for (gsize i = 0; i < g.dictionaries_len; i++)
+	for (gsize i = 0; i < g.dictionaries->len; i++)
 	{
-		Dictionary *dict = &g.dictionaries[i];
+		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
 		GtkWidget *dummy = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
 		GtkWidget *label = gtk_label_new (dict->name);
 		gtk_notebook_append_page (GTK_NOTEBOOK (g.notebook), dummy, label);
@@ -346,7 +324,5 @@ main (int argc, char *argv[])
 	gtk_widget_grab_focus (g.entry);
 	gtk_widget_show_all (g.window);
 	gtk_main ();
-
-	g_strfreev (filenames);
 	return 0;
 }

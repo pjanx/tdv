@@ -19,6 +19,11 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <glib.h>
+#include <gio/gio.h>
+
+#include "stardict.h"
+
 /// After this statement, the element has been found and its index is stored
 /// in the variable "imid".
 #define BINARY_SEARCH_BEGIN(max, compare)                                     \
@@ -44,10 +49,24 @@ gboolean xstrtoul (unsigned long *out, const char *s, int base);
 void fatal (const gchar *format, ...) G_GNUC_PRINTF (1, 2) G_GNUC_NORETURN;
 
 gchar *resolve_relative_filename_generic
-	(gchar **paths, const gchar *tail, const gchar *filename);
+	(const gchar **paths, const gchar *tail, const gchar *filename);
 gchar *resolve_relative_config_filename (const gchar *filename);
 gchar *resolve_filename
 	(const gchar *filename, gchar *(*relative_cb) (const char *));
 GKeyFile *load_project_config_file (GError **error);
+
+// --- Loading -----------------------------------------------------------------
+
+typedef struct dictionary Dictionary;
+
+struct dictionary
+{
+	gchar        *filename;          ///< Path to the dictionary
+	StardictDict *dict;              ///< StarDict dictionary data
+	gchar        *name;              ///< Name to show
+};
+
+void dictionary_destroy (Dictionary *self);
+gboolean load_dictionaries (GPtrArray *dictionaries, GError **e);
 
 #endif  // ! UTILS_H

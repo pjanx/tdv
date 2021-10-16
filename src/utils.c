@@ -113,7 +113,7 @@ fatal (const gchar *format, ...)
 // At times, GLib even with its sheer size is surprisingly useless,
 // and I need to port some code over from "liberty".
 
-static gchar **
+static const gchar **
 get_xdg_config_dirs (void)
 {
 	GPtrArray *paths = g_ptr_array_new ();
@@ -122,12 +122,12 @@ get_xdg_config_dirs (void)
 		*system; system++)
 		g_ptr_array_add (paths, (gpointer) *system);
 	g_ptr_array_add (paths, NULL);
-	return (gchar **) g_ptr_array_free (paths, FALSE);
+	return (const gchar **) g_ptr_array_free (paths, FALSE);
 }
 
 gchar *
 resolve_relative_filename_generic
-	(gchar **paths, const gchar *tail, const gchar *filename)
+	(const gchar **paths, const gchar *tail, const gchar *filename)
 {
 	for (; *paths; paths++)
 	{
@@ -147,10 +147,10 @@ resolve_relative_filename_generic
 gchar *
 resolve_relative_config_filename (const gchar *filename)
 {
-	gchar **paths = get_xdg_config_dirs ();
-	gchar *result = resolve_relative_filename_generic
-		(paths, PROJECT_NAME, filename);
-	g_strfreev (paths);
+	const gchar **paths = get_xdg_config_dirs ();
+	gchar *result =
+		resolve_relative_filename_generic (paths, PROJECT_NAME, filename);
+	g_free (paths);
 	return result;
 }
 
@@ -202,7 +202,7 @@ GKeyFile *
 load_project_config_file (GError **error)
 {
 	GKeyFile *key_file = g_key_file_new ();
-	gchar **paths = get_xdg_config_dirs ();
+	const gchar **paths = get_xdg_config_dirs ();
 	GError *e = NULL;
 
 	// XXX: if there are dashes in the final path component,
@@ -210,8 +210,8 @@ load_project_config_file (GError **error)
 	//   which is completely undocumented
 	g_key_file_load_from_dirs (key_file,
 		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
-		(const gchar **) paths, NULL, 0, &e);
-	g_strfreev (paths);
+		paths, NULL, 0, &e);
+	g_free (paths);
 	if (!e)
 		return key_file;
 
@@ -223,3 +223,84 @@ load_project_config_file (GError **error)
 	g_key_file_free (key_file);
 	return NULL;
 }
+
+// --- Loading -----------------------------------------------------------------
+
+void
+dictionary_destroy (Dictionary *self)
+{
+	g_free (self->name);
+	g_free (self->filename);
+
+	if (self->dict)
+		g_object_unref (self->dict);
+
+	g_free (self);
+}
+
+static gboolean
+dictionary_load (Dictionary *self, GError **e)
+{
+	if (!(self->dict = stardict_dict_new (self->filename, e)))
+		return FALSE;
+
+	if (!self->name)
+	{
+		self->name = g_strdup (stardict_info_get_book_name
+			(stardict_dict_get_info (self->dict)));
+	}
+	return TRUE;
+}
+
+static gboolean
+load_dictionaries_sequentially (GPtrArray *dictionaries, GError **e)
+{
+	for (guint i = 0; i < dictionaries->len; i++)
+		if (!dictionary_load (g_ptr_array_index (dictionaries, i), e))
+			return FALSE;
+	return TRUE;
+}
+
+// Parallelize dictionary loading if possible, because of collation reindexing
+#if GLIB_CHECK_VERSION (2, 36, 0)
+static void
+load_worker (gpointer data, gpointer user_data)
+{
+	GError *e = NULL;
+	dictionary_load (data, &e);
+	if (e)
+		g_async_queue_push (user_data, e);
+}
+
+gboolean
+load_dictionaries (GPtrArray *dictionaries, GError **e)
+{
+	GAsyncQueue *error_queue =
+		g_async_queue_new_full ((GDestroyNotify) g_error_free);
+	GThreadPool *pool = g_thread_pool_new (load_worker, error_queue,
+		g_get_num_processors (), TRUE, NULL);
+	if G_UNLIKELY (!g_thread_pool_get_num_threads (pool))
+	{
+		g_thread_pool_free (pool, TRUE, TRUE);
+		g_async_queue_unref (error_queue);
+		return load_dictionaries_sequentially (dictionaries, e);
+	}
+
+	for (guint i = 0; i < dictionaries->len; i++)
+		g_thread_pool_push (pool, g_ptr_array_index (dictionaries, i), NULL);
+	g_thread_pool_free (pool, FALSE, TRUE);
+
+	gboolean result = TRUE;
+	if ((*e = g_async_queue_try_pop (error_queue)))
+		result = FALSE;
+
+	g_async_queue_unref (error_queue);
+	return result;
+}
+#else  // GLib < 2.36
+gboolean
+load_dictionaries (GPtrArray *dictionaries, GError **e)
+{
+	return load_dictionaries_sequentially (dictionaries, e);
+}
+#endif  // GLib < 2.36
