@@ -139,20 +139,16 @@ view_entry_height (ViewEntry *ve, gint *word_offset, gint *defn_offset)
 #define PADDING 5
 
 static gint
-view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width, gboolean even)
+view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
+	GtkStyleContext *style)
 {
-	// TODO: this shouldn't be hardcoded, read it out from somewhere
-	gdouble g = even ? 1. : .95;
-
 	gint word_y = 0, defn_y = 0,
 		height = view_entry_height (ve, &word_y, &defn_y);
-	cairo_rectangle (cr, 0, 0, full_width, height);
-	cairo_set_source_rgb (cr, g, g, g);
-	cairo_fill (cr);
 
-	cairo_set_source_rgb (cr, 0, 0, 0);
-	cairo_move_to (cr, full_width / 2 + PADDING, defn_y);
-	pango_cairo_show_layout (cr, ve->definition_layout);
+	gtk_render_background (style, cr, 0, 0, full_width, height);
+	gtk_render_frame (style, cr, 0, 0, full_width, height);
+	gtk_render_layout (style, cr,
+		full_width / 2 + PADDING, defn_y, ve->definition_layout);
 
 	PangoLayoutIter *iter = pango_layout_get_iter (ve->definition_layout);
 	do
@@ -162,8 +158,8 @@ view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width, gboolean even)
 
 		PangoRectangle logical = {};
 		pango_layout_iter_get_line_extents (iter, NULL, &logical);
-		cairo_move_to (cr, PADDING, word_y + PANGO_PIXELS (logical.y));
-		pango_cairo_show_layout (cr, ve->word_layout);
+		gtk_render_layout (style, cr,
+			PADDING, word_y + PANGO_PIXELS (logical.y), ve->word_layout);
 	}
 	while (pango_layout_iter_next_line (iter));
 	pango_layout_iter_free (iter);
@@ -403,15 +399,33 @@ stardict_view_draw (GtkWidget *widget, cairo_t *cr)
 	GtkAllocation allocation;
 	gtk_widget_get_allocation (widget, &allocation);
 
+	GtkStyleContext *style = gtk_widget_get_style_context (widget);
+	gtk_render_background (style, cr,
+		0, 0, allocation.width, allocation.height);
+	gtk_render_frame (style, cr,
+		0, 0, allocation.width, allocation.height);
+
 	gint offset = -self->top_offset;
 	gint i = self->top_position;
 	for (GList *iter = self->entries; iter; iter = iter->next)
 	{
+		// Style regions would be appropriate, if they weren't deprecated.
+		// GTK+ CSS gadgets/notes are an internal API.  We don't want to turn
+		// this widget into a container, to avoid needless complexity.
+		//
+		// gtk_style_context_{get,set}_path() may be misused by adding the same
+		// GType with gtk_widget_path_append_type() and changing its name
+		// using gtk_widget_path_iter_set_name()... but that is ugly.
+		gtk_style_context_save (style);
+		gtk_style_context_add_class (style, (i++ & 1) ? "even" : "odd");
+
 		cairo_save (cr);
 		cairo_translate (cr, 0, offset);
 		// TODO: later exclude clipped entries, but it's not that important
-		offset += view_entry_draw (iter->data, cr, allocation.width, i++ & 1);
+		offset += view_entry_draw (iter->data, cr, allocation.width, style);
 		cairo_restore (cr);
+
+		gtk_style_context_restore (style);
 	}
 	return TRUE;
 }
@@ -476,6 +490,8 @@ stardict_view_class_init (StardictViewClass *klass)
 	widget_class->size_allocate = stardict_view_size_allocate;
 	widget_class->screen_changed = stardict_view_screen_changed;
 	widget_class->scroll_event = stardict_view_scroll_event;
+
+	gtk_widget_class_set_css_name (widget_class, "stardict-view");
 }
 
 static void

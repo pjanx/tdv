@@ -246,8 +246,23 @@ main (int argc, char *argv[])
 	if (!load_dictionaries (g.dictionaries, &error))
 		die_with_dialog (error->message);
 
-	// Some Adwaita stupidity
-	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }";
+	// Some Adwaita stupidity, plus defaults for our own widget.
+	// All the named colours have been there since GNOME 3.4
+	// (see gnome-extra-themes git history, Adwaita used to live there).
+	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }"
+		"stardict-view.odd {"
+			"background: @theme_base_color; "
+			"color: @theme_text_color; }"
+		"stardict-view.odd:backdrop {"
+			"background: @theme_unfocused_base_color; "
+			"color: @theme_fg_color; /* should be more faded than 'text' */ }"
+		"stardict-view.even {"
+			"background: mix(@theme_base_color, @theme_text_color, 0.02); "
+			"color: @theme_text_color; }"
+		"stardict-view.even:backdrop {"
+			"background: mix(@theme_unfocused_base_color, "
+				"@theme_fg_color, 0.02); "
+			"color: @theme_fg_color; /* should be more faded than 'text' */ }";
 
 	GdkScreen *screen = gdk_screen_get_default ();
 	GtkCssProvider *provider = gtk_css_provider_new ();
