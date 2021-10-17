@@ -81,8 +81,9 @@ and general undesirability of terminal UIs, it might be better to start anew.
 
 Graphical UI
 ------------
-With GTK+ 3 development packages installed, an alternative, work-in-progress
-frontend will be built and installed.
+With GTK+ 3 development packages installed, an alternative frontend will be
+built and installed.  It shares the default dictionary list with 'sdtui',
+but styling will follow your theme, and has to be customized from 'gtk.css'.
 
 Contributing and Support
 ------------------------

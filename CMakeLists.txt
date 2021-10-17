@@ -79,7 +79,7 @@ if (WITH_X11)
 endif ()
 
 pkg_check_modules (gtk gtk+-3.0)
-option (WITH_GUI "Build a work-in-progress GTK+ UI" ${gtk_FOUND})
+option (WITH_GUI "Build an alternative GTK+ UI" ${gtk_FOUND})
 
 link_directories (${dependencies_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
