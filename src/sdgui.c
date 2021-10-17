@@ -250,6 +250,7 @@ main (int argc, char *argv[])
 	// All the named colours have been there since GNOME 3.4
 	// (see gnome-extra-themes git history, Adwaita used to live there).
 	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }"
+		"stardict-view { padding: 0 .25em; }"
 		"stardict-view.odd {"
 			"background: @theme_base_color; "
 			"color: @theme_text_color; }"

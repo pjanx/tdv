@@ -136,7 +136,14 @@ view_entry_height (ViewEntry *ve, gint *word_offset, gint *defn_offset)
 	return MAX (word_y + word_h, defn_y + defn_h);
 }
 
-#define PADDING 5
+static GtkBorder
+view_entry_get_padding (GtkStyleContext *style)
+{
+	GtkBorder padding = {};
+	GtkStateFlags state = gtk_style_context_get_state (style);
+	gtk_style_context_get_padding (style, state, &padding);
+	return padding;
+}
 
 static gint
 view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
@@ -147,9 +154,18 @@ view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
 
 	gtk_render_background (style, cr, 0, 0, full_width, height);
 	gtk_render_frame (style, cr, 0, 0, full_width, height);
-	gtk_render_layout (style, cr,
-		full_width / 2 + PADDING, defn_y, ve->definition_layout);
 
+	// Top/bottom and left/right-dependent padding will not work, too much code
+	GtkBorder padding = view_entry_get_padding (style);
+
+	gtk_style_context_save (style);
+	gtk_style_context_add_class (style, GTK_STYLE_CLASS_RIGHT);
+	gtk_render_layout (style, cr,
+		full_width / 2 + padding.left, defn_y, ve->definition_layout);
+	gtk_style_context_restore (style);
+
+	gtk_style_context_save (style);
+	gtk_style_context_add_class (style, GTK_STYLE_CLASS_LEFT);
 	PangoLayoutIter *iter = pango_layout_get_iter (ve->definition_layout);
 	do
 	{
@@ -159,35 +175,42 @@ view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
 		PangoRectangle logical = {};
 		pango_layout_iter_get_line_extents (iter, NULL, &logical);
 		gtk_render_layout (style, cr,
-			PADDING, word_y + PANGO_PIXELS (logical.y), ve->word_layout);
+			padding.left, word_y + PANGO_PIXELS (logical.y), ve->word_layout);
 	}
 	while (pango_layout_iter_next_line (iter));
 	pango_layout_iter_free (iter);
+	gtk_style_context_restore (style);
 	return height;
 }
 
 static void
-view_entry_rebuild_layout (ViewEntry *ve, PangoContext *pc, gint width)
+view_entry_rebuild_layouts (ViewEntry *ve, GtkWidget *widget)
 {
+	PangoContext *pc = gtk_widget_get_pango_context (widget);
+	GtkStyleContext *style = gtk_widget_get_style_context (widget);
+	gint full_width = gtk_widget_get_allocated_width (widget);
+
 	g_clear_object (&ve->word_layout);
 	g_clear_object (&ve->definition_layout);
 
-	int left_width = width / 2 - 2 * PADDING;
-	int right_width = width - left_width - 2 * PADDING;
-	if (left_width < 1 || right_width < 1)
+	GtkBorder padding = view_entry_get_padding (style);
+	gint part_width = full_width / 2 - padding.left - padding.right;
+	if (part_width < 1)
 		return;
 
+	// Left/right-dependent fonts aren't supported (GTK_STYLE_PROPERTY_FONT)
 	// TODO: preferably pre-validate the layouts with pango_parse_markup(),
 	//   so that it doesn't warn without indication on the frontend
 	ve->word_layout = pango_layout_new (pc);
 	pango_layout_set_markup (ve->word_layout, ve->word, -1);
 	pango_layout_set_ellipsize (ve->word_layout, PANGO_ELLIPSIZE_END);
 	pango_layout_set_single_paragraph_mode (ve->word_layout, TRUE);
-	pango_layout_set_width (ve->word_layout, PANGO_SCALE * left_width);
+	pango_layout_set_width (ve->word_layout, PANGO_SCALE * part_width);
 
 	ve->definition_layout = pango_layout_new (pc);
 	pango_layout_set_markup (ve->definition_layout, ve->definition, -1);
-	pango_layout_set_width (ve->definition_layout, PANGO_SCALE * right_width);
+	pango_layout_set_width (ve->definition_layout, PANGO_SCALE * part_width);
+	pango_layout_set_wrap (ve->definition_layout, PANGO_WRAP_WORD_CHAR);
 }
 
 // --- Widget ------------------------------------------------------------------
@@ -210,12 +233,9 @@ struct _StardictView
 static ViewEntry *
 make_entry (StardictView *self, StardictIterator *iterator)
 {
-	ViewEntry *ve =
-		view_entry_new (iterator, self->matched ? self->matched : "");
-
-	GtkWidget *widget = GTK_WIDGET (self);
-	view_entry_rebuild_layout (ve, gtk_widget_get_pango_context (widget),
-		gtk_widget_get_allocated_width (widget));
+	const gchar *matched = self->matched ? self->matched : "";
+	ViewEntry *ve = view_entry_new (iterator, matched);
+	view_entry_rebuild_layouts (ve, GTK_WIDGET (self));
 	return ve;
 }
 
@@ -350,10 +370,12 @@ stardict_view_get_preferred_height (GtkWidget *widget,
 }
 
 static void
-stardict_view_get_preferred_width (GtkWidget *widget G_GNUC_UNUSED,
+stardict_view_get_preferred_width (GtkWidget *widget,
 	gint *minimum, gint *natural)
 {
-	*natural = *minimum = 4 * PADDING;
+	GtkStyleContext *style = gtk_widget_get_style_context (widget);
+	GtkBorder padding = view_entry_get_padding (style);
+	*natural = *minimum = 2 * (padding.left + 1 * padding.right);
 }
 
 static void
@@ -383,9 +405,7 @@ stardict_view_realize (GtkWidget *widget)
 	GdkWindow *window = gdk_window_new (gtk_widget_get_parent_window (widget),
 		&attributes, GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL);
 
-	// The default background colour of the GDK window is transparent,
-	// we'll keep it that way, rather than apply the style context.
-
+	// The default background colour of the GDK window is transparent
 	gtk_widget_register_window (widget, window);
 	gtk_widget_set_window (widget, window);
 	gtk_widget_set_realized (widget, TRUE);
