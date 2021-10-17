@@ -250,6 +250,12 @@ main (int argc, char *argv[])
 	// All the named colours have been there since GNOME 3.4
 	// (see gnome-extra-themes git history, Adwaita used to live there).
 	const char *style = "notebook header tab { padding: 2px 8px; margin: 0; }"
+		// `gsettings set org.gnome.desktop.interface gtk-key-theme "Emacs"`
+		// isn't quite what I want, and note that ^U works by default
+		"@binding-set Readline {"
+			"bind '<Control>H' { 'delete-from-cursor' (chars, -1) };"
+			"bind '<Control>W' { 'delete-from-cursor' (word-ends, -1) }; }"
+		"entry { -gtk-key-bindings: Readline }"
 		"stardict-view { padding: 0 .25em; }"
 		"stardict-view.odd {"
 			"background: @theme_base_color; "
@@ -299,9 +305,6 @@ main (int argc, char *argv[])
 
 	// FIXME: when the clear icon shows, the widget changes in height
 	g.entry = gtk_search_entry_new ();
-	// TODO: attach to the "key-press-event" signal and implement ^W at least,
-	// though ^U is working already!  Note that bindings can be done in CSS
-	// as well, if we have any extra specially for the editor
 	g_signal_connect (g.entry, "changed", G_CALLBACK (on_changed), g.view);
 	// TODO: make the entry have a background colour, rather than transparency
 	gtk_entry_set_has_frame (GTK_ENTRY (g.entry), FALSE);
