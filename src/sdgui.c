@@ -171,7 +171,9 @@ accelerate_hamburger (GdkEvent *event)
 	GdkModifierType mods = 0;
 	gtk_accelerator_parse (accelerator, &key, &mods);
 	g_free (accelerator);
-	if (!key || event->key.keyval != key || event->key.state != mods)
+
+	guint mask = gtk_accelerator_get_default_mod_mask ();
+	if (!key || event->key.keyval != key || (event->key.state & mask) != mods)
 		return FALSE;
 
 	gtk_button_clicked (GTK_BUTTON (g.hamburger));
@@ -187,7 +189,8 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 	if (accelerate_hamburger (event))
 		return TRUE;
 
-	if (event->key.state == GDK_CONTROL_MASK)
+	guint mods = event->key.state & gtk_accelerator_get_default_mod_mask ();
+	if (mods == GDK_CONTROL_MASK)
 	{
 		// Can't use gtk_widget_add_accelerator() to change-current-page(-1/+1)
 		// because that signal has arguments, which cannot be passed.
@@ -202,7 +205,7 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 			return TRUE;
 		}
 	}
-	if (event->key.state == GDK_MOD1_MASK)
+	if (mods == GDK_MOD1_MASK)
 	{
 		if (event->key.keyval >= GDK_KEY_0
 		 && event->key.keyval <= GDK_KEY_9)
