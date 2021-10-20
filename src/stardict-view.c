@@ -395,8 +395,9 @@ stardict_view_realize (GtkWidget *widget)
 		// Input-only would presumably also work (as in GtkPathBar, e.g.),
 		// but it merely seems to involve more work.
 		.wclass      = GDK_INPUT_OUTPUT,
-
 		.visual      = gtk_widget_get_visual (widget),
+
+		// GDK_SMOOTH_SCROLL_MASK is useless, will stop sending UP/DOWN
 		.event_mask  = gtk_widget_get_events (widget) | GDK_SCROLL_MASK,
 	};
 
@@ -481,15 +482,16 @@ stardict_view_scroll_event (GtkWidget *widget, GdkEventScroll *event)
 	switch (event->direction)
 	{
 	case GDK_SCROLL_UP:
-		self->top_offset -= 3 * natural_row_size (widget);
-		adjust_for_offset (self);
+		stardict_view_scroll (self, GTK_SCROLL_STEPS, -3);
 		return TRUE;
 	case GDK_SCROLL_DOWN:
-		self->top_offset += 3 * natural_row_size (widget);
+		stardict_view_scroll (self, GTK_SCROLL_STEPS, +3);
+		return TRUE;
+	case GDK_SCROLL_SMOOTH:
+		self->top_offset += event->delta_y;
 		adjust_for_offset (self);
 		return TRUE;
 	default:
-		// GDK_SCROLL_SMOOTH doesn't fit the intended way of usage
 		return FALSE;
 	}
 }
