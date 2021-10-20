@@ -12,6 +12,10 @@ software.
 
 image::sdtui.png[align="center"]
 
+With GTK+ 3 development packages installed, an alternative frontend will also be
+built and installed.  It shares the default dictionary list with 'sdtui',
+but styling will follow your theme, and has to be customized from 'gtk.css'.
+
 Packages
 --------
 Regular releases are sporadic.  git master should be stable enough.  You can get
@@ -26,7 +30,8 @@ Building and Running
 --------------------
 Build dependencies: CMake, pkg-config, asciidoctor +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included), glib-2.0 >= 2.38,
-                      pango, xcb, xcb-xfixes (the latter two optional)
+ pango, xcb, xcb-xfixes (the latter two optional for the TUI),
+ gtk+-3.0 (for the alternative graphical UI)
 
  $ git clone --recursive https://git.janouch.name/p/sdtui.git
  $ mkdir sdtui/build
@@ -73,17 +78,10 @@ While I've been successfully using 'sdtui' for many years now, some work has to
 be done yet before the software can be considered fit for inclusion in regular
 Linux and/or BSD distributions:
 
- - The tab bar and the text input field don't handle overflows well.
+ - The tab bar and the text input field don't handle overflows well in the TUI.
  - Lacking configuration, standard StarDict locations should be scanned.
 
-Given the entangledness of this codebase, issues with the file format,
-and general undesirability of terminal UIs, it might be better to start anew.
-
-Graphical UI
-------------
-With GTK+ 3 development packages installed, an alternative frontend will be
-built and installed.  It shares the default dictionary list with 'sdtui',
-but styling will follow your theme, and has to be customized from 'gtk.css'.
+Given all issues with the file format, it might be better to start anew.
 
 Contributing and Support
 ------------------------
