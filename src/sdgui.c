@@ -219,6 +219,10 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 			return stardict_view_scroll (view, GTK_SCROLL_PAGES, -0.5), TRUE;
 		if (event->key.keyval == GDK_KEY_Page_Down)
 			return stardict_view_scroll (view, GTK_SCROLL_PAGES, +0.5), TRUE;
+		if (event->key.keyval == GDK_KEY_Up)
+			return stardict_view_scroll (view, GTK_SCROLL_STEPS, -1), TRUE;
+		if (event->key.keyval == GDK_KEY_Down)
+			return stardict_view_scroll (view, GTK_SCROLL_STEPS, +1), TRUE;
 	}
 	return FALSE;
 }
