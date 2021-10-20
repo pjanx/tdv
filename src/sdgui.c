@@ -290,7 +290,7 @@ main (int argc, char *argv[])
 		"@binding-set Readline {"
 			"bind '<Control>H' { 'delete-from-cursor' (chars, -1) };"
 			"bind '<Control>W' { 'delete-from-cursor' (word-ends, -1) }; }"
-		"entry { -gtk-key-bindings: Readline }"
+		"entry { -gtk-key-bindings: Readline; border-radius: 0; }"
 		"stardict-view { padding: 0 .25em; }"
 		"stardict-view.odd {"
 			"background: @theme_base_color; "
@@ -312,11 +312,6 @@ main (int argc, char *argv[])
 	gtk_style_context_add_provider_for_screen (screen,
 		GTK_STYLE_PROVIDER (provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-	g.notebook = gtk_notebook_new ();
-	g_signal_connect (g.notebook, "switch-page",
-		G_CALLBACK (on_switch_page), NULL);
-	gtk_notebook_set_scrollable (GTK_NOTEBOOK (g.notebook), TRUE);
-
 	g.watch_selection = TRUE;
 	GtkWidget *item =
 		gtk_check_menu_item_new_with_label (_("Follow selection"));
@@ -336,14 +331,15 @@ main (int argc, char *argv[])
 	gtk_button_set_relief (GTK_BUTTON (g.hamburger), GTK_RELIEF_NONE);
 	gtk_widget_show (g.hamburger);
 
+	g.notebook = gtk_notebook_new ();
+	g_signal_connect (g.notebook, "switch-page",
+		G_CALLBACK (on_switch_page), NULL);
+	gtk_notebook_set_scrollable (GTK_NOTEBOOK (g.notebook), TRUE);
 	gtk_notebook_set_action_widget
 		(GTK_NOTEBOOK (g.notebook), g.hamburger, GTK_PACK_END);
 
-	// FIXME: when the clear icon shows, the widget changes in height
 	g.entry = gtk_search_entry_new ();
 	g_signal_connect (g.entry, "changed", G_CALLBACK (on_changed), g.view);
-	// TODO: make the entry have a background colour, rather than transparency
-	gtk_entry_set_has_frame (GTK_ENTRY (g.entry), FALSE);
 
 	g.window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_default_size (GTK_WINDOW (g.window), 300, 600);
