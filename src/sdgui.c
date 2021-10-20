@@ -30,6 +30,7 @@ static struct
 {
 	GtkWidget    *window;            ///< Top-level window
 	GtkWidget    *notebook;          ///< Notebook with tabs
+	GtkWidget    *hamburger;         ///< Hamburger menu
 	GtkWidget    *entry;             ///< Search entry widget
 	GtkWidget    *view;              ///< Entries view
 
@@ -158,11 +159,38 @@ on_switch_page (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED GtkWidget *page,
 }
 
 static gboolean
+accelerate_hamburger (GdkEvent *event)
+{
+	gchar *accelerator = NULL;
+	g_object_get (gtk_widget_get_settings (g.window), "gtk-menu-bar-accel",
+		&accelerator, NULL);
+	if (!accelerator)
+		return FALSE;
+
+	guint key = 0;
+	GdkModifierType mods = 0;
+	gtk_accelerator_parse (accelerator, &key, &mods);
+	g_free (accelerator);
+	if (!key || event->key.keyval != key || event->key.state != mods)
+		return FALSE;
+
+	gtk_button_clicked (GTK_BUTTON (g.hamburger));
+	return TRUE;
+}
+
+static gboolean
 on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 	G_GNUC_UNUSED gpointer data)
 {
+	// The "activate" signal of the GtkMenuButton cannot be used
+	// from a real accelerator, due to "no trigger event for menu popup".
+	if (accelerate_hamburger (event))
+		return TRUE;
+
 	if (event->key.state == GDK_CONTROL_MASK)
 	{
+		// Can't use gtk_widget_add_accelerator() to change-current-page(-1/+1)
+		// because that signal has arguments, which cannot be passed.
 		if (event->key.keyval == GDK_KEY_Page_Up)
 		{
 			gtk_notebook_prev_page (GTK_NOTEBOOK (g.notebook));
@@ -294,14 +322,15 @@ main (int argc, char *argv[])
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
 	gtk_widget_show_all (menu);
 
-	GtkWidget *hamburger = gtk_menu_button_new ();
-	gtk_menu_button_set_direction (GTK_MENU_BUTTON (hamburger), GTK_ARROW_NONE);
-	gtk_menu_button_set_popup (GTK_MENU_BUTTON (hamburger), menu);
-	gtk_button_set_relief (GTK_BUTTON (hamburger), GTK_RELIEF_NONE);
-	gtk_widget_show (hamburger);
+	g.hamburger = gtk_menu_button_new ();
+	gtk_menu_button_set_direction
+		(GTK_MENU_BUTTON (g.hamburger), GTK_ARROW_NONE);
+	gtk_menu_button_set_popup (GTK_MENU_BUTTON (g.hamburger), menu);
+	gtk_button_set_relief (GTK_BUTTON (g.hamburger), GTK_RELIEF_NONE);
+	gtk_widget_show (g.hamburger);
 
 	gtk_notebook_set_action_widget
-		(GTK_NOTEBOOK (g.notebook), hamburger, GTK_PACK_END);
+		(GTK_NOTEBOOK (g.notebook), g.hamburger, GTK_PACK_END);
 
 	// FIXME: when the clear icon shows, the widget changes in height
 	g.entry = gtk_search_entry_new ();
