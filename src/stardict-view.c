@@ -555,3 +555,24 @@ stardict_view_set_matched (StardictView *self, const gchar *matched)
 	self->matched = g_strdup (matched);
 	reload (self);
 }
+
+void
+stardict_view_scroll (StardictView *self, GtkScrollStep step, gdouble amount)
+{
+	g_return_if_fail (STARDICT_IS_VIEW (self));
+
+	GtkWidget *widget = GTK_WIDGET (self);
+	switch (step)
+	{
+	case GTK_SCROLL_STEPS:
+		self->top_offset += amount * natural_row_size (widget);
+		break;
+	case GTK_SCROLL_PAGES:
+		self->top_offset += amount * gtk_widget_get_allocated_height (widget);
+		break;
+	default:
+		break;
+	}
+
+	adjust_for_offset (self);
+}

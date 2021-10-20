@@ -30,5 +30,7 @@ GtkWidget *stardict_view_new (void);
 void stardict_view_set_position (StardictView *view,
 	StardictDict *dict, guint position);
 void stardict_view_set_matched (StardictView *view, const gchar *matched);
+void stardict_view_scroll (StardictView *view,
+	GtkScrollStep step, gdouble amount);
 
 #endif  // ! STARDICT_VIEW_H

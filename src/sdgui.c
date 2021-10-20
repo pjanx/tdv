@@ -216,6 +216,20 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 			return TRUE;
 		}
 	}
+	if (mods == 0)
+	{
+		StardictView *view = STARDICT_VIEW (g.view);
+		if (event->key.keyval == GDK_KEY_Page_Up)
+		{
+			stardict_view_scroll (view, GTK_SCROLL_PAGES, -0.5);
+			return TRUE;
+		}
+		if (event->key.keyval == GDK_KEY_Page_Down)
+		{
+			stardict_view_scroll (view, GTK_SCROLL_PAGES, +0.5);
+			return TRUE;
+		}
+	}
 	return FALSE;
 }
 
@@ -341,8 +355,6 @@ main (int argc, char *argv[])
 	// TODO: make the entry have a background colour, rather than transparency
 	gtk_entry_set_has_frame (GTK_ENTRY (g.entry), FALSE);
 
-	// TODO: supposedly attach to "key-press-event" here and react to
-	// PageUp/PageDown and up/down arrow keys... either here or in the Entry
 	g.window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_default_size (GTK_WINDOW (g.window), 300, 600);
 	g_signal_connect (g.window, "destroy",
