@@ -195,15 +195,9 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 		// Can't use gtk_widget_add_accelerator() to change-current-page(-1/+1)
 		// because that signal has arguments, which cannot be passed.
 		if (event->key.keyval == GDK_KEY_Page_Up)
-		{
-			gtk_notebook_prev_page (GTK_NOTEBOOK (g.notebook));
-			return TRUE;
-		}
+			return gtk_notebook_prev_page (GTK_NOTEBOOK (g.notebook)), TRUE;
 		if (event->key.keyval == GDK_KEY_Page_Down)
-		{
-			gtk_notebook_next_page (GTK_NOTEBOOK (g.notebook));
-			return TRUE;
-		}
+			return gtk_notebook_next_page (GTK_NOTEBOOK (g.notebook)), TRUE;
 	}
 	if (mods == GDK_MOD1_MASK)
 	{
@@ -220,15 +214,9 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 	{
 		StardictView *view = STARDICT_VIEW (g.view);
 		if (event->key.keyval == GDK_KEY_Page_Up)
-		{
-			stardict_view_scroll (view, GTK_SCROLL_PAGES, -0.5);
-			return TRUE;
-		}
+			return stardict_view_scroll (view, GTK_SCROLL_PAGES, -0.5), TRUE;
 		if (event->key.keyval == GDK_KEY_Page_Down)
-		{
-			stardict_view_scroll (view, GTK_SCROLL_PAGES, +0.5);
-			return TRUE;
-		}
+			return stardict_view_scroll (view, GTK_SCROLL_PAGES, +0.5), TRUE;
 	}
 	return FALSE;
 }
