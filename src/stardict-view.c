@@ -27,7 +27,8 @@ typedef struct view_entry ViewEntry;
 
 struct view_entry
 {
-	gchar *word;                        ///< The word, in Pango markup
+	gchar *word;                        ///< The word
+	gsize word_matched;                 ///< Initial matching bytes of the word
 	gchar *definition;                  ///< Definition lines, in Pango markup
 
 	PangoLayout *word_layout;           ///< Ellipsized one-line layout or NULL
@@ -56,18 +57,8 @@ view_entry_new (StardictIterator *iterator, const gchar *matched)
 	// it on each search field change by rebuilding the list of view entries.
 	// The phonetics suffix would need to be stored separately.
 	const gchar *word = stardict_iterator_get_word (iterator);
-	gsize common_prefix = stardict_longest_common_collation_prefix
-		(iterator->owner, word, matched);
 
-	ViewEntry *ve = g_slice_alloc0 (sizeof *ve);
-
-	GString *adjusted_word = g_string_new ("");
-	gchar *pre = g_markup_escape_text (word, common_prefix);
-	gchar *post = g_markup_escape_text (word + common_prefix, -1);
-	g_string_printf (adjusted_word, "<u>%s</u>%s", pre, post);
-	g_free (pre);
-	g_free (post);
-
+	GString *adjusted_word = g_string_new (word);
 	GPtrArray *definitions = g_ptr_array_new_full (2, g_free);
 	for (const GList *fields = stardict_entry_get_fields (entry); fields; )
 	{
@@ -86,12 +77,8 @@ view_entry_new (StardictIterator *iterator, const gchar *matched)
 				xdxf_to_pango_markup_with_reduced_effort (field->data));
 			break;
 		case STARDICT_FIELD_PHONETIC:
-		{
-			gchar *escaped = g_markup_escape_text (field->data, -1);
-			g_string_append_printf (adjusted_word, " /%s/", escaped);
-			g_free (escaped);
-			break;
-		}
+			g_string_append_printf (adjusted_word,
+				" /%s/", (const char *) field->data);
 		default:
 			// TODO: support more of them
 			break;
@@ -100,7 +87,10 @@ view_entry_new (StardictIterator *iterator, const gchar *matched)
 	}
 	g_object_unref (entry);
 
+	ViewEntry *ve = g_slice_alloc0 (sizeof *ve);
 	ve->word = g_string_free (adjusted_word, FALSE);
+	ve->word_matched = stardict_longest_common_collation_prefix
+		(iterator->owner, word, matched);
 	if (!definitions->len)
 	{
 		gchar *message = g_markup_escape_text (_("no usable field found"), -1);
@@ -198,15 +188,24 @@ view_entry_rebuild_layouts (ViewEntry *ve, GtkWidget *widget)
 	if (part_width < 1)
 		return;
 
-	// Left/right-dependent fonts aren't supported (GTK_STYLE_PROPERTY_FONT)
-	// TODO: preferably pre-validate the layouts with pango_parse_markup(),
-	//   so that it doesn't warn without indication on the frontend
+	// Left/right-dependent fonts aren't supported
 	ve->word_layout = pango_layout_new (pc);
-	pango_layout_set_markup (ve->word_layout, ve->word, -1);
+	pango_layout_set_text (ve->word_layout, ve->word, -1);
 	pango_layout_set_ellipsize (ve->word_layout, PANGO_ELLIPSIZE_END);
 	pango_layout_set_single_paragraph_mode (ve->word_layout, TRUE);
 	pango_layout_set_width (ve->word_layout, PANGO_SCALE * part_width);
 
+	// gtk_css_style_get_pango_attributes() is completely inaccessible,
+	// so the underline cannot be styled (GTK_STYLE_PROPERTY_FONT isn't enough)
+	PangoAttrList *attrs = pango_attr_list_new ();
+	PangoAttribute *u = pango_attr_underline_new (PANGO_UNDERLINE_SINGLE);
+	u->end_index = ve->word_matched;
+	pango_attr_list_insert (attrs, u);
+	pango_layout_set_attributes (ve->word_layout, attrs);
+	pango_attr_list_unref (attrs);
+
+	// TODO: preferably pre-validate the layout with pango_parse_markup(),
+	//   so that it doesn't warn without indication on the frontend
 	ve->definition_layout = pango_layout_new (pc);
 	pango_layout_set_markup (ve->definition_layout, ve->definition, -1);
 	pango_layout_set_width (ve->definition_layout, PANGO_SCALE * part_width);
@@ -431,7 +430,7 @@ stardict_view_draw (GtkWidget *widget, cairo_t *cr)
 	for (GList *iter = self->entries; iter; iter = iter->next)
 	{
 		// Style regions would be appropriate, if they weren't deprecated.
-		// GTK+ CSS gadgets/notes are an internal API.  We don't want to turn
+		// GTK+ CSS gadgets/nodes are an internal API.  We don't want to turn
 		// this widget into a container, to avoid needless complexity.
 		//
 		// gtk_style_context_{get,set}_path() may be misused by adding the same
