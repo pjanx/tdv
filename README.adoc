@@ -12,9 +12,9 @@ software.
 
 image::sdtui.png[align="center"]
 
-With GTK+ 3 development packages installed, an alternative frontend will also be
-built and installed.  It shares the default dictionary list with 'sdtui',
-but styling will follow your theme, and has to be customized from 'gtk.css'.
+As a recent addition, there is now an alternative GTK+ 3 based frontend as well.
+It shares its dictionary list with 'sdtui', but styling will follow your theme,
+and may be customized from 'gtk.css'.
 
 Packages
 --------
@@ -36,7 +36,8 @@ Runtime dependencies: ncursesw, zlib, ICU, termo (included), glib-2.0 >= 2.38,
  $ git clone --recursive https://git.janouch.name/p/sdtui.git
  $ mkdir sdtui/build
  $ cd sdtui/build
- $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug -DWITH_X11=ON
+ $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug \
+   -DWITH_X11=ON -DWITH_GUI=ON
  $ make
 
 To install the application, you can do either the usual:
@@ -52,6 +53,18 @@ Having the program installed, simply run it with a StarDict '.ifo' file as
 an argument.  It is, however, preferable to
 link:docs/sdtui.1.adoc#_configuration[configure it] to load your dictionaries
 automatically.
+
+Windows
+~~~~~~~
+With the help of Mingw-w64 and WINE, the GUI will successfully cross-compile
+for Windows.  It isn't particularly usable on that system, if only because
+selection watching is a very X11/Wayland-specific feature.  Beware that build
+dependencies take up almost a gigabyte of disk space.
+
+ $ sh cmake/Win64Depends.cmake
+ $ cmake -DCMAKE_TOOLCHAIN_FILE=cmake/Win64CrossToolchain.cmake \
+   -DCMAKE_BUILD_TYPE=Release -B build
+ $ cmake --build build -- package
 
 Dictionaries
 ------------

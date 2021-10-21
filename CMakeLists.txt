@@ -11,6 +11,25 @@ endif ()
 # For custom modules
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+# Cross-compilation for Windows, as a proof-of-concept pulled in from logdiag
+if (WIN32)
+	if (NOT CMAKE_CROSSCOMPILING)
+		message (FATAL_ERROR "Win32 must be cross-compiled to build sensibly")
+	endif ()
+
+	set (WIN32_DEPENDS_PATH ${PROJECT_SOURCE_DIR}/win32-depends)
+	list (APPEND CMAKE_PREFIX_PATH ${WIN32_DEPENDS_PATH})
+	list (APPEND CMAKE_INCLUDE_PATH ${WIN32_DEPENDS_PATH}/lib)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mms-bitfields")
+
+	if (CMAKE_CROSSCOMPILING)
+		list (APPEND CMAKE_FIND_ROOT_PATH ${WIN32_DEPENDS_PATH})
+	endif (CMAKE_CROSSCOMPILING)
+
+	set (ENV{PKG_CONFIG_LIBDIR}
+		"${WIN32_DEPENDS_PATH}/share/pkgconfig:${WIN32_DEPENDS_PATH}/lib/pkgconfig")
+endif (WIN32)
+
 # Dependencies
 find_package (ZLIB REQUIRED)
 find_package (Ncursesw REQUIRED)
@@ -18,7 +37,7 @@ find_package (PkgConfig REQUIRED)
 pkg_check_modules (dependencies REQUIRED glib-2.0>=2.38 gio-2.0 pango)
 
 pkg_check_modules (icu icu-uc icu-i18n)
-if (NOT icu_FOUND)
+if (NOT icu_FOUND AND NOT WIN32)
 	find_program (icu_CONFIG_EXECUTABLE icu-config)
 	if (NOT icu_CONFIG_EXECUTABLE)
 		message (FATAL_ERROR "ICU not found")
@@ -73,9 +92,8 @@ if (WITH_X11)
 		message (FATAL_ERROR "XCB not found")
 	endif ()
 
-	list (APPEND dependencies_INCLUDE_DIRS ${xcb_INCLUDE_DIRS})
-	list (APPEND dependencies_LIBRARY_DIRS ${xcb_LIBRARY_DIRS})
-	list (APPEND dependencies_LIBRARIES ${xcb_LIBRARIES})
+	include_directories (${xcb_INCLUDE_DIRS})
+	link_directories (${xcb_LIBRARY_DIRS})
 endif ()
 
 pkg_check_modules (gtk gtk+-3.0)
@@ -121,6 +139,10 @@ add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 # Project libraries
 set (project_common_libraries ${ZLIB_LIBRARIES} ${icu_LIBRARIES}
 	${dependencies_LIBRARIES})
+if (WIN32)
+	find_package (LibIntl REQUIRED)
+	list (APPEND project_common_libraries ${LibIntl_LIBRARIES})
+endif (WIN32)
 
 set (project_common_headers
 	${PROJECT_BINARY_DIR}/config.h
@@ -152,19 +174,24 @@ set (project_headers
 
 # Build the main executable and link it
 add_definitions (-DGLIB_DISABLE_DEPRECATION_WARNINGS)
-add_executable (${PROJECT_NAME}
-	${project_sources} ${project_headers} ${project_common_sources})
-target_link_libraries (${PROJECT_NAME} ${project_common_libraries}
-	${Ncursesw_LIBRARIES} termo-static)
+if (NOT WIN32)
+	add_executable (${PROJECT_NAME}
+		${project_sources} ${project_headers} ${project_common_sources})
+	target_link_libraries (${PROJECT_NAME} ${project_common_libraries}
+		${Ncursesw_LIBRARIES} termo-static)
+	if (WITH_X11)
+		target_link_libraries (${PROJECT_NAME} ${xcb_LIBRARIES})
+	endif ()
+endif (NOT WIN32)
 
 # The same for the alternative GTK+ UI
 if (WITH_GUI)
-	add_executable (sdgui
+	add_executable (sdgui WIN32
 		src/sdgui.c
 		src/stardict-view.c
 		${project_common_sources})
 	target_include_directories (sdgui PUBLIC ${gtk_INCLUDE_DIRS})
-	target_link_libraries (sdgui ${gtk_LIBRARIES} ${project_common_libraries})
+	target_link_libraries (sdgui ${project_common_libraries} ${gtk_LIBRARIES})
 endif ()
 
 # Tools
@@ -193,22 +220,50 @@ endforeach ()
 add_custom_target (dicts DEPENDS ${dicts_targets})
 
 # The files to be installed
-include (GNUInstallDirs)
-install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
-install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
-if (WITH_GUI)
-	install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
-	install (FILES sdgui.desktop
-		DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-	install (FILES sdgui.xml
-		DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
-endif ()
+if (NOT WIN32)
+	include (GNUInstallDirs)
+	install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+	install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
-foreach (page ${project_MAN_PAGES})
-	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
-	install (FILES "${page}"
-		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
-endforeach ()
+	if (WITH_GUI)
+		install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
+		install (FILES sdgui.desktop
+			DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+		install (FILES sdgui.xml
+			DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
+	endif ()
+
+	foreach (page ${project_MAN_PAGES})
+		string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
+		install (FILES "${page}"
+			DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
+	endforeach ()
+elseif (WITH_GUI)
+	# This rather crude filter has been mostly copied over from logdiag
+	install (TARGETS sdgui DESTINATION .)
+	install (DIRECTORY
+		${WIN32_DEPENDS_PATH}/bin/
+		DESTINATION .
+		FILES_MATCHING PATTERN "*.dll"
+		PATTERN "libgettext*" EXCLUDE)
+	install (DIRECTORY
+		${WIN32_DEPENDS_PATH}/etc/
+		DESTINATION etc)
+	install (DIRECTORY
+		${WIN32_DEPENDS_PATH}/lib/gdk-pixbuf-2.0
+		DESTINATION lib
+		FILES_MATCHING PATTERN "*" PATTERN "*.a" EXCLUDE)
+	install (DIRECTORY
+		${WIN32_DEPENDS_PATH}/share/glib-2.0/schemas
+		DESTINATION share/glib-2.0)
+
+	install (DIRECTORY
+		${WIN32_DEPENDS_PATH}/share/icons/Adwaita
+		DESTINATION share/icons OPTIONAL)
+	install (FILES
+		${WIN32_DEPENDS_PATH}/share/icons/hicolor/index.theme
+		DESTINATION share/icons/hicolor)
+endif ()
 
 # Do some unit tests
 option (BUILD_TESTING "Build tests" OFF)

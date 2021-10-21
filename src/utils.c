@@ -1,7 +1,7 @@
 /*
  * utils.c: miscellaneous utilities
  *
- * Copyright (c) 2013 - 2020, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2021, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -25,7 +25,9 @@
 #include <errno.h>
 #include <stdarg.h>
 
+#ifndef WIN32
 #include <pwd.h>
+#endif  // ! WIN32
 
 #include "config.h"
 #include "utils.h"
@@ -161,6 +163,10 @@ try_expand_tilde (const gchar *filename)
 	if (!until_slash)
 		return g_build_filename (g_get_home_dir () ?: "", filename, NULL);
 
+#ifdef WIN32
+	// TODO: also ensure that path separators are handled sensibly around here
+	return NULL;
+#else  // ! WIN32
 	long buf_len = sysconf (_SC_GETPW_R_SIZE_MAX);
 	if (buf_len < 0)
 		buf_len = 1024;
@@ -177,6 +183,7 @@ try_expand_tilde (const gchar *filename)
 		result = g_strdup_printf ("%s%s", pwd.pw_dir, filename + until_slash);
 	g_free (buf);
 	return result;
+#endif  // ! WIN32
 }
 
 gchar *
