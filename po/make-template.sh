@@ -5,6 +5,8 @@
 # should not need to run the whole configuration process just to get this file.
 dir=$(dirname $0)
 
+export LC_ALL=C
+
 re='^[ \t]*project *( *\([^ \t)]\{1,\}\) \{1,\}VERSION \{1,\}\([^ \t)]\{1,\}\).*'
 package=$(sed -n "s/$re/\\1/p" "$dir/../CMakeLists.txt")
 version=$(sed -n "s/$re/\\2/p" "$dir/../CMakeLists.txt")
@@ -13,7 +15,7 @@ if [ -z "$package" -o -z "$version" ]; then
 	exit 1
 fi
 
-xgettext -LC -k_ -kN_ $dir/../src/*.c -o "$dir/$package.pot" \
+xgettext -LC -k_ -kN_ "$dir"/../src/*.c -o "$dir/$package.pot" \
 	--package-name="$package" --package-version="$version" \
 	--copyright-holder="Přemysl Eric Janouch" \
 	--msgid-bugs-address="https://git.janouch.name/p/$package/issues"
