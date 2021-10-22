@@ -192,15 +192,18 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 	if (accelerate_hamburger (event))
 		return TRUE;
 
+	GtkNotebook *notebook = GTK_NOTEBOOK (g.notebook);
 	guint mods = event->key.state & gtk_accelerator_get_default_mod_mask ();
 	if (mods == GDK_CONTROL_MASK)
 	{
 		// Can't use gtk_widget_add_accelerator() to change-current-page(-1/+1)
 		// because that signal has arguments, which cannot be passed.
+		gint current = gtk_notebook_get_current_page (notebook);
 		if (event->key.keyval == GDK_KEY_Page_Up)
-			return gtk_notebook_prev_page (GTK_NOTEBOOK (g.notebook)), TRUE;
+			return gtk_notebook_set_current_page (notebook, --current), TRUE;
 		if (event->key.keyval == GDK_KEY_Page_Down)
-			return gtk_notebook_next_page (GTK_NOTEBOOK (g.notebook)), TRUE;
+			return gtk_notebook_set_current_page (notebook,
+				++current % gtk_notebook_get_n_pages (notebook)), TRUE;
 	}
 	if (mods == GDK_MOD1_MASK)
 	{
@@ -208,8 +211,7 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 		 && event->key.keyval <= GDK_KEY_9)
 		{
 			gint n = event->key.keyval - GDK_KEY_0;
-			gtk_notebook_set_current_page
-				(GTK_NOTEBOOK (g.notebook), n ? (n - 1) : 10);
+			gtk_notebook_set_current_page (notebook, n ? (n - 1) : 10);
 			return TRUE;
 		}
 	}
