@@ -281,7 +281,7 @@ if (BUILD_TESTING)
 endif ()
 
 # CPack
-set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict terminal UI")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict TUI and GUI")
 set (CPACK_PACKAGE_VENDOR "Premysl Eric Janouch")
 set (CPACK_PACKAGE_CONTACT "Přemysl Eric Janouch <p@janouch.name>")
 set (CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")

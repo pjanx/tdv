@@ -1,5 +1,5 @@
-StarDict Terminal UI
-====================
+StarDict Terminal and Graphical UI
+==================================
 
 'sdtui' aims to provide an easy way of viewing translation as well as other
 kinds of dictionaries in your terminal, and is inspired by the dictionary
@@ -12,9 +12,9 @@ software.
 
 image::sdtui.png[align="center"]
 
-As a recent addition, there is now an alternative GTK+ 3 based frontend as well.
-It shares its dictionary list with 'sdtui', but styling will follow your theme,
-and may be customized from 'gtk.css'.
+As a recent addition, there is now an alternative GTK+ 3 based frontend as well,
+called 'sdgui'.  It shares its dictionary list with 'sdtui', but styling will
+follow your theme, and may be customized from 'gtk.css'.
 
 Packages
 --------
@@ -56,7 +56,7 @@ automatically.
 
 Windows
 ~~~~~~~
-With the help of Mingw-w64 and WINE, the GUI will successfully cross-compile
+With the help of Mingw-w64 and WINE, 'sdgui' will successfully cross-compile
 for Windows.  It isn't particularly usable on that system, if only because
 selection watching is a very X11/Wayland-specific feature.  Beware that build
 dependencies take up almost a gigabyte of disk space.
