@@ -61,7 +61,7 @@ for Windows.  It isn't particularly usable on that system, if only because
 selection watching is a very X11/Wayland-specific feature.  Beware that build
 dependencies take up almost a gigabyte of disk space.
 
- $ sh cmake/Win64Depends.cmake
+ $ sh cmake/Win64Depends.sh
  $ cmake -DCMAKE_TOOLCHAIN_FILE=cmake/Win64CrossToolchain.cmake \
    -DCMAKE_BUILD_TYPE=Release -B build
  $ cmake --build build -- package
