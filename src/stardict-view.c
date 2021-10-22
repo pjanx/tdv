@@ -533,14 +533,14 @@ stardict_view_set_position (StardictView *self,
 	StardictDict *dict, guint position)
 {
 	g_return_if_fail (STARDICT_IS_VIEW (self));
-	g_return_if_fail (STARDICT_IS_DICT (dict));
+	g_return_if_fail (dict == NULL || STARDICT_IS_DICT (dict));
 
 	// Update the minimum size, if appropriate (almost never)
 	if (!self->dict != !dict)
 		gtk_widget_queue_resize (GTK_WIDGET (self));
 
 	g_clear_object (&self->dict);
-	self->dict = g_object_ref (dict);
+	self->dict = dict ? g_object_ref (dict) : NULL;
 	self->top_position = position;
 	self->top_offset = 0;
 

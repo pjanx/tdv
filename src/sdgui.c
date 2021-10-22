@@ -231,6 +231,82 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 }
 
 static void
+init_tabs (void)
+{
+	for (gsize i = 0; i < g.dictionaries->len; i++)
+	{
+		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
+		GtkWidget *dummy = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+		GtkWidget *label = gtk_label_new (dict->name);
+		gtk_notebook_append_page (GTK_NOTEBOOK (g.notebook), dummy, label);
+	}
+
+	gtk_widget_show_all (g.notebook);
+	gtk_widget_grab_focus (g.entry);
+}
+
+static gboolean
+reload_dictionaries (GPtrArray *new_dictionaries)
+{
+	GError *error = NULL;
+	if (!load_dictionaries (new_dictionaries, &error))
+	{
+		GtkWidget *dialog = gtk_message_dialog_new (GTK_WINDOW (g.window), 0,
+			GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", error->message);
+		gtk_dialog_run (GTK_DIALOG (dialog));
+		gtk_widget_destroy (dialog);
+		g_error_free (error);
+		return FALSE;
+	}
+
+	while (gtk_notebook_get_n_pages (GTK_NOTEBOOK (g.notebook)))
+		gtk_notebook_remove_page (GTK_NOTEBOOK (g.notebook), -1);
+
+	g.dictionary = -1;
+	stardict_view_set_position (STARDICT_VIEW (g.view), NULL, 0);
+	g_ptr_array_free (g.dictionaries, TRUE);
+	g.dictionaries = new_dictionaries;
+	init_tabs ();
+	return TRUE;
+}
+
+static void
+on_open (G_GNUC_UNUSED GtkMenuItem *item, G_GNUC_UNUSED gpointer data)
+{
+	// The default is local-only.  Paths are returned absolute.
+	GtkWidget *dialog = gtk_file_chooser_dialog_new (_("Open dictionary"),
+		GTK_WINDOW (g.window), GTK_FILE_CHOOSER_ACTION_OPEN,
+		_("_Cancel"), GTK_RESPONSE_CANCEL,
+		_("_Open"), GTK_RESPONSE_ACCEPT, NULL);
+
+	GtkFileFilter *filter = gtk_file_filter_new ();
+	gtk_file_filter_add_pattern (filter, "*.ifo");
+	gtk_file_filter_set_name (filter, "*.ifo");
+	GtkFileChooser *chooser = GTK_FILE_CHOOSER (dialog);
+	gtk_file_chooser_add_filter (chooser, filter);
+	gtk_file_chooser_set_select_multiple (chooser, TRUE);
+
+	GPtrArray *new_dictionaries =
+		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
+	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	{
+		GSList *paths = gtk_file_chooser_get_filenames (chooser);
+		for (GSList *iter = paths; iter; iter = iter->next)
+		{
+			Dictionary *dict = g_malloc0 (sizeof *dict);
+			dict->filename = iter->data;
+			g_ptr_array_add (new_dictionaries, dict);
+
+		}
+		g_slist_free (paths);
+	}
+
+	gtk_widget_destroy (dialog);
+	if (!new_dictionaries->len || !reload_dictionaries (new_dictionaries))
+		g_ptr_array_free (new_dictionaries, TRUE);
+}
+
+static void
 on_destroy (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED gpointer data)
 {
 	gtk_main_quit ();
@@ -319,16 +395,22 @@ main (int argc, char *argv[])
 	gtk_style_context_add_provider_for_screen (screen,
 		GTK_STYLE_PROVIDER (provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
+	GtkWidget *item_open = gtk_menu_item_new_with_mnemonic (_("_Open..."));
+	g_signal_connect (item_open, "activate", G_CALLBACK (on_open), NULL);
+
 	g.watch_selection = TRUE;
-	GtkWidget *item =
-		gtk_check_menu_item_new_with_label (_("Follow selection"));
+	GtkWidget *item_selection =
+		gtk_check_menu_item_new_with_mnemonic (_("_Follow selection"));
 	gtk_check_menu_item_set_active
-		(GTK_CHECK_MENU_ITEM (item), g.watch_selection);
-	g_signal_connect (item, "toggled",
+		(GTK_CHECK_MENU_ITEM (item_selection), g.watch_selection);
+	g_signal_connect (item_selection, "toggled",
 		G_CALLBACK (on_selection_watch_toggle), NULL);
 
 	GtkWidget *menu = gtk_menu_new ();
-	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_open);
+#ifndef WIN32
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_selection);
+#endif  // ! WIN32
 	gtk_widget_show_all (menu);
 
 	g.hamburger = gtk_menu_button_new ();
@@ -364,20 +446,12 @@ main (int argc, char *argv[])
 
 	g.view = stardict_view_new ();
 	gtk_box_pack_end (GTK_BOX (superbox), g.view, TRUE, TRUE, 0);
-
-	for (gsize i = 0; i < g.dictionaries->len; i++)
-	{
-		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
-		GtkWidget *dummy = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-		GtkWidget *label = gtk_label_new (dict->name);
-		gtk_notebook_append_page (GTK_NOTEBOOK (g.notebook), dummy, label);
-	}
+	init_tabs ();
 
 	GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
 	g_signal_connect (clipboard, "owner-change",
 		G_CALLBACK (on_selection), NULL);
 
-	gtk_widget_grab_focus (g.entry);
 	gtk_widget_show_all (g.window);
 	gtk_main ();
 	return 0;
