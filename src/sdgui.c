@@ -407,6 +407,7 @@ main (int argc, char *argv[])
 		G_CALLBACK (on_selection_watch_toggle), NULL);
 
 	GtkWidget *menu = gtk_menu_new ();
+	gtk_widget_set_halign (menu, GTK_ALIGN_END);
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_open);
 #ifndef WIN32
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_selection);
@@ -414,10 +415,10 @@ main (int argc, char *argv[])
 	gtk_widget_show_all (menu);
 
 	g.hamburger = gtk_menu_button_new ();
-	gtk_menu_button_set_direction
-		(GTK_MENU_BUTTON (g.hamburger), GTK_ARROW_NONE);
-	gtk_menu_button_set_popup (GTK_MENU_BUTTON (g.hamburger), menu);
 	gtk_button_set_relief (GTK_BUTTON (g.hamburger), GTK_RELIEF_NONE);
+	gtk_button_set_image (GTK_BUTTON (g.hamburger), gtk_image_new_from_icon_name
+		("open-menu-symbolic", GTK_ICON_SIZE_BUTTON));
+	gtk_menu_button_set_popup (GTK_MENU_BUTTON (g.hamburger), menu);
 	gtk_widget_show (g.hamburger);
 
 	g.notebook = gtk_notebook_new ();
