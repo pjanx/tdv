@@ -244,8 +244,7 @@ elseif (WITH_GUI)
 	install (DIRECTORY
 		${WIN32_DEPENDS_PATH}/bin/
 		DESTINATION .
-		FILES_MATCHING PATTERN "*.dll"
-		PATTERN "libgettext*" EXCLUDE)
+		FILES_MATCHING PATTERN "*.dll")
 	install (DIRECTORY
 		${WIN32_DEPENDS_PATH}/etc/
 		DESTINATION etc)
@@ -263,6 +262,8 @@ elseif (WITH_GUI)
 	install (FILES
 		${WIN32_DEPENDS_PATH}/share/icons/hicolor/index.theme
 		DESTINATION share/icons/hicolor)
+
+	install (SCRIPT cmake/Win32Cleanup.cmake)
 endif ()
 
 # Do some unit tests
