@@ -173,7 +173,7 @@ set (project_headers
 	${project_common_headers})
 
 # Build the main executable and link it
-add_definitions (-DGLIB_DISABLE_DEPRECATION_WARNINGS)
+add_definitions (-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_38)
 if (NOT WIN32)
 	add_executable (${PROJECT_NAME}
 		${project_sources} ${project_headers} ${project_common_sources})
