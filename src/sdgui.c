@@ -245,17 +245,23 @@ init_tabs (void)
 	gtk_widget_grab_focus (g.entry);
 }
 
+static void
+show_error_dialog (GError *error)
+{
+	GtkWidget *dialog = gtk_message_dialog_new (GTK_WINDOW (g.window), 0,
+		GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", error->message);
+	gtk_dialog_run (GTK_DIALOG (dialog));
+	gtk_widget_destroy (dialog);
+	g_error_free (error);
+}
+
 static gboolean
 reload_dictionaries (GPtrArray *new_dictionaries)
 {
 	GError *error = NULL;
 	if (!load_dictionaries (new_dictionaries, &error))
 	{
-		GtkWidget *dialog = gtk_message_dialog_new (GTK_WINDOW (g.window), 0,
-			GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", error->message);
-		gtk_dialog_run (GTK_DIALOG (dialog));
-		gtk_widget_destroy (dialog);
-		g_error_free (error);
+		show_error_dialog (error);
 		return FALSE;
 	}
 
@@ -304,6 +310,35 @@ on_open (G_GNUC_UNUSED GtkMenuItem *item, G_GNUC_UNUSED gpointer data)
 	gtk_widget_destroy (dialog);
 	if (!new_dictionaries->len || !reload_dictionaries (new_dictionaries))
 		g_ptr_array_free (new_dictionaries, TRUE);
+}
+
+static void
+on_drag_data_received (G_GNUC_UNUSED GtkWidget *widget,
+	G_GNUC_UNUSED GdkDragContext *context, G_GNUC_UNUSED gint x,
+	G_GNUC_UNUSED gint y, GtkSelectionData *data, G_GNUC_UNUSED guint info,
+	G_GNUC_UNUSED guint time, G_GNUC_UNUSED gpointer user_data)
+{
+	GError *error = NULL;
+	gchar **dropped_uris = gtk_selection_data_get_uris (data);
+	if (!dropped_uris)
+		return;
+
+	GPtrArray *new_dictionaries =
+		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
+	for (gsize i = 0; !error && dropped_uris[i]; i++)
+	{
+		Dictionary *dict = g_malloc0 (sizeof *dict);
+		dict->filename = g_filename_from_uri (dropped_uris[i], NULL, &error);
+		g_ptr_array_add (new_dictionaries, dict);
+	}
+
+	g_strfreev (dropped_uris);
+	if (error)
+		show_error_dialog (error);
+	else if (new_dictionaries->len && reload_dictionaries (new_dictionaries))
+		return;
+
+	g_ptr_array_free (new_dictionaries, TRUE);
 }
 
 static void
@@ -452,6 +487,12 @@ main (int argc, char *argv[])
 	GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
 	g_signal_connect (clipboard, "owner-change",
 		G_CALLBACK (on_selection), NULL);
+
+	gtk_drag_dest_set (g.view,
+		GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY);
+	gtk_drag_dest_add_uri_targets (g.view);
+	g_signal_connect (g.view, "drag-data-received",
+		G_CALLBACK (on_drag_data_received), NULL);
 
 	gtk_widget_show_all (g.window);
 	gtk_main ();
