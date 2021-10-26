@@ -264,6 +264,9 @@ elseif (WITH_GUI)
 		DESTINATION share/icons/hicolor)
 
 	install (SCRIPT cmake/Win32Cleanup.cmake)
+	install (CODE "execute_process (COMMAND
+		sh \"${PROJECT_SOURCE_DIR}/cmake/Win32CleanupAdwaita.sh\"
+		WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX})")
 endif ()
 
 # Do some unit tests
