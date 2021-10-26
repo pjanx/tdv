@@ -276,6 +276,19 @@ set (project_tests stardict)
 if (BUILD_TESTING)
 	enable_testing ()
 
+	find_program (xmlwf_EXECUTABLE xmlwf)
+	find_program (xmllint_EXECUTABLE xmllint)
+	foreach (xml sdgui.xml)
+		if (xmlwf_EXECUTABLE)
+			add_test (test-xmlwf-${xml} ${xmlwf_EXECUTABLE}
+				${PROJECT_SOURCE_DIR}/${xml})
+		endif ()
+		if (xmllint_EXECUTABLE)
+			add_test (test-xmllint-${xml} ${xmllint_EXECUTABLE} --noout
+				${PROJECT_SOURCE_DIR}/${xml})
+		endif ()
+	endforeach ()
+
 	foreach (name ${project_tests})
 		add_executable (test-${name}
 			src/test-${name}.c ${project_common_sources})
