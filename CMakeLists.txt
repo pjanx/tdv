@@ -72,9 +72,11 @@ if (USE_SYSTEM_TERMO)
 		message (FATAL_ERROR "System termo library not found")
 	endif ()
 else ()
-	# We don't want the library to install, even though EXCLUDE_FROM_ALL
-	# sabotages CTest -- those unbuilt tests need to be excluded in CTest runs
+	# We don't want the library to install, but EXCLUDE_FROM_ALL ignores tests
 	add_subdirectory (termo EXCLUDE_FROM_ALL)
+	file (WRITE ${PROJECT_BINARY_DIR}/CTestCustom.cmake
+		"execute_process (COMMAND ${CMAKE_COMMAND} --build termo)")
+
 	# We don't have many good choices; this is a relatively clean approach
 	# (other possibilities: setting a variable in the parent scope, using
 	# a cache variable, writing a special config file with build paths in it
