@@ -365,9 +365,27 @@ set (CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
 set (CPACK_GENERATOR "TGZ;ZIP")
 set (CPACK_PACKAGE_FILE_NAME
 	"${PROJECT_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-set (CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}-${PROJECT_VERSION}")
+set (CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME} ${PROJECT_VERSION}")
 set (CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set (CPACK_SOURCE_IGNORE_FILES "/\\\\.git;/build;/CMakeLists.txt.user")
 set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}")
+
+# XXX: It is still possible to install multiple copies, making commands collide.
+set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${PROJECT_NAME}")
+
+set (CPACK_NSIS_INSTALLED_ICON_NAME sdgui.exe)
+set (CPACK_PACKAGE_EXECUTABLES sdgui sdgui)
+set (CPACK_NSIS_EXECUTABLES_DIRECTORY .)
+set (CPACK_NSIS_EXTRA_INSTALL_COMMANDS [[
+	WriteRegStr HKCR '.ifo' '' 'sdgui.Dictionary'
+	WriteRegStr HKCR 'sdgui.Dictionary' '' 'StarDict Dictionary'
+	WriteRegStr HKCR 'sdgui.Dictionary\\shell\\open\\command' '' '\"$INSTDIR\\sdgui.exe\" \"%1\"'
+	System::Call 'shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)'
+]])
+set (CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS [[
+	DeleteRegKey HKCR 'sdgui.Dictionary'
+	System::Call 'shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)'
+]])
 
 include (CPack)
