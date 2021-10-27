@@ -187,13 +187,17 @@ if (NOT WIN32)
 endif (NOT WIN32)
 
 # The same for the alternative GTK+ UI
+if (NOT ${CMAKE_VERSION} VERSION_LESS 3.18.0)
+	set (find_program_REQUIRE REQUIRED)
+endif ()
+
 function (icon_to_png svg size output_dir output)
 	set (_dimensions ${size}x${size})
 	set (_png_path ${output_dir}/hicolor/${_dimensions}/apps)
 	set (_png ${_png_path}/sdgui.png)
 	set (${output} ${_png} PARENT_SCOPE)
 
-	find_program (rsvg_convert_EXECUTABLE rsvg-convert REQUIRED)
+	find_program (rsvg_convert_EXECUTABLE rsvg-convert ${find_program_REQUIRE})
 	add_custom_command (OUTPUT ${_png}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${_png_path}
 		COMMAND ${rsvg_convert_EXECUTABLE} --output=${_png}
@@ -203,7 +207,7 @@ function (icon_to_png svg size output_dir output)
 endfunction ()
 
 function (icon_for_win32 pngs ico)
-	find_program (icotool_EXECUTABLE icotool REQUIRED)
+	find_program (icotool_EXECUTABLE icotool ${find_program_REQUIRE})
 	add_custom_command (OUTPUT ${ico}
 		COMMAND ${icotool_EXECUTABLE} -c -o ${ico} ${pngs}
 		DEPENDS ${pngs}
