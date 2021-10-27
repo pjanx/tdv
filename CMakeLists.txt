@@ -187,27 +187,39 @@ if (NOT WIN32)
 endif (NOT WIN32)
 
 # The same for the alternative GTK+ UI
-if (WITH_GUI)
+function (icon_to_png svg size output_dir output)
+	set (_dimensions ${size}x${size})
+	set (_png_path ${output_dir}/hicolor/${_dimensions}/apps)
+	set (_png ${_png_path}/sdgui.png)
+	set (${output} ${_png} PARENT_SCOPE)
+
 	find_program (rsvg_convert_EXECUTABLE rsvg-convert REQUIRED)
+	add_custom_command (OUTPUT ${_png}
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${_png_path}
+		COMMAND ${rsvg_convert_EXECUTABLE} --output=${_png}
+			--width=${size} --height=${size} ${svg}
+		DEPENDS ${svg}
+		COMMENT "Generating ${_dimensions} application icon" VERBATIM)
+endfunction ()
+
+function (icon_for_win32 pngs ico)
+	find_program (icotool_EXECUTABLE icotool REQUIRED)
+	add_custom_command (OUTPUT ${ico}
+		COMMAND ${icotool_EXECUTABLE} -c -o ${ico} ${pngs}
+		DEPENDS ${pngs}
+		COMMENT "Generating Windows program icon" VERBATIM)
+endfunction ()
+
+if (WITH_GUI)
 	set (icon_svg ${PROJECT_SOURCE_DIR}/sdgui.svg)
 	set (icon_base ${PROJECT_BINARY_DIR}/icons)
-	set (icon_png_list)
 
 	# The largest size is mainly for an appropriately sized Windows icon
-	foreach (icon_number 16 32 48 256)
-		set (icon_size ${icon_number}x${icon_number})
-		set (icon_png_path ${icon_base}/hicolor/${icon_size}/apps)
-		set (icon_png ${icon_png_path}/sdgui.png)
+	set (icon_png_list)
+	foreach (icon_size 16 32 48 256)
+		icon_to_png (${icon_svg} ${icon_size} ${icon_base} icon_png)
 		list (APPEND icon_png_list ${icon_png})
-
-		add_custom_command (OUTPUT ${icon_png}
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${icon_png_path}
-			COMMAND ${rsvg_convert_EXECUTABLE} --output=${icon_png}
-				--width=${icon_number} --height=${icon_number} ${icon_svg}
-			DEPENDS ${icon_svg}
-			COMMENT "Generating ${icon_size} application icon" VERBATIM)
-	endforeach (icon_number)
-
+	endforeach ()
 	add_custom_target (sdgui-icons ALL DEPENDS ${icon_png_list})
 
 	set (sdgui_sources
@@ -216,12 +228,8 @@ if (WITH_GUI)
 		${project_common_sources})
 
 	if (WIN32)
-		find_program (icotool_EXECUTABLE icotool REQUIRED)
 		set (icon_ico ${PROJECT_BINARY_DIR}/sdgui.ico)
-		add_custom_command (OUTPUT ${icon_ico}
-			COMMAND ${icotool_EXECUTABLE} -c -o ${icon_ico} ${icon_png_list}
-			DEPENDS ${icon_png_list}
-			COMMENT "Generating Windows program icon" VERBATIM)
+		icon_for_win32 ("${icon_png_list}" ${icon_ico})
 
 		set (resource_file ${PROJECT_BINARY_DIR}/sdgui.rc)
 		list (APPEND sdgui_sources ${resource_file})
