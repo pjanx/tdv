@@ -2,6 +2,7 @@
 Type=Application
 Name=sdgui
 GenericName=StarDict GUI
+Icon=sdgui
 Exec=sdgui %F
 StartupNotify=true
 MimeType=application/x-stardict-ifo;

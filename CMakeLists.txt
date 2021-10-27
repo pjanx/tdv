@@ -229,6 +229,8 @@ if (NOT WIN32)
 
 	if (WITH_GUI)
 		install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
+		install (FILES sdgui.svg
+			DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 		install (FILES sdgui.desktop
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 		install (FILES sdgui.xml

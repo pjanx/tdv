@@ -27,6 +27,9 @@
 #include "utils.h"
 #include "stardict-view.h"
 
+#undef PROJECT_NAME
+#define PROJECT_NAME "sdgui"
+
 static struct
 {
 	GtkWidget    *window;            ///< Top-level window
@@ -384,6 +387,8 @@ main (int argc, char *argv[])
 		g_error_free (error);
 		return 1;
 	}
+
+	gtk_window_set_default_icon_name (PROJECT_NAME);
 
 	g.dictionaries =
 		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
