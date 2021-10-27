@@ -188,10 +188,51 @@ endif (NOT WIN32)
 
 # The same for the alternative GTK+ UI
 if (WITH_GUI)
-	add_executable (sdgui WIN32
+	find_program (rsvg_convert_EXECUTABLE rsvg-convert REQUIRED)
+	set (icon_svg ${PROJECT_SOURCE_DIR}/sdgui.svg)
+	set (icon_base ${PROJECT_BINARY_DIR}/icons)
+	set (icon_png_list)
+
+	# The largest size is mainly for an appropriately sized Windows icon
+	foreach (icon_number 16 32 48 256)
+		set (icon_size ${icon_number}x${icon_number})
+		set (icon_png_path ${icon_base}/hicolor/${icon_size}/apps)
+		set (icon_png ${icon_png_path}/sdgui.png)
+		list (APPEND icon_png_list ${icon_png})
+
+		add_custom_command (OUTPUT ${icon_png}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${icon_png_path}
+			COMMAND ${rsvg_convert_EXECUTABLE} --output=${icon_png}
+				--width=${icon_number} --height=${icon_number} ${icon_svg}
+			DEPENDS ${icon_svg}
+			COMMENT "Generating ${icon_size} application icon" VERBATIM)
+	endforeach (icon_number)
+
+	add_custom_target (sdgui-icons ALL DEPENDS ${icon_png_list})
+
+	set (sdgui_sources
 		src/sdgui.c
 		src/stardict-view.c
 		${project_common_sources})
+
+	if (WIN32)
+		find_program (icotool_EXECUTABLE icotool REQUIRED)
+		set (icon_ico ${PROJECT_BINARY_DIR}/sdgui.ico)
+		add_custom_command (OUTPUT ${icon_ico}
+			COMMAND ${icotool_EXECUTABLE} -c -o ${icon_ico} ${icon_png_list}
+			DEPENDS ${icon_png_list}
+			COMMENT "Generating Windows program icon" VERBATIM)
+
+		set (resource_file ${PROJECT_BINARY_DIR}/sdgui.rc)
+		list (APPEND sdgui_sources ${resource_file})
+		add_custom_command (OUTPUT ${resource_file}
+			COMMAND ${CMAKE_COMMAND} -E echo "1 ICON \"sdgui.ico\""
+				> ${resource_file} VERBATIM)
+		set_property (SOURCE ${resource_file}
+			APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
+	endif ()
+
+	add_executable (sdgui WIN32 ${sdgui_sources})
 	target_include_directories (sdgui PUBLIC ${gtk_INCLUDE_DIRS})
 	target_link_libraries (sdgui ${project_common_libraries} ${gtk_LIBRARIES})
 endif ()
@@ -231,6 +272,8 @@ if (NOT WIN32)
 		install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
 		install (FILES sdgui.svg
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+		install (DIRECTORY ${PROJECT_BINARY_DIR}/icons
+			DESTINATION ${CMAKE_INSTALL_DATADIR})
 		install (FILES sdgui.desktop
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 		install (FILES sdgui.xml
@@ -266,6 +309,7 @@ elseif (WITH_GUI)
 	install (FILES
 		${WIN32_DEPENDS_PATH}/share/icons/hicolor/index.theme
 		DESTINATION share/icons/hicolor)
+	install (DIRECTORY ${icon_base} DESTINATION share)
 
 	install (SCRIPT cmake/Win32Cleanup.cmake)
 	install (CODE "execute_process (COMMAND
