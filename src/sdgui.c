@@ -472,6 +472,7 @@ main (int argc, char *argv[])
 	g_signal_connect (g.entry, "changed", G_CALLBACK (on_changed), g.view);
 
 	g.window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_title (GTK_WINDOW (g.window), PROJECT_NAME);
 	gtk_window_set_default_size (GTK_WINDOW (g.window), 300, 600);
 	g_signal_connect (g.window, "destroy",
 		G_CALLBACK (on_destroy), NULL);
