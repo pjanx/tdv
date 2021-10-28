@@ -214,7 +214,7 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 		 && event->key.keyval <= GDK_KEY_9)
 		{
 			gint n = event->key.keyval - GDK_KEY_0;
-			gtk_notebook_set_current_page (notebook, n ? (n - 1) : 10);
+			gtk_notebook_set_current_page (notebook, (n ? n : 10) - 1);
 			return TRUE;
 		}
 	}
