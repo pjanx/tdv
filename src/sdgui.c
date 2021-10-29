@@ -305,7 +305,6 @@ on_open (G_GNUC_UNUSED GtkMenuItem *item, G_GNUC_UNUSED gpointer data)
 			Dictionary *dict = g_malloc0 (sizeof *dict);
 			dict->filename = iter->data;
 			g_ptr_array_add (new_dictionaries, dict);
-
 		}
 		g_slist_free (paths);
 	}
