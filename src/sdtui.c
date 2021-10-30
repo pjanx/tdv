@@ -154,6 +154,7 @@ struct application
 	GPtrArray     * dictionaries;       ///< All loaded AppDictionaries
 
 	StardictDict  * dict;               ///< The current dictionary
+	StardictDict  * last;               ///< The last dictionary
 	guint           show_help : 1;      ///< Whether help can be shown
 	guint           center_search : 1;  ///< Whether to center the search
 	guint           underline_last : 1; ///< Underline the last definition
@@ -1330,6 +1331,18 @@ app_get_current_definition (Application *self)
 	return NULL;
 }
 
+static void
+app_goto_dictionary_directly (Application *self, StardictDict *dict)
+{
+	if (dict == self->dict)
+		return;
+
+	self->last = self->dict;
+	self->dict = dict;
+	app_search_for_entry (self);
+	app_redraw_top (self);
+}
+
 /// Switch to a different dictionary by number.
 static gboolean
 app_goto_dictionary (Application *self, guint n)
@@ -1338,9 +1351,7 @@ app_goto_dictionary (Application *self, guint n)
 		return FALSE;
 
 	Dictionary *dict = g_ptr_array_index (self->dictionaries, n);
-	self->dict = dict->dict;
-	app_search_for_entry (self);
-	app_redraw_top (self);
+	app_goto_dictionary_directly (self, dict->dict);
 	return TRUE;
 }
 
@@ -1403,6 +1414,7 @@ enum user_action
 	USER_ACTION_GOTO_PAGE_NEXT,
 	USER_ACTION_GOTO_DICTIONARY_PREVIOUS,
 	USER_ACTION_GOTO_DICTIONARY_NEXT,
+	USER_ACTION_GOTO_DICTIONARY_LAST,
 
 	USER_ACTION_FLIP,
 
@@ -1504,6 +1516,12 @@ app_process_user_action (Application *self, UserAction action)
 	case USER_ACTION_GOTO_DICTIONARY_NEXT:
 		if (!app_goto_dictionary_delta (self, +1))
 			beep ();
+		return TRUE;
+	case USER_ACTION_GOTO_DICTIONARY_LAST:
+		if (!self->last)
+			beep ();
+		else
+			app_goto_dictionary_directly (self, self->last);
 		return TRUE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1678,6 +1696,7 @@ app_process_keysym (Application *self, termo_key_t *event)
 	{
 		[TERMO_SYM_LEFT]      = USER_ACTION_MOVE_SPLITTER_LEFT,
 		[TERMO_SYM_RIGHT]     = USER_ACTION_MOVE_SPLITTER_RIGHT,
+		[TERMO_SYM_TAB]       = USER_ACTION_GOTO_DICTIONARY_LAST,
 	};
 	static ActionMap actions_ctrl =
 	{
