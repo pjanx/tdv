@@ -39,6 +39,7 @@ static struct
 	GtkWidget    *view;              ///< Entries view
 
 	gint          dictionary;        ///< Index of the current dictionary
+	gint          last;              ///< The last dictionary index
 	GPtrArray    *dictionaries;      ///< All open dictionaries
 
 	gboolean      watch_selection;   ///< Following X11 PRIMARY?
@@ -160,6 +161,7 @@ static void
 on_switch_page (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED GtkWidget *page,
 	guint page_num, G_GNUC_UNUSED gpointer data)
 {
+	g.last = g.dictionary;
 	g.dictionary = page_num;
 	search (g_ptr_array_index (g.dictionaries, g.dictionary));
 }
@@ -217,6 +219,11 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 			gtk_notebook_set_current_page (notebook, (n ? n : 10) - 1);
 			return TRUE;
 		}
+		if (event->key.keyval == GDK_KEY_Tab)
+		{
+			gtk_notebook_set_current_page (notebook, g.last);
+			return TRUE;
+		}
 	}
 	if (mods == 0)
 	{
@@ -236,12 +243,12 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 static void
 init_tabs (void)
 {
-	for (gsize i = 0; i < g.dictionaries->len; i++)
+	for (gsize i = g.dictionaries->len; i--; )
 	{
 		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
 		GtkWidget *dummy = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
 		GtkWidget *label = gtk_label_new (dict->name);
-		gtk_notebook_append_page (GTK_NOTEBOOK (g.notebook), dummy, label);
+		gtk_notebook_insert_page (GTK_NOTEBOOK (g.notebook), dummy, label, 0);
 	}
 
 	gtk_widget_show_all (g.notebook);
@@ -448,9 +455,9 @@ main (int argc, char *argv[])
 	GtkWidget *menu = gtk_menu_new ();
 	gtk_widget_set_halign (menu, GTK_ALIGN_END);
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_open);
-#ifndef WIN32
+#ifndef G_OS_WIN32
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), item_selection);
-#endif  // ! WIN32
+#endif  // ! G_OS_WIN32
 	gtk_widget_show_all (menu);
 
 	g.hamburger = gtk_menu_button_new ();
