@@ -71,4 +71,4 @@ configure
 status Success
 
 # XXX: Why is this override needed to run some GLib-based things under wine64?
-export XDG_DATA_DIRS=$(pwd)/share
+unset XDG_DATA_DIRS
