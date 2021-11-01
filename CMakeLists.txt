@@ -324,9 +324,18 @@ elseif (WITH_GUI)
 	install (DIRECTORY ${icon_base} DESTINATION share)
 
 	install (SCRIPT cmake/Win32Cleanup.cmake)
+
+	find_program (GTK_UPDATE_ICON_CACHE_EXECUTABLE gtk-update-icon-cache)
+	if (NOT GTK_UPDATE_ICON_CACHE_EXECUTABLE)
+		message (FATAL_ERROR "gtk-update-icon-cache not found")
+	endif ()
+
 	install (CODE "execute_process (COMMAND
 		sh \"${PROJECT_SOURCE_DIR}/cmake/Win32CleanupAdwaita.sh\"
 		WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX})")
+	install (CODE " # This may speed up program start-up a little bit
+		execute_process (COMMAND \"${GTK_UPDATE_ICON_CACHE_EXECUTABLE}\"
+			\"\${CMAKE_INSTALL_PREFIX}/share/icons/Adwaita\")")
 endif ()
 
 # Do some unit tests
