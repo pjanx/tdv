@@ -12,6 +12,7 @@ find share/icons/Adwaita -type f | awk 'BEGIN {
 	sub(/[.].+$/, "", base)
 
 	# Try matching while cutting off suffixes
+	# Disregarding the not-much-used GTK_ICON_LOOKUP_GENERIC_FALLBACK
 	while (!(keep = good[base]) &&
 		sub(/-(ltr|rtl|symbolic)$/, "", base)) {}
 	if (!keep)
