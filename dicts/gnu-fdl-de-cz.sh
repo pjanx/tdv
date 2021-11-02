@@ -2,7 +2,7 @@
 # GNU/FDL German-Czech dictionary, see https://gnu.nemeckoceskyslovnik.cz
 
 # Sometimes the domain doesn't resolve, and the contents are close to useless
-[ -n "$WANT_BAD_DICTS" ] || exit
+[ -n "$WANT_BAD_DICTS" ] || exit 0
 
 curl -Lo- 'https://gnu.nemeckoceskyslovnik.cz/index.php?id=6&sablona=export&format=zcu' | \
 grep -v ^# | sed 's/\\//g' | perl -CSD -F\\t -le '

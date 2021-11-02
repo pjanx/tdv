@@ -37,9 +37,7 @@
 #include <termo.h>  // input
 #include <ncurses.h>  // output
 #include <termios.h>
-#ifndef TIOCGWINSZ
 #include <sys/ioctl.h>
-#endif  // ! TIOCGWINSZ
 
 #include "config.h"
 #include "stardict.h"

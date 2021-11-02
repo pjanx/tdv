@@ -66,7 +66,6 @@ endif ()
 find_package (Termo QUIET NO_MODULE)
 option (USE_SYSTEM_TERMO
 	"Don't compile our own termo library, use the system one" ${Termo_FOUND})
-
 if (USE_SYSTEM_TERMO)
 	if (NOT Termo_FOUND)
 		message (FATAL_ERROR "System termo library not found")
@@ -88,7 +87,6 @@ endif ()
 
 pkg_check_modules (xcb xcb xcb-xfixes)
 option (WITH_X11 "Compile with X11 selection support using XCB" ${xcb_FOUND})
-
 if (WITH_X11)
 	if (NOT xcb_FOUND)
 		message (FATAL_ERROR "XCB not found")
@@ -100,8 +98,15 @@ endif ()
 
 pkg_check_modules (gtk gtk+-3.0)
 option (WITH_GUI "Build an alternative GTK+ UI" ${gtk_FOUND})
+if (WITH_GUI)
+	if (NOT gtk_FOUND)
+		message (FATAL_ERROR "GTK+ not found")
+	endif ()
 
-link_directories (${dependencies_LIBRARY_DIRS})
+	link_directories (${gtk_LIBRARY_DIRS})
+endif ()
+
+link_directories (${dependencies_LIBRARY_DIRS} ${icu_LIBRARY_DIRS})
 include_directories (${ZLIB_INCLUDE_DIRS} ${icu_INCLUDE_DIRS}
 	${dependencies_INCLUDE_DIRS} ${Ncursesw_INCLUDE_DIRS}
 	${Termo_INCLUDE_DIRS})

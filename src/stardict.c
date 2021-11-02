@@ -309,26 +309,24 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		goto error;
 	}
 
-	ret_val = TRUE;
-
-	// FIXME check for zeros, don't assume that 0 means for "not set"
+	// FIXME check for zeros, don't assume that 0 means "not set"
 	if (!sti->book_name || !*sti->book_name)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 			"%s: %s", path, _("no book name specified"));
-		ret_val = FALSE;
+		goto error;
 	}
 	if (!sti->word_count)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 			"%s: %s", path, _("word count not specified"));
-		ret_val = FALSE;
+		goto error;
 	}
 	if (!sti->idx_filesize)
 	{
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 			"%s: %s", path, _("index file size not specified"));
-		ret_val = FALSE;
+		goto error;
 	}
 
 	if (!sti->idx_offset_bits)
@@ -338,8 +336,10 @@ load_ifo (StardictInfo *sti, const gchar *path, GError **error)
 		g_set_error (error, STARDICT_ERROR, STARDICT_ERROR_INVALID_DATA,
 			"%s: %s: %lu", path, _("invalid index offset bits"),
 			sti->idx_offset_bits);
-		ret_val = FALSE;
+		goto error;
 	}
+
+	ret_val = TRUE;
 
 error:
 	if (!ret_val)
