@@ -167,6 +167,7 @@ struct application
 	gchar         * search_label;       ///< Text of the "Search" label
 	GArray        * input;              ///< The current search input
 	guint           input_pos;          ///< Cursor position within input
+	guint           input_offset;       ///< Render offset in codepoints
 	gboolean        input_confirmed;    ///< Input has been confirmed
 
 	gfloat          division;           ///< Position of the division column
@@ -533,7 +534,7 @@ app_init (Application *self, char **filenames)
 	self->search_label = g_strdup_printf ("%s: ", _("Search"));
 
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
-	self->input_pos = 0;
+	self->input_pos = self->input_offset = 0;
 	self->input_confirmed = FALSE;
 
 	self->division = 0.5;
@@ -796,6 +797,20 @@ row_buffer_ellipsis (RowBuffer *self, int target, chtype attrs)
 }
 
 static void
+row_buffer_align (RowBuffer *self, int target, chtype attrs)
+{
+	if (target >= 0 && self->total_width > target)
+		row_buffer_ellipsis (self, target, attrs);
+
+	while (self->total_width < target)
+	{
+		struct row_char rc = { ' ', attrs, 1 };
+		g_array_append_val (self->chars, rc);
+		self->total_width += rc.width;
+	}
+}
+
+static void
 row_buffer_print (RowBuffer *self, gunichar *ucs4, size_t len, chtype attrs)
 {
 	gsize locale_str_len;
@@ -837,20 +852,81 @@ row_buffer_flush (RowBuffer *self)
 static void
 row_buffer_finish (RowBuffer *self, int width, chtype attrs)
 {
-	if (width >= 0 && self->total_width > width)
-		row_buffer_ellipsis (self, width, attrs);
-	while (self->total_width < width)
-	{
-		struct row_char rc = { ' ', attrs, 1 };
-		g_array_append_val (self->chars, rc);
-		self->total_width += rc.width;
-	}
-
+	row_buffer_align (self, width, attrs);
 	row_buffer_flush (self);
 	row_buffer_free (self);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+static gint
+app_input_width (Application *self, guint begin, guint end)
+{
+	gint width = 0;
+	for (guint i = begin; i < end; i++)
+		width += app_char_width (self,
+			g_array_index (self->input, gunichar, i));
+	return width;
+}
+
+static guint
+app_scroll_back_input (Application *self, guint from, gint target)
+{
+	guint last_spacing = from;
+	while (from--)
+	{
+		gint width = app_input_width (self, from, from + 1);
+		if (target < width)
+			break;
+
+		if (width)
+		{
+			last_spacing = from;
+			target -= width;
+		}
+	}
+	return last_spacing;
+}
+
+static guint
+app_adjust_input_offset (Application *self, gint space)
+{
+	gint to_cursor =
+		app_input_width (self, 0, self->input_pos);
+	gint at_cursor =
+		app_input_width (self, self->input_pos, self->input_pos + 1);
+	gint past_cursor =
+		app_input_width (self, self->input_pos + 1, self->input->len);
+
+	// 1. If everything fits, no scrolling is desired, and no arrows present
+	if (to_cursor + at_cursor + past_cursor <= space)
+		return 0;
+
+	// TODO: try to prevent 2. and 3. from fighting with each other
+
+	// 2. If everything up to and including the cursor, plus right arrow fits,
+	//    start at the beginning
+	if (to_cursor + at_cursor + 1 /* right arrow */ <= space)
+		return 0;
+
+	// 3. If everything from the cursor to the right fits, fill the line,
+	//    but keep one extra space for a trailing caret
+	gint reserved = self->input_pos != self->input->len;
+	gint from_cursor_with_trailing_caret = at_cursor + past_cursor + reserved;
+	if (1 /* left arrow */ + from_cursor_with_trailing_caret <= space)
+		return app_scroll_back_input (self, self->input->len, space - 1 - 1);
+
+	// At this point, we know there will be arrows on both sides
+	space -= 2;
+
+	// 4. If the cursor has moved too much to either side, follow it
+	if (self->input_pos < self->input_offset
+	 || app_input_width (self, self->input_offset, self->input_pos + 1) > space)
+		return app_scroll_back_input (self, self->input_pos, space / 2);
+
+	// 5. Otherwise, don't fiddle with the offset at all, it's not necessary
+	return self->input_offset;
+}
 
 /// Render the top bar.
 static void
@@ -871,26 +947,37 @@ app_redraw_top (Application *self)
 
 	buf = row_buffer_make (self);
 	row_buffer_append (&buf, self->search_label, APP_ATTR (SEARCH));
-	gsize indent = buf.total_width;
+	gint indent = buf.total_width;
 
 	int word_attrs = APP_ATTR (SEARCH);
 	if (self->input_confirmed)
 		word_attrs |= A_BOLD;
 
-	gchar *input_utf8 = g_ucs4_to_utf8
-		((gunichar *) self->input->data, -1, NULL, NULL, NULL);
+	self->input_offset = app_adjust_input_offset (self, COLS - indent);
+	if (self->input_offset)
+	{
+		row_buffer_append (&buf, "<", word_attrs ^ A_BOLD);
+		indent++;
+	}
+
+	gchar *input_utf8 = g_ucs4_to_utf8 ((gunichar *) self->input->data
+		+ self->input_offset, -1, NULL, NULL, NULL);
 	g_return_if_fail (input_utf8 != NULL);
 	row_buffer_append (&buf, input_utf8, word_attrs);
 	g_free (input_utf8);
 
+	gint overflow = buf.total_width - COLS;
+	if (overflow > 0)
+	{
+		row_buffer_pop_cells (&buf, overflow + 1 /* right arrow */);
+		row_buffer_align (&buf, COLS - 1 /* right arrow */, APP_ATTR (SEARCH));
+		row_buffer_append (&buf, ">", word_attrs ^ A_BOLD);
+	}
+
 	row_buffer_finish (&buf, COLS, APP_ATTR (SEARCH));
+	gint offset = app_input_width (self, self->input_offset, self->input_pos);
 
-	guint offset, i;
-	for (offset = i = 0; i < self->input_pos; i++)
-		offset += app_char_width (self,
-			g_array_index (self->input, gunichar, i));
-
-	move (1, MIN ((gint) (indent + offset), COLS - 1));
+	move (1, MIN (indent + offset, COLS - 1));
 	refresh ();
 }
 
@@ -1270,7 +1357,7 @@ app_set_input (Application *self, const gchar *text, gsize text_len)
 
 	g_array_free (self->input, TRUE);
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
-	self->input_pos = 0;
+	self->input_pos = self->input_offset = 0;
 
 	gunichar *p = output;
 	gboolean last_was_space = false;
@@ -1782,7 +1869,7 @@ app_process_key (Application *self, termo_key_t *event)
 	{
 		if (self->input->len != 0)
 			g_array_remove_range (self->input, 0, self->input->len);
-		self->input_pos = 0;
+		self->input_pos = self->input_offset = 0;
 		self->input_confirmed = FALSE;
 	}
 
@@ -1815,16 +1902,23 @@ app_process_left_mouse_click (Application *self, int line, int column)
 	else if (line == 1)
 	{
 		// FIXME: this is only an approximation
-		gsize label_len = g_utf8_strlen (self->search_label, -1);
-		gint pos = column - label_len;
+		glong label_width = g_utf8_strlen (self->search_label, -1);
+
+		gint pos = column - label_width;
 		if (pos >= 0)
 		{
-			guint offset, i;
-			for (offset = i = 0; i < self->input->len; i++)
+			// On clicking the left arrow, go to that invisible character
+			// behind the arrow (skiping over non-spacing suffixes)
+			guint i = self->input_offset;
+			if (i && !pos--)
 			{
-				size_t width = app_char_width
-					(self, g_array_index (self->input, gunichar, i));
-				if ((offset += width) > (guint) pos)
+				while (i-- && !app_input_width (self, i, i + 1))
+					;
+			}
+			for (gint occupied = 0; i < self->input->len; i++)
+			{
+				size_t width = app_input_width (self, i, i + 1);
+				if ((occupied += width) > pos)
 					break;
 			}
 

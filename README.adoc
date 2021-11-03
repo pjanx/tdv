@@ -87,11 +87,12 @@ https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--
 
 Further Development
 -------------------
-While I've been successfully using 'sdtui' for many years now, some work has to
-be done yet before the software can be considered fit for inclusion in regular
-Linux and/or BSD distributions:
+While I've been successfully using 'sdtui' for many years now, some issues
+should be addressed before including the software in regular Linux and/or
+BSD distributions:
 
- - The tab bar and the text input field don't handle overflows well in the TUI.
+ - The tab bar doesn't handle overflows well in the TUI.
+ - The GUI doesn't support text selection, and is awkward to configure.
  - Lacking configuration, standard StarDict locations should be scanned.
 
 Given all issues with the file format, it might be better to start anew.
