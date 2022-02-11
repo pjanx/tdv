@@ -164,6 +164,11 @@ on_switch_page (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED GtkWidget *page,
 	g.last = g.dictionary;
 	g.dictionary = page_num;
 	search (g_ptr_array_index (g.dictionaries, g.dictionary));
+
+	// Hack: Make right-clicking notebook arrows also re-focus the entry.
+	GdkEvent *event = gtk_get_current_event ();
+	if (event && event->type == GDK_BUTTON_PRESS)
+		gtk_widget_grab_focus (g.entry);
 }
 
 static gboolean
@@ -240,6 +245,21 @@ on_key_press (G_GNUC_UNUSED GtkWidget *widget, GdkEvent *event,
 	return FALSE;
 }
 
+static gboolean
+on_tab_focus (G_GNUC_UNUSED GtkWidget *widget,
+	G_GNUC_UNUSED GtkDirectionType direction, G_GNUC_UNUSED gpointer user_data)
+{
+	// Hack: Make it so that tab headers don't retain newly gained focus
+	// when clicked, re-focus the entry instead.
+	GdkEvent *event = gtk_get_current_event ();
+	if (!event || event->type != GDK_BUTTON_PRESS
+		|| event->button.button != GDK_BUTTON_PRIMARY)
+		return FALSE;
+
+	gtk_widget_grab_focus (g.entry);
+	return TRUE;
+}
+
 static void
 init_tabs (void)
 {
@@ -247,6 +267,7 @@ init_tabs (void)
 	{
 		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
 		GtkWidget *dummy = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+		g_signal_connect (dummy, "focus", G_CALLBACK (on_tab_focus), NULL);
 		GtkWidget *label = gtk_label_new (dict->name);
 		gtk_notebook_insert_page (GTK_NOTEBOOK (g.notebook), dummy, label, 0);
 	}
