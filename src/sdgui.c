@@ -343,10 +343,9 @@ on_open (G_GNUC_UNUSED GtkMenuItem *item, G_GNUC_UNUSED gpointer data)
 }
 
 static void
-on_drag_data_received (G_GNUC_UNUSED GtkWidget *widget,
-	G_GNUC_UNUSED GdkDragContext *context, G_GNUC_UNUSED gint x,
-	G_GNUC_UNUSED gint y, GtkSelectionData *data, G_GNUC_UNUSED guint info,
-	G_GNUC_UNUSED guint time, G_GNUC_UNUSED gpointer user_data)
+on_drag_data_received (G_GNUC_UNUSED GtkWidget *widget, GdkDragContext *context,
+	G_GNUC_UNUSED gint x, G_GNUC_UNUSED gint y, GtkSelectionData *data,
+	G_GNUC_UNUSED guint info, guint time, G_GNUC_UNUSED gpointer user_data)
 {
 	GError *error = NULL;
 	gchar **dropped_uris = gtk_selection_data_get_uris (data);
@@ -369,6 +368,7 @@ on_drag_data_received (G_GNUC_UNUSED GtkWidget *widget,
 		return;
 
 	g_ptr_array_free (new_dictionaries, TRUE);
+	gtk_drag_finish (context, error == NULL, FALSE, time);
 }
 
 static void
