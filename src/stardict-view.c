@@ -223,6 +223,7 @@ struct _StardictView
 	gchar *matched;                     ///< Highlight common word part of this
 
 	gint top_offset;                    ///< Pixel offset into the entry
+	gdouble drag_last_offset;           ///< Last offset when dragging
 	// TODO: think about making it, e.g., a pair of (ViewEntry *, guint)
 	// NOTE: this is the index of a Pango paragraph (a virtual entity)
 	guint selected;                     ///< Offset to the selected definition
@@ -501,6 +502,38 @@ stardict_view_scroll_event (GtkWidget *widget, GdkEventScroll *event)
 }
 
 static void
+on_drag_begin (GtkGestureDrag *drag, G_GNUC_UNUSED gdouble start_x,
+	G_GNUC_UNUSED gdouble start_y, gpointer user_data)
+{
+	GtkGesture *gesture = GTK_GESTURE (drag);
+	GdkEventSequence *sequence
+		= gtk_gesture_get_last_updated_sequence (gesture);
+
+	GdkModifierType state = 0;
+	const GdkEvent *last_event = gtk_gesture_get_last_event (gesture, sequence);
+	gdk_event_get_state (last_event, &state);
+	if (state & gtk_accelerator_get_default_mod_mask ())
+		gtk_gesture_set_sequence_state (gesture, sequence,
+			GTK_EVENT_SEQUENCE_DENIED);
+	else
+	{
+		gtk_gesture_set_sequence_state (gesture, sequence,
+			GTK_EVENT_SEQUENCE_CLAIMED);
+		STARDICT_VIEW (user_data)->drag_last_offset = 0;
+	}
+}
+
+static void
+on_drag_update (G_GNUC_UNUSED GtkGestureDrag *drag,
+	G_GNUC_UNUSED gdouble offset_x, gdouble offset_y, gpointer user_data)
+{
+	StardictView *self = STARDICT_VIEW (user_data);
+	self->top_offset += self->drag_last_offset - offset_y;
+	adjust_for_offset (self);
+	self->drag_last_offset = offset_y;
+}
+
+static void
 stardict_view_class_init (StardictViewClass *klass)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -523,6 +556,15 @@ stardict_view_class_init (StardictViewClass *klass)
 static void
 stardict_view_init (G_GNUC_UNUSED StardictView *self)
 {
+	GtkGesture *drag = gtk_gesture_drag_new (GTK_WIDGET (self));
+	gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (drag), TRUE);
+	gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (drag),
+		GTK_PHASE_BUBBLE);
+	g_object_set_data_full (G_OBJECT (self), "stardict-view-drag-gesture",
+		drag, g_object_unref);
+
+	g_signal_connect (drag, "drag-begin", G_CALLBACK (on_drag_begin), self);
+	g_signal_connect (drag, "drag-update", G_CALLBACK (on_drag_update), self);
 }
 
 // --- Public ------------------------------------------------------------------
