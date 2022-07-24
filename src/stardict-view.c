@@ -395,9 +395,8 @@ stardict_view_realize (GtkWidget *widget)
 		// but it merely seems to involve more work.
 		.wclass      = GDK_INPUT_OUTPUT,
 		.visual      = gtk_widget_get_visual (widget),
-
-		// GDK_SMOOTH_SCROLL_MASK is useless, will stop sending UP/DOWN
-		.event_mask  = gtk_widget_get_events (widget) | GDK_SCROLL_MASK,
+		.event_mask  = gtk_widget_get_events (widget) | GDK_SCROLL_MASK
+			| GDK_SMOOTH_SCROLL_MASK,
 	};
 
 	// We need this window to receive input events at all.
@@ -487,9 +486,14 @@ stardict_view_scroll_event (GtkWidget *widget, GdkEventScroll *event)
 		stardict_view_scroll (self, GTK_SCROLL_STEPS, +3);
 		return TRUE;
 	case GDK_SCROLL_SMOOTH:
-		self->top_offset += event->delta_y;
-		adjust_for_offset (self);
+	{
+		// On GDK/Wayland, the mouse wheel will typically create 1.5 deltas,
+		// after dividing a 15 degree click angle from libinput by 10.
+		// On X11, as libinput(4) indicates, the delta will always be 1.0.
+		double delta = CLAMP(event->delta_y, -1, +1);
+		stardict_view_scroll (self, GTK_SCROLL_STEPS, 3 * delta);
 		return TRUE;
+	}
 	default:
 		return FALSE;
 	}
