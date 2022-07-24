@@ -218,6 +218,6 @@ main (int argc, char *argv[])
 		fatal ("Error: failed to write the dictionary: %s\n", error->message);
 
 	generator_free (generator);
-	fclose (fsorted);
+	pclose (fsorted);
 	return 0;
 }
