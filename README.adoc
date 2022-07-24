@@ -28,7 +28,8 @@ The rest of this README will concern itself with externalities.
 
 Building and Running
 --------------------
-Build dependencies: CMake, pkg-config, asciidoctor, librsvg (for the GUI) +
+Build-only dependencies: CMake, pkg-config, asciidoctor, librsvg (for the GUI),
+ icoutils (for the GUI, when targetting Windows) +
 Runtime dependencies: ncursesw, zlib, ICU, termo (included), glib-2.0 >= 2.38,
  pango, xcb, xcb-xfixes (the latter two optional for the TUI),
  gtk+-3.0 (for the GUI)
