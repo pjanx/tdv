@@ -5,7 +5,7 @@ use warnings;
 use strict;
 
 # GNU Gzip can unpack a ZIP file, but not the BSD one, and unzip can't use stdin
-my $zipcat = qx/command -v bsdtar/ ? 'bsdtar -xOf-' : 'zcat';
+my $zipcat = qx/(command -v bsdtar)/ ? 'bsdtar -xOf-' : 'zcat';
 
 my $base = 'https://lindat.cz/repository/xmlui';
 my $path = 'handle/11858/00-097C-0000-0001-4880-3';
