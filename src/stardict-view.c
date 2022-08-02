@@ -1,7 +1,7 @@
 /*
  * StarDict GTK+ UI - dictionary view component
  *
- * Copyright (c) 2021, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2021 - 2022, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -135,27 +135,69 @@ view_entry_get_padding (GtkStyleContext *style)
 	return padding;
 }
 
-static gint
-view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
-	GtkStyleContext *style)
-{
-	gint word_y = 0, defn_y = 0,
-		height = view_entry_height (ve, &word_y, &defn_y);
+typedef struct view_entry_render_ctx ViewEntryRenderCtx;
 
-	gtk_render_background (style, cr, 0, 0, full_width, height);
-	gtk_render_frame (style, cr, 0, 0, full_width, height);
+// TODO: see if we can't think of a cleaner way of doing this
+struct view_entry_render_ctx
+{
+	GtkStyleContext *style;
+	cairo_t *cr;
+	int width;
+	int height;
+
+	// Forwarded from StardictView
+	PangoLayout *selection_layout;
+	int selection_begin;
+	int selection_end;
+};
+
+static void
+view_entry_render (ViewEntryRenderCtx *ctx, gdouble x, gdouble y,
+	PangoLayout *layout)
+{
+	gtk_render_layout (ctx->style, ctx->cr, x, y, layout);
+	if (layout != ctx->selection_layout)
+		return;
+
+	gtk_style_context_save (ctx->style);
+	gtk_style_context_set_state (ctx->style, GTK_STATE_FLAG_SELECTED);
+	cairo_save (ctx->cr);
+
+	int ranges[2] = { MIN (ctx->selection_begin, ctx->selection_end),
+		MAX (ctx->selection_begin, ctx->selection_end) };
+	cairo_region_t *region
+		= gdk_pango_layout_get_clip_region (layout, x, y, ranges, 1);
+	gdk_cairo_region (ctx->cr, region);
+	cairo_clip (ctx->cr);
+	cairo_region_destroy (region);
+
+	gtk_render_background (ctx->style, ctx->cr, 0, 0, ctx->width, ctx->height);
+	gtk_render_layout (ctx->style, ctx->cr, x, y, layout);
+
+	cairo_restore (ctx->cr);
+	gtk_style_context_restore (ctx->style);
+}
+
+static gint
+view_entry_draw (ViewEntry *ve, ViewEntryRenderCtx *ctx)
+{
+	gint word_y = 0, defn_y = 0;
+	ctx->height = view_entry_height (ve, &word_y, &defn_y);
+
+	gtk_render_background (ctx->style, ctx->cr, 0, 0, ctx->width, ctx->height);
+	gtk_render_frame (ctx->style, ctx->cr, 0, 0, ctx->width, ctx->height);
 
 	// Top/bottom and left/right-dependent padding will not work, too much code
-	GtkBorder padding = view_entry_get_padding (style);
+	GtkBorder padding = view_entry_get_padding (ctx->style);
 
-	gtk_style_context_save (style);
-	gtk_style_context_add_class (style, GTK_STYLE_CLASS_RIGHT);
-	gtk_render_layout (style, cr,
-		full_width / 2 + padding.left, defn_y, ve->definition_layout);
-	gtk_style_context_restore (style);
+	gtk_style_context_save (ctx->style);
+	gtk_style_context_add_class (ctx->style, GTK_STYLE_CLASS_RIGHT);
+	view_entry_render (ctx, ctx->width / 2 + padding.left, defn_y,
+		ve->definition_layout);
+	gtk_style_context_restore (ctx->style);
 
-	gtk_style_context_save (style);
-	gtk_style_context_add_class (style, GTK_STYLE_CLASS_LEFT);
+	gtk_style_context_save (ctx->style);
+	gtk_style_context_add_class (ctx->style, GTK_STYLE_CLASS_LEFT);
 	PangoLayoutIter *iter = pango_layout_get_iter (ve->definition_layout);
 	do
 	{
@@ -164,13 +206,13 @@ view_entry_draw (ViewEntry *ve, cairo_t *cr, gint full_width,
 
 		PangoRectangle logical = {};
 		pango_layout_iter_get_line_extents (iter, NULL, &logical);
-		gtk_render_layout (style, cr,
-			padding.left, word_y + PANGO_PIXELS (logical.y), ve->word_layout);
+		view_entry_render (ctx, padding.left, word_y + PANGO_PIXELS (logical.y),
+			ve->word_layout);
 	}
 	while (pango_layout_iter_next_line (iter));
 	pango_layout_iter_free (iter);
-	gtk_style_context_restore (style);
-	return height;
+	gtk_style_context_restore (ctx->style);
+	return ctx->height;
 }
 
 static void
@@ -224,10 +266,12 @@ struct _StardictView
 
 	gint top_offset;                    ///< Pixel offset into the entry
 	gdouble drag_last_offset;           ///< Last offset when dragging
-	// TODO: think about making it, e.g., a pair of (ViewEntry *, guint)
-	// NOTE: this is the index of a Pango paragraph (a virtual entity)
-	guint selected;                     ///< Offset to the selected definition
 	GList *entries;                     ///< ViewEntry-s within the view
+
+	GtkGesture *selection_gesture;      ///< Selection gesture
+	GWeakRef selection;                 ///< Selected PangoLayout, if any
+	int selection_begin;                ///< Start index within `selection`
+	int selection_end;                  ///< End index within `selection`
 };
 
 static ViewEntry *
@@ -321,9 +365,13 @@ reload (StardictView *self)
 {
 	GtkWidget *widget = GTK_WIDGET (self);
 
+	// FIXME: this invalidates the selection, we'd need better identification
 	g_list_free_full (self->entries, (GDestroyNotify) view_entry_destroy);
 	self->entries = NULL;
 	gtk_widget_queue_draw (widget);
+
+	// For consistency, and the check in make_context_menu()
+	self->selection_begin = self->selection_end = -1;
 
 	if (gtk_widget_get_realized (widget) && self->dict)
 		adjust_for_height (self);
@@ -351,6 +399,9 @@ stardict_view_finalize (GObject *gobject)
 
 	g_list_free_full (self->entries, (GDestroyNotify) view_entry_destroy);
 	self->entries = NULL;
+
+	g_object_unref (self->selection_gesture);
+	g_weak_ref_clear (&self->selection);
 
 	g_free (self->matched);
 	self->matched = NULL;
@@ -397,7 +448,7 @@ stardict_view_realize (GtkWidget *widget)
 		.wclass      = GDK_INPUT_OUTPUT,
 		.visual      = gtk_widget_get_visual (widget),
 		.event_mask  = gtk_widget_get_events (widget) | GDK_SCROLL_MASK
-			| GDK_SMOOTH_SCROLL_MASK,
+			| GDK_SMOOTH_SCROLL_MASK | GDK_BUTTON_PRESS_MASK,
 	};
 
 	// We need this window to receive input events at all.
@@ -425,6 +476,17 @@ stardict_view_draw (GtkWidget *widget, cairo_t *cr)
 	gtk_render_frame (style, cr,
 		0, 0, allocation.width, allocation.height);
 
+	ViewEntryRenderCtx ctx =
+	{
+		.style = style,
+		.cr = cr,
+		.width = allocation.width,
+		.height = 0,
+		.selection_layout = g_weak_ref_get (&self->selection),
+		.selection_begin = self->selection_begin,
+		.selection_end = self->selection_end,
+	};
+
 	gint offset = -self->top_offset;
 	gint i = self->top_position;
 	for (GList *iter = self->entries; iter; iter = iter->next)
@@ -442,12 +504,84 @@ stardict_view_draw (GtkWidget *widget, cairo_t *cr)
 		cairo_save (cr);
 		cairo_translate (cr, 0, offset);
 		// TODO: later exclude clipped entries, but it's not that important
-		offset += view_entry_draw (iter->data, cr, allocation.width, style);
+		offset += view_entry_draw (iter->data, &ctx);
 		cairo_restore (cr);
 
 		gtk_style_context_restore (style);
 	}
+	g_clear_object (&ctx.selection_layout);
 	return TRUE;
+}
+
+/// Figure out which layout is at given widget coordinates, and translate them.
+static PangoLayout *
+layout_at (StardictView *self, int *x, int *y)
+{
+	GtkWidget *widget = GTK_WIDGET (self);
+	int width = gtk_widget_get_allocated_width (widget);
+
+	// The algorithm here is a simplification of stardict_view_draw().
+	GtkStyleContext *style = gtk_widget_get_style_context (widget);
+	GtkBorder padding = view_entry_get_padding (style);
+	gint offset = -self->top_offset;
+	for (GList *iter = self->entries; iter; iter = iter->next)
+	{
+		ViewEntry *ve = iter->data;
+		if (G_UNLIKELY (*y < offset))
+			break;
+
+		gint top_y = offset, word_y = 0, defn_y = 0;
+		offset += view_entry_height (ve, &word_y, &defn_y);
+		if (*y >= offset)
+			continue;
+
+		if (*x >= width / 2)
+		{
+			*x -= width / 2 + padding.left;
+			*y -= top_y + defn_y;
+			return ve->definition_layout;
+		}
+		else
+		{
+			*x -= padding.left;
+			*y -= top_y + word_y;
+			return ve->word_layout;
+		}
+	}
+	return NULL;
+}
+
+/// Figure out a layout's coordinates.
+static gboolean
+layout_coords (StardictView *self, PangoLayout *layout, int *x, int *y)
+{
+	GtkWidget *widget = GTK_WIDGET (self);
+	int width = gtk_widget_get_allocated_width (widget);
+
+	// The algorithm here is a simplification of stardict_view_draw().
+	GtkStyleContext *style = gtk_widget_get_style_context (widget);
+	GtkBorder padding = view_entry_get_padding (style);
+	gint offset = -self->top_offset;
+	for (GList *iter = self->entries; iter; iter = iter->next)
+	{
+		ViewEntry *ve = iter->data;
+		gint top_y = offset, word_y = 0, defn_y = 0;
+		offset += view_entry_height (ve, &word_y, &defn_y);
+
+		if (layout == ve->definition_layout)
+		{
+			*x = width / 2 + padding.left;
+			*y = top_y + defn_y;
+			return TRUE;
+		}
+		if (layout == ve->word_layout)
+		{
+			*x = padding.left;
+			*y = top_y + word_y;
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 static void
@@ -501,6 +635,150 @@ stardict_view_scroll_event (GtkWidget *widget, GdkEventScroll *event)
 	}
 }
 
+static int
+layout_index_at (PangoLayout *layout, int x, int y)
+{
+	int index = 0, trailing = 0;
+	(void) pango_layout_xy_to_index (layout,
+		x * PANGO_SCALE,
+		y * PANGO_SCALE,
+		&index,
+		&trailing);
+
+	const char *text = pango_layout_get_text (layout) + index;
+	while (trailing--)
+	{
+		int len = g_utf8_next_char(text) - text;
+		text += len;
+		index += len;
+	}
+	return index;
+}
+
+static void
+publish_selection (StardictView *self, GdkAtom target)
+{
+	PangoLayout *layout = g_weak_ref_get (&self->selection);
+	if (!layout || self->selection_begin == self->selection_end)
+		return;
+
+	// Unlike GtkLabel, we don't place the selection in PRIMARY immediately.
+	const char *text = pango_layout_get_text (layout);
+	int len = strlen (text),
+		s1 = MIN (self->selection_begin, self->selection_end),
+		s2 = MAX (self->selection_begin, self->selection_end);
+	if (s1 >= 0 && s1 <= len && s2 >= 0 && s2 <= len)
+		gtk_clipboard_set_text (gtk_clipboard_get (target), text + s1, s2 - s1);
+	g_object_unref (layout);
+}
+
+static void
+select_word_at (StardictView *self, int x, int y)
+{
+	PangoLayout *layout = layout_at (self, &x, &y);
+	if (!layout)
+		return;
+
+	const char *text = pango_layout_get_text (layout), *p = NULL;
+	const char *begin = text + layout_index_at (layout, x, y), *end = begin;
+	while ((p = g_utf8_find_prev_char (text, begin))
+		&& !g_unichar_isspace (g_utf8_get_char (p)))
+		begin = p;
+	gunichar c;
+	while ((c = g_utf8_get_char (end)) && !g_unichar_isspace (c))
+		end = g_utf8_next_char (end);
+
+	g_weak_ref_set (&self->selection, layout);
+	self->selection_begin = begin - text;
+	self->selection_end = end - text;
+	gtk_widget_queue_draw (GTK_WIDGET (self));
+	publish_selection (self, GDK_SELECTION_PRIMARY);
+}
+
+static void
+select_all_at (StardictView *self, int x, int y)
+{
+	PangoLayout *layout = layout_at (self, &x, &y);
+	if (!layout)
+		return;
+
+	g_weak_ref_set (&self->selection, layout);
+	self->selection_begin = 0;
+	self->selection_end = strlen (pango_layout_get_text (layout));
+	gtk_widget_queue_draw (GTK_WIDGET (self));
+	publish_selection (self, GDK_SELECTION_PRIMARY);
+}
+
+static void
+on_copy_activate (G_GNUC_UNUSED GtkMenuItem *item, gpointer user_data)
+{
+	publish_selection (STARDICT_VIEW (user_data), GDK_SELECTION_CLIPBOARD);
+}
+
+static gboolean
+destroy_widget_idle_source_func (GtkWidget *widget)
+{
+	// The whole menu is deactivated /before/ any item is activated,
+	// and a destroyed child item will not activate.
+	gtk_widget_destroy (widget);
+	return FALSE;
+}
+
+static GtkMenu *
+make_context_menu (StardictView *self)
+{
+	GtkWidget *copy = gtk_menu_item_new_with_mnemonic ("_Copy");
+	gtk_widget_set_sensitive (copy,
+		self->selection_begin < self->selection_end);
+	g_signal_connect_data (copy, "activate",
+		G_CALLBACK (on_copy_activate), g_object_ref (self),
+		(GClosureNotify) g_object_unref, 0);
+
+	GtkWidget *menu = gtk_menu_new ();
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), copy);
+
+	// As per GTK+ 3 Common Questions, 1.5.
+	g_object_ref_sink (menu);
+	g_signal_connect_swapped (menu, "deactivate",
+		G_CALLBACK (g_idle_add), destroy_widget_idle_source_func);
+	g_signal_connect (menu, "destroy",
+		G_CALLBACK (g_object_unref), NULL);
+
+	gtk_widget_show_all (menu);
+	return GTK_MENU (menu);
+}
+
+static gboolean
+stardict_view_button_press_event (GtkWidget *widget, GdkEventButton *event)
+{
+	StardictView *self = STARDICT_VIEW (widget);
+	if (gdk_event_triggers_context_menu((const GdkEvent *) event))
+	{
+		gtk_menu_popup_at_pointer (make_context_menu (self),
+			(const GdkEvent *) event);
+		return GDK_EVENT_STOP;
+	}
+
+	if (event->type == GDK_2BUTTON_PRESS && event->button == GDK_BUTTON_PRIMARY)
+	{
+		gtk_event_controller_reset (
+			GTK_EVENT_CONTROLLER (self->selection_gesture));
+		select_word_at (self, event->x, event->y);
+		return GDK_EVENT_STOP;
+	}
+
+	if (event->type == GDK_3BUTTON_PRESS && event->button == GDK_BUTTON_PRIMARY)
+	{
+		gtk_event_controller_reset (
+			GTK_EVENT_CONTROLLER (self->selection_gesture));
+		select_all_at (self, event->x, event->y);
+		return GDK_EVENT_STOP;
+	}
+
+	return GTK_WIDGET_CLASS (stardict_view_parent_class)
+		->button_press_event (widget, event);
+}
+
 static void
 on_drag_begin (GtkGestureDrag *drag, G_GNUC_UNUSED gdouble start_x,
 	G_GNUC_UNUSED gdouble start_y, gpointer user_data)
@@ -511,7 +789,7 @@ on_drag_begin (GtkGestureDrag *drag, G_GNUC_UNUSED gdouble start_x,
 
 	GdkModifierType state = 0;
 	const GdkEvent *last_event = gtk_gesture_get_last_event (gesture, sequence);
-	gdk_event_get_state (last_event, &state);
+	(void) gdk_event_get_state (last_event, &state);
 	if (state & gtk_accelerator_get_default_mod_mask ())
 		gtk_gesture_set_sequence_state (gesture, sequence,
 			GTK_EVENT_SEQUENCE_DENIED);
@@ -534,13 +812,86 @@ on_drag_update (G_GNUC_UNUSED GtkGestureDrag *drag,
 }
 
 static void
+on_select_begin (GtkGestureDrag *drag, gdouble start_x, gdouble start_y,
+	gpointer user_data)
+{
+	// Despite our two gestures not being grouped up, claiming one doesn't
+	// deny the other, and :exclusive isn't the opposite of :touch-only.
+	// A non-NULL sequence indicates a touch event.
+	GtkGesture *gesture = GTK_GESTURE (drag);
+	if (gtk_gesture_get_last_updated_sequence (gesture))
+	{
+		gtk_gesture_set_state(gesture, GTK_EVENT_SEQUENCE_DENIED);
+		return;
+	}
+
+	StardictView *self = STARDICT_VIEW (user_data);
+	g_weak_ref_set (&self->selection, NULL);
+	self->selection_begin = -1;
+	self->selection_end = -1;
+	gtk_widget_queue_draw (GTK_WIDGET (self));
+
+	int layout_x = start_x, layout_y = start_y;
+	PangoLayout *layout = layout_at (self, &layout_x, &layout_y);
+	if (!layout)
+	{
+		gtk_gesture_set_state(gesture, GTK_EVENT_SEQUENCE_DENIED);
+		return;
+	}
+
+	g_weak_ref_set (&self->selection, layout);
+	self->selection_end = self->selection_begin
+		= layout_index_at (layout, layout_x, layout_y);
+	gtk_gesture_set_state (gesture, GTK_EVENT_SEQUENCE_CLAIMED);
+}
+
+static void
+on_select_update (GtkGestureDrag *drag, gdouble offset_x, gdouble offset_y,
+	gpointer user_data)
+{
+	GtkGesture *gesture = GTK_GESTURE (drag);
+	StardictView *self = STARDICT_VIEW (user_data);
+	PangoLayout *layout = g_weak_ref_get (&self->selection);
+	if (!layout)
+	{
+		gtk_gesture_set_state(gesture, GTK_EVENT_SEQUENCE_DENIED);
+		return;
+	}
+
+	double start_x = 0, start_y = 0;
+	(void) gtk_gesture_drag_get_start_point (drag, &start_x, &start_y);
+
+	int x = 0, y = 0;
+	if (!layout_coords (self, layout, &x, &y))
+	{
+		g_warning ("internal error: weakly referenced layout not found");
+		gtk_gesture_set_state(gesture, GTK_EVENT_SEQUENCE_DENIED);
+		goto out;
+	}
+
+	self->selection_end = layout_index_at (layout,
+		start_x + offset_x - x,
+		start_y + offset_y - y);
+	gtk_widget_queue_draw (GTK_WIDGET (self));
+
+out:
+	g_object_unref (layout);
+}
+
+static void
+on_select_end (G_GNUC_UNUSED GtkGestureDrag *drag,
+	G_GNUC_UNUSED gdouble offset_x, G_GNUC_UNUSED gdouble offset_y,
+	gpointer user_data)
+{
+	publish_selection (STARDICT_VIEW (user_data), GDK_SELECTION_PRIMARY);
+}
+
+static void
 stardict_view_class_init (StardictViewClass *klass)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	object_class->finalize = stardict_view_finalize;
 
-	// TODO: handle mouse events for text selection
-	// See https://wiki.gnome.org/HowDoI/CustomWidgets for some guidelines.
 	GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 	widget_class->get_preferred_height = stardict_view_get_preferred_height;
 	widget_class->get_preferred_width = stardict_view_get_preferred_width;
@@ -549,22 +900,40 @@ stardict_view_class_init (StardictViewClass *klass)
 	widget_class->size_allocate = stardict_view_size_allocate;
 	widget_class->screen_changed = stardict_view_screen_changed;
 	widget_class->scroll_event = stardict_view_scroll_event;
+	widget_class->button_press_event = stardict_view_button_press_event;
 
 	gtk_widget_class_set_css_name (widget_class, "stardict-view");
 }
 
 static void
-stardict_view_init (G_GNUC_UNUSED StardictView *self)
+stardict_view_init (StardictView *self)
 {
+	g_weak_ref_init (&self->selection, NULL);
+	self->selection_begin = -1;
+	self->selection_end = -1;
+
 	GtkGesture *drag = gtk_gesture_drag_new (GTK_WIDGET (self));
 	gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (drag), TRUE);
 	gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (drag),
-		GTK_PHASE_BUBBLE);
+		GTK_PHASE_TARGET);
 	g_object_set_data_full (G_OBJECT (self), "stardict-view-drag-gesture",
 		drag, g_object_unref);
+	g_signal_connect (drag, "drag-begin",
+		G_CALLBACK (on_drag_begin), self);
+	g_signal_connect (drag, "drag-update",
+		G_CALLBACK (on_drag_update), self);
 
-	g_signal_connect (drag, "drag-begin", G_CALLBACK (on_drag_begin), self);
-	g_signal_connect (drag, "drag-update", G_CALLBACK (on_drag_update), self);
+	self->selection_gesture = gtk_gesture_drag_new (GTK_WIDGET (self));
+	gtk_gesture_single_set_exclusive (
+		GTK_GESTURE_SINGLE (self->selection_gesture), TRUE);
+	gtk_event_controller_set_propagation_phase (
+		GTK_EVENT_CONTROLLER (self->selection_gesture), GTK_PHASE_TARGET);
+	g_signal_connect (self->selection_gesture, "drag-begin",
+		G_CALLBACK (on_select_begin), self);
+	g_signal_connect (self->selection_gesture, "drag-update",
+		G_CALLBACK (on_select_update), self);
+	g_signal_connect (self->selection_gesture, "drag-end",
+		G_CALLBACK (on_select_end), self);
 }
 
 // --- Public ------------------------------------------------------------------

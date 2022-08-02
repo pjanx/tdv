@@ -454,7 +454,10 @@ main (int argc, char *argv[])
 		"stardict-view.even:backdrop {"
 			"background: mix(@theme_unfocused_base_color, "
 				"@theme_fg_color, 0.03); "
-			"color: @theme_fg_color; /* should be more faded than 'text' */ }";
+			"color: @theme_fg_color; /* should be more faded than 'text' */ }"
+		"stardict-view:selected {"
+			"background-color: @theme_selected_bg_color; "
+			"color: @theme_selected_fg_color; }";
 
 	GdkScreen *screen = gdk_screen_get_default ();
 	GtkCssProvider *provider = gtk_css_provider_new ();

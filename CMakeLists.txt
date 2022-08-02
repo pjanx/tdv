@@ -3,9 +3,9 @@ project (sdtui VERSION 0.1.0 LANGUAGES C)
 
 # Moar warnings
 if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
-	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
-	set (CMAKE_C_FLAGS_DEBUG
-		"${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -Wno-missing-field-initializers")
+	set (ignores "-Wno-missing-field-initializers -Wno-cast-function-type")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 ${ignores}")
+	set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra")
 endif ()
 
 # For custom modules
