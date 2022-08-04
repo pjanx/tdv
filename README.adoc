@@ -76,7 +76,7 @@ types are plain text, Pango markup, and XDXF (the visual format works better).
 The `make dicts` command will build some examples from freely available sources:
 
  - GNU/FDL Czech-English dictionary
- - Czech foreign words
+ - Czech foreign words (the site's export is broken as of 2022/08, no response)
  - Czech WordNet 1.9 PDT (synonyms, hypernyms, hyponyms)
 
 You can use the included 'transform' tool to convert already existing StarDict
@@ -93,7 +93,7 @@ should be addressed before including the software in regular Linux and/or
 BSD distributions:
 
  - The tab bar doesn't handle overflows well in the TUI.
- - The GUI doesn't support text selection, and is awkward to configure.
+ - The GUI has a few usability issues, and is awkward to configure.
  - Lacking configuration, standard StarDict locations should be scanned.
 
 Given all issues with the file format, it might be better to start anew.
