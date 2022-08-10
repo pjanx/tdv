@@ -17,18 +17,23 @@ if (WIN32)
 		message (FATAL_ERROR "Win32 must be cross-compiled to build sensibly")
 	endif ()
 
-	set (WIN32_DEPENDS_PATH ${PROJECT_SOURCE_DIR}/win32-depends)
-	list (APPEND CMAKE_PREFIX_PATH ${WIN32_DEPENDS_PATH})
-	list (APPEND CMAKE_INCLUDE_PATH ${WIN32_DEPENDS_PATH}/lib)
+	set (win32_deps_root "${PROJECT_SOURCE_DIR}")
+	set (win32_deps_prefix "${win32_deps_root}/mingw64")
+	list (APPEND CMAKE_PREFIX_PATH "${win32_deps_prefix}")
+	list (APPEND CMAKE_INCLUDE_PATH "${win32_deps_prefix}/lib")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mms-bitfields")
 
 	if (CMAKE_CROSSCOMPILING)
-		list (APPEND CMAKE_FIND_ROOT_PATH ${WIN32_DEPENDS_PATH})
-	endif (CMAKE_CROSSCOMPILING)
+		list (APPEND CMAKE_FIND_ROOT_PATH ${win32_deps_prefix})
+	endif ()
 
-	set (ENV{PKG_CONFIG_LIBDIR}
-		"${WIN32_DEPENDS_PATH}/share/pkgconfig:${WIN32_DEPENDS_PATH}/lib/pkgconfig")
-endif (WIN32)
+	# Relativize prefixes, and bar pkg-config from looking up host libraries
+	set (ENV{PKG_CONFIG_SYSROOT_DIR} "${win32_deps_root}")
+	set (win32_deps_pcpath
+		"${win32_deps_prefix}/share/pkgconfig:${win32_deps_prefix}/lib/pkgconfig")
+	set (ENV{PKG_CONFIG_PATH} "${win32_deps_pcpath}")
+	set (ENV{PKG_CONFIG_LIBDIR} "${win32_deps_pcpath}")
+endif ()
 
 # Dependencies
 find_package (ZLIB REQUIRED)
@@ -306,25 +311,25 @@ elseif (WITH_GUI)
 	# This rather crude filter has been mostly copied over from logdiag
 	install (TARGETS sdgui DESTINATION .)
 	install (DIRECTORY
-		${WIN32_DEPENDS_PATH}/bin/
+		${win32_deps_prefix}/bin/
 		DESTINATION .
 		FILES_MATCHING PATTERN "*.dll")
 	install (DIRECTORY
-		${WIN32_DEPENDS_PATH}/etc/
+		${win32_deps_prefix}/etc/
 		DESTINATION etc)
 	install (DIRECTORY
-		${WIN32_DEPENDS_PATH}/lib/gdk-pixbuf-2.0
+		${win32_deps_prefix}/lib/gdk-pixbuf-2.0
 		DESTINATION lib
 		FILES_MATCHING PATTERN "*" PATTERN "*.a" EXCLUDE)
 	install (DIRECTORY
-		${WIN32_DEPENDS_PATH}/share/glib-2.0/schemas
+		${win32_deps_prefix}/share/glib-2.0/schemas
 		DESTINATION share/glib-2.0)
 
 	install (DIRECTORY
-		${WIN32_DEPENDS_PATH}/share/icons/Adwaita
+		${win32_deps_prefix}/share/icons/Adwaita
 		DESTINATION share/icons OPTIONAL)
 	install (FILES
-		${WIN32_DEPENDS_PATH}/share/icons/hicolor/index.theme
+		${win32_deps_prefix}/share/icons/hicolor/index.theme
 		DESTINATION share/icons/hicolor)
 	install (DIRECTORY ${icon_base} DESTINATION share)
 

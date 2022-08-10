@@ -54,13 +54,12 @@ configure() {
 	glib-compile-schemas share/glib-2.0/schemas
 	wine64 bin/gdk-pixbuf-query-loaders.exe \
 		> lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
-
-	# pkgconf has a command line option for this, but CMake can't pass it
-	sed -i "s|^prefix=/mingw64|prefix=$(pwd)|" {share,lib}/pkgconfig/*.pc
 }
 
-mkdir -p win32-depends
-cd win32-depends
+# This directory name matches the prefix in .pc files, so we don't need to
+# modify them (pkgconf has --prefix-variable, but CMake can't pass that option)
+mkdir -p mingw64
+cd mingw64
 dbsync
 fetch mingw-w64-x86_64-gtk3 mingw-w64-x86_64-icu \
 	mingw-w64-x86_64-libwinpthread-git # because we don't do "provides"?
