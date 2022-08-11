@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# Win64Depends.sh: download dependencies from MSYS2 for cross-compilation
+# Win64Depends.sh: download dependencies from MSYS2 for cross-compilation.
 # Dependencies: AWK, sed, sha256sum, cURL, bsdtar, wine64
 repository=https://repo.msys2.org/mingw/mingw64/
 
@@ -57,12 +57,12 @@ configure() {
 }
 
 # This directory name matches the prefix in .pc files, so we don't need to
-# modify them (pkgconf has --prefix-variable, but CMake can't pass that option)
+# modify them (pkgconf has --prefix-variable, but CMake can't pass that option).
 mkdir -p mingw64
 cd mingw64
 dbsync
 fetch mingw-w64-x86_64-gtk3 mingw-w64-x86_64-icu \
-	mingw-w64-x86_64-libwinpthread-git # because we don't do "provides"?
+	mingw-w64-x86_64-libwinpthread-git # Because we don't do "provides"?
 verify
 extract
 configure
