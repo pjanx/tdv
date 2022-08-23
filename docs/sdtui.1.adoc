@@ -48,10 +48,13 @@ Luckily, some compositors, such as Sway, synchronize selections with Xwayland.
 
 To set up automatically loaded dictionaries, use the following scheme:
 
+// AsciiDoc would otherwise like to process tildes as a long subscript.
+:tilde: ~
+
 [subs="normal"]
  [Dictionaries]
- _name 1_ = __~/path/to/dict.ifo__
- _name 2_ = __~/another/dict.ifo__
+ _name 1_ = __{tilde}/path/to/dict.ifo__
+ _name 2_ = __{tilde}/another/dict.ifo__
 
 The left-hand side keys define their appearance in the tab bar.
 
