@@ -316,6 +316,13 @@ adjust_for_height (StardictView *self)
 
 	self->entries = g_list_concat (self->entries, g_list_reverse (append));
 	gtk_widget_queue_draw (widget);
+
+	// Also handling this for adjust_for_offset(), which calls this.
+	PangoLayout *selection = g_weak_ref_get (&self->selection);
+	if (selection)
+		g_object_unref (selection);
+	else
+		self->selection_begin = self->selection_end = -1;
 }
 
 static void
@@ -365,7 +372,6 @@ reload (StardictView *self)
 {
 	GtkWidget *widget = GTK_WIDGET (self);
 
-	// FIXME: this invalidates the selection, we'd need better identification
 	g_list_free_full (self->entries, (GDestroyNotify) view_entry_destroy);
 	self->entries = NULL;
 	gtk_widget_queue_draw (widget);
@@ -590,7 +596,28 @@ stardict_view_size_allocate (GtkWidget *widget, GtkAllocation *allocation)
 	GTK_WIDGET_CLASS (stardict_view_parent_class)
 		->size_allocate (widget, allocation);
 
-	reload (STARDICT_VIEW (widget));
+	StardictView *self = STARDICT_VIEW (widget);
+	if (!gtk_widget_get_realized (widget) || !self->dict)
+		return;
+
+	PangoLayout *selection = g_weak_ref_get (&self->selection), **origin = NULL;
+	for (GList *iter = self->entries; iter; iter = iter->next)
+	{
+		ViewEntry *ve = iter->data;
+		if (selection && selection == ve->word_layout)
+			origin = &ve->word_layout;
+		if (selection && selection == ve->definition_layout)
+			origin = &ve->definition_layout;
+	}
+	if (selection)
+		g_object_unref (selection);
+
+	for (GList *iter = self->entries; iter; iter = iter->next)
+		view_entry_rebuild_layouts (iter->data, widget);
+	if (origin)
+		g_weak_ref_set (&self->selection, *origin);
+
+	adjust_for_offset (self);
 }
 
 static void
