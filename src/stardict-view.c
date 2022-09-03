@@ -729,7 +729,7 @@ make_context_menu (StardictView *self)
 {
 	GtkWidget *copy = gtk_menu_item_new_with_mnemonic ("_Copy");
 	gtk_widget_set_sensitive (copy,
-		self->selection_begin < self->selection_end);
+		self->selection_begin != self->selection_end);
 	g_signal_connect_data (copy, "activate",
 		G_CALLBACK (on_copy_activate), g_object_ref (self),
 		(GClosureNotify) g_object_unref, 0);
