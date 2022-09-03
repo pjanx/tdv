@@ -128,6 +128,15 @@ on_changed (G_GNUC_UNUSED GtkWidget *widget, G_GNUC_UNUSED gpointer data)
 }
 
 static void
+on_send (G_GNUC_UNUSED StardictView *view,
+	const char *word, G_GNUC_UNUSED gpointer data)
+{
+	GtkEntryBuffer *buf = gtk_entry_get_buffer (GTK_ENTRY (g.entry));
+	gtk_entry_buffer_set_text (buf, word, -1);
+	gtk_editable_select_region (GTK_EDITABLE (g.entry), 0, -1);
+}
+
+static void
 on_selection_received (G_GNUC_UNUSED GtkClipboard *clipboard, const gchar *text,
 	G_GNUC_UNUSED gpointer data)
 {
@@ -529,6 +538,8 @@ main (int argc, char *argv[])
 	gtk_drag_dest_add_uri_targets (g.view);
 	g_signal_connect (g.view, "drag-data-received",
 		G_CALLBACK (on_drag_data_received), NULL);
+	g_signal_connect (g.view, "send",
+		G_CALLBACK (on_send), NULL);
 
 	gtk_widget_show_all (g.window);
 	gtk_main ();
