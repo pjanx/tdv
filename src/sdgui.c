@@ -296,14 +296,10 @@ show_error_dialog (GError *error)
 }
 
 static gboolean
-reload_dictionaries (GPtrArray *new_dictionaries)
+reload_dictionaries (GPtrArray *new_dictionaries, GError **error)
 {
-	GError *error = NULL;
-	if (!load_dictionaries (new_dictionaries, &error))
-	{
-		show_error_dialog (error);
+	if (!load_dictionaries (new_dictionaries, error))
 		return FALSE;
-	}
 
 	while (gtk_notebook_get_n_pages (GTK_NOTEBOOK (g.notebook)))
 		gtk_notebook_remove_page (GTK_NOTEBOOK (g.notebook), -1);
@@ -347,8 +343,14 @@ on_open (G_GNUC_UNUSED GtkMenuItem *item, G_GNUC_UNUSED gpointer data)
 	}
 
 	gtk_widget_destroy (dialog);
-	if (!new_dictionaries->len || !reload_dictionaries (new_dictionaries))
+
+	GError *error = NULL;
+	if (!new_dictionaries->len
+	 || !reload_dictionaries (new_dictionaries, &error))
 		g_ptr_array_free (new_dictionaries, TRUE);
+
+	if (error)
+		show_error_dialog (error);
 }
 
 static void
@@ -371,13 +373,14 @@ on_drag_data_received (G_GNUC_UNUSED GtkWidget *widget, GdkDragContext *context,
 	}
 
 	g_strfreev (dropped_uris);
+	if (!new_dictionaries->len
+	 || !reload_dictionaries (new_dictionaries, &error))
+		g_ptr_array_free (new_dictionaries, TRUE);
+
+	gtk_drag_finish (context, error == NULL, FALSE, time);
+
 	if (error)
 		show_error_dialog (error);
-	else if (new_dictionaries->len && reload_dictionaries (new_dictionaries))
-		return;
-
-	g_ptr_array_free (new_dictionaries, TRUE);
-	gtk_drag_finish (context, error == NULL, FALSE, time);
 }
 
 static void
