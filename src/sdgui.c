@@ -42,6 +42,8 @@ static struct
 	gint          last;              ///< The last dictionary index
 	GPtrArray    *dictionaries;      ///< All open dictionaries
 
+	gboolean      loading;           ///< Dictionaries are being loaded
+
 	gboolean      watch_selection;   ///< Following X11 PRIMARY?
 }
 g;
@@ -49,19 +51,19 @@ g;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 static void
-init (gchar **filenames)
+load_from_filenames (GPtrArray *out, gchar **filenames)
 {
 	for (gsize i = 0; filenames[i]; i++)
 	{
 		Dictionary *dict = g_malloc0 (sizeof *dict);
 		dict->filename = g_strdup (filenames[i]);
-		g_ptr_array_add (g.dictionaries, dict);
+		g_ptr_array_add (out, dict);
 	}
 }
 
 // TODO: try to deduplicate, similar to app_load_config_values()
 static gboolean
-init_from_key_file (GKeyFile *kf, GError **error)
+load_from_key_file (GPtrArray *out, GKeyFile *kf, GError **error)
 {
 	const gchar *dictionaries = "Dictionaries";
 	gchar **names = g_key_file_get_keys (kf, dictionaries, NULL, NULL);
@@ -72,13 +74,13 @@ init_from_key_file (GKeyFile *kf, GError **error)
 	{
 		Dictionary *dict = g_malloc0 (sizeof *dict);
 		dict->name = names[i];
-		g_ptr_array_add (g.dictionaries, dict);
+		g_ptr_array_add (out, dict);
 	}
 	g_free (names);
 
-	for (gsize i = 0; i < g.dictionaries->len; i++)
+	for (gsize i = 0; i < out->len; i++)
 	{
-		Dictionary *dict = g_ptr_array_index (g.dictionaries, i);
+		Dictionary *dict = g_ptr_array_index (out, i);
 		gchar *path =
 			g_key_file_get_string (kf, dictionaries, dict->name, error);
 		if (!path)
@@ -95,13 +97,13 @@ init_from_key_file (GKeyFile *kf, GError **error)
 }
 
 static gboolean
-init_from_config (GError **error)
+load_from_config (GPtrArray *out, GError **error)
 {
 	GKeyFile *key_file = load_project_config_file (error);
 	if (!key_file)
 		return FALSE;
 
-	gboolean result = init_from_key_file (key_file, error);
+	gboolean result = load_from_key_file (out, key_file, error);
 	g_key_file_free (key_file);
 	return result;
 }
@@ -111,6 +113,8 @@ search (Dictionary *dict)
 {
 	GtkEntryBuffer *buf = gtk_entry_get_buffer (GTK_ENTRY (g.entry));
 	const gchar *input_utf8 = gtk_entry_buffer_get_text (buf);
+	if (!dict->dict)
+		return;
 
 	StardictIterator *iterator =
 		stardict_dict_search (dict->dict, input_utf8, NULL);
@@ -295,20 +299,68 @@ show_error_dialog (GError *error)
 	g_error_free (error);
 }
 
-static gboolean
-reload_dictionaries (GPtrArray *new_dictionaries, GError **error)
+static void
+on_new_dictionaries_loaded (G_GNUC_UNUSED GObject* source_object,
+	GAsyncResult* res, G_GNUC_UNUSED gpointer user_data)
 {
-	if (!load_dictionaries (new_dictionaries, error))
-		return FALSE;
+	g.loading = FALSE;
+
+	GError *error = NULL;
+	GPtrArray *new_dictionaries =
+		g_task_propagate_pointer (G_TASK (res), &error);
+	if (!new_dictionaries)
+	{
+		show_error_dialog (error);
+		return;
+	}
 
 	while (gtk_notebook_get_n_pages (GTK_NOTEBOOK (g.notebook)))
 		gtk_notebook_remove_page (GTK_NOTEBOOK (g.notebook), -1);
 
 	g.dictionary = -1;
+	if (g.dictionaries)
+		g_ptr_array_free (g.dictionaries, TRUE);
+
 	stardict_view_set_position (STARDICT_VIEW (g.view), NULL, 0);
-	g_ptr_array_free (g.dictionaries, TRUE);
 	g.dictionaries = new_dictionaries;
 	init_tabs ();
+}
+
+static void
+on_reload_dictionaries_task (GTask *task, G_GNUC_UNUSED gpointer source_object,
+	gpointer task_data, G_GNUC_UNUSED GCancellable *cancellable)
+{
+	GError *error = NULL;
+	if (load_dictionaries (task_data, &error))
+	{
+		g_task_return_pointer (task,
+			g_ptr_array_ref (task_data), (GDestroyNotify) g_ptr_array_unref);
+	}
+	else
+		g_task_return_error (task, error);
+}
+
+static gboolean
+reload_dictionaries (GPtrArray *new_dictionaries, GError **error)
+{
+	// TODO: We could cancel that task.
+	if (g.loading)
+	{
+		g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+			"already loading dictionaries");
+		return FALSE;
+	}
+
+	// TODO: Some other kind of indication.
+	//   Note that "action widgets" aren't visible without GtkNotebook tabs.
+	g.loading = TRUE;
+
+	GTask *task = g_task_new (NULL, NULL, on_new_dictionaries_loaded, NULL);
+	g_task_set_name (task, __func__);
+	g_task_set_task_data (task,
+		new_dictionaries, (GDestroyNotify) g_ptr_array_unref);
+	g_task_run_in_thread (task, on_reload_dictionaries_task);
+	g_object_unref (task);
 	return TRUE;
 }
 
@@ -429,19 +481,19 @@ main (int argc, char *argv[])
 
 	gtk_window_set_default_icon_name (PROJECT_NAME);
 
-	g.dictionaries =
+	GPtrArray *new_dictionaries =
 		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
 	if (filenames)
-		init (filenames);
-	else if (!init_from_config (&error) && error)
+	{
+		load_from_filenames (new_dictionaries, filenames);
+		g_strfreev (filenames);
+	}
+	else if (!load_from_config (new_dictionaries, &error) && error)
 		die_with_dialog (error->message);
-	g_strfreev (filenames);
 
-	if (!g.dictionaries->len)
+	if (!new_dictionaries->len)
 		die_with_dialog (_("No dictionaries found either in "
 			"the configuration or on the command line"));
-	if (!load_dictionaries (g.dictionaries, &error))
-		die_with_dialog (error->message);
 
 	// Some Adwaita stupidity, plus defaults for our own widget.
 	// All the named colours have been there since GNOME 3.4
@@ -530,7 +582,6 @@ main (int argc, char *argv[])
 
 	g.view = stardict_view_new ();
 	gtk_box_pack_end (GTK_BOX (superbox), g.view, TRUE, TRUE, 0);
-	init_tabs ();
 
 	GtkClipboard *clipboard = gtk_clipboard_get (GDK_SELECTION_PRIMARY);
 	g_signal_connect (clipboard, "owner-change",
@@ -543,6 +594,9 @@ main (int argc, char *argv[])
 		G_CALLBACK (on_drag_data_received), NULL);
 	g_signal_connect (g.view, "send",
 		G_CALLBACK (on_send), NULL);
+
+	if (!reload_dictionaries (new_dictionaries, &error))
+		die_with_dialog (error->message);
 
 	gtk_widget_show_all (g.window);
 	gtk_main ();

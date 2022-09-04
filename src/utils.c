@@ -269,7 +269,6 @@ load_dictionaries_sequentially (GPtrArray *dictionaries, GError **e)
 }
 
 // Parallelize dictionary loading if possible, because of collation reindexing
-#if GLIB_CHECK_VERSION (2, 36, 0)
 static void
 load_worker (gpointer data, gpointer user_data)
 {
@@ -304,10 +303,3 @@ load_dictionaries (GPtrArray *dictionaries, GError **e)
 	g_async_queue_unref (error_queue);
 	return result;
 }
-#else  // GLib < 2.36
-gboolean
-load_dictionaries (GPtrArray *dictionaries, GError **e)
-{
-	return load_dictionaries_sequentially (dictionaries, e);
-}
-#endif  // GLib < 2.36
