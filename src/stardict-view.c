@@ -659,11 +659,17 @@ reset_hover_for_event (StardictView *self, guint state, int x, int y)
 	if ((state &= gtk_accelerator_get_default_mod_mask ()) != GDK_CONTROL_MASK)
 		return;
 
+	GdkWindow *window = gtk_widget_get_window (GTK_WIDGET (self));
+	if (x < 0
+	 || y < 0
+	 || x >= gdk_window_get_width (window)
+	 || y >= gdk_window_get_height (window))
+		return;
+
 	g_weak_ref_set (&self->hover,
 		locate_word_at (self, x, y, &self->hover_begin, &self->hover_end));
 	gtk_widget_queue_draw (GTK_WIDGET (self));
 
-	GdkWindow *window = gtk_widget_get_window (GTK_WIDGET (self));
 	GdkCursor *cursor = gdk_cursor_new_from_name
 		(gdk_window_get_display (window), "pointer");
 	gdk_window_set_cursor (window, cursor);
