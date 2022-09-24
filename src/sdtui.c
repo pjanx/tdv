@@ -166,6 +166,7 @@ struct application
 	GPtrArray     * entries;            ///< ViewEntry-s within the view
 
 	gchar         * search_label;       ///< Text of the "Search" label
+	gsize           search_label_width; ///< Visible width of "search_label"
 	GArray        * input;              ///< The current search input
 	guint           input_pos;          ///< Cursor position within input
 	guint           input_offset;       ///< Render offset in codepoints
@@ -486,6 +487,17 @@ app_init_attrs (Application *self)
 #undef XX
 }
 
+static gsize
+app_utf8_width (Application *self, const char *utf8)
+{
+	gsize width = 0;
+	gunichar *ucs4 = g_utf8_to_ucs4_fast (utf8, -1, NULL);
+	for (gunichar *it = ucs4; *it; it++)
+		width += app_char_width (self, *it);
+	g_free (ucs4);
+	return width;
+}
+
 static gboolean
 app_load_dictionaries (Application *self, GError **e)
 {
@@ -500,11 +512,7 @@ app_load_dictionaries (Application *self, GError **e)
 		gchar *tmp = g_strdup_printf (" %s ", dict->super.name);
 		g_free (dict->super.name);
 		dict->super.name = tmp;
-
-		gunichar *ucs4 = g_utf8_to_ucs4_fast (dict->super.name, -1, NULL);
-		for (gunichar *it = ucs4; *it; it++)
-			dict->name_width += app_char_width (self, *it);
-		g_free (ucs4);
+		dict->name_width = app_utf8_width (self, dict->super.name);
 	}
 	return TRUE;
 }
@@ -520,6 +528,15 @@ app_init (Application *self, char **filenames)
 	self->tk = NULL;
 	self->tk_timer = 0;
 
+	const char *charset = NULL;
+	self->locale_is_utf8 = g_get_charset (&charset);
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32LE");
+#else // G_BYTE_ORDER != G_LITTLE_ENDIAN
+	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32BE");
+#endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
+	self->focused = TRUE;
+
 	self->show_help = TRUE;
 	self->center_search = TRUE;
 	self->underline_last = TRUE;
@@ -533,21 +550,13 @@ app_init (Application *self, char **filenames)
 		((GDestroyNotify) view_entry_free);
 
 	self->search_label = g_strdup_printf ("%s: ", _("Search"));
+	self->search_label_width = app_utf8_width (self, self->search_label);
 
 	self->input = g_array_new (TRUE, FALSE, sizeof (gunichar));
 	self->input_pos = self->input_offset = 0;
 	self->input_confirmed = FALSE;
 
 	self->division = 0.5;
-
-	const char *charset;
-	self->locale_is_utf8 = g_get_charset (&charset);
-#if G_BYTE_ORDER == G_LITTLE_ENDIAN
-	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32LE");
-#else // G_BYTE_ORDER != G_LITTLE_ENDIAN
-	self->ucs4_to_locale = g_iconv_open (charset, "UTF-32BE");
-#endif // G_BYTE_ORDER != G_LITTLE_ENDIAN
-	self->focused = TRUE;
 
 	app_init_attrs (self);
 	self->dictionaries =
@@ -1922,10 +1931,7 @@ app_process_left_mouse_click (Application *self, int line, int column)
 	}
 	else if (line == 1)
 	{
-		// FIXME: this is only an approximation
-		glong label_width = g_utf8_strlen (self->search_label, -1);
-
-		gint pos = column - label_width;
+		gint pos = column - self->search_label_width;
 		if (pos >= 0)
 		{
 			// On clicking the left arrow, go to that invisible character
