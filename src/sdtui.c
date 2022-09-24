@@ -1,7 +1,7 @@
 /*
  * StarDict terminal UI
  *
- * Copyright (c) 2013 - 2021, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2013 - 2022, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
@@ -159,6 +159,7 @@ struct application
 	guint           hl_prefix : 1;      ///< Highlight the common prefix
 	guint           watch_x11_sel : 1;  ///< Requested X11 selection watcher
 
+	guint           dict_offset;        ///< Scroll position of the tab bar
 	guint32         top_position;       ///< Index of the topmost dict. entry
 	guint           top_offset;         ///< Offset into the top entry
 	guint           selected;           ///< Offset to the selected definition
@@ -710,7 +711,7 @@ row_buffer_append_length (RowBuffer *self,
 		// XXX: this is very crude as it disrespects combining marks
 		gunichar c =
 			app_is_character_in_locale (self->app, ucs4[i]) ? ucs4[i] : '?';
-		struct row_char rc = { c, attrs, unichar_width (c) };
+		RowChar rc = { c, attrs, unichar_width (c) };
 		g_array_append_val (self->chars, rc);
 		self->total_width += rc.width;
 	}
@@ -935,12 +936,32 @@ app_redraw_top (Application *self)
 	RowBuffer buf = row_buffer_make (self);
 	row_buffer_append (&buf, APP_TITLE, APP_ATTR (HEADER) | A_BOLD);
 
+	// Trivially ensure the current dictionary's tab is visible.
+	int available = COLS - buf.total_width, width = 0;
+	self->dict_offset = 0;
 	for (guint i = 0; i < self->dictionaries->len; i++)
 	{
-		Dictionary *dict = g_ptr_array_index (self->dictionaries, i);
-		row_buffer_append (&buf, dict->name,
+		AppDictionary *dict = g_ptr_array_index (self->dictionaries, i);
+		width += dict->name_width;
+		if (self->dict != dict->super.dict)
+			continue;
+
+		gboolean is_last = i + 1 == self->dictionaries->len;
+		while (self->dict_offset < i
+			&& (available < width || (available == width && !is_last)))
+		{
+			dict = g_ptr_array_index (self->dictionaries, self->dict_offset++);
+			width -= dict->name_width;
+		}
+		break;
+	}
+
+	for (guint i = self->dict_offset; i < self->dictionaries->len; i++)
+	{
+		AppDictionary *dict = g_ptr_array_index (self->dictionaries, i);
+		row_buffer_append (&buf, dict->super.name,
 			APP_ATTR_IF (self->dictionaries->len > 1
-				&& self->dict == dict->dict, ACTIVE, HEADER));
+				&& self->dict == dict->super.dict, ACTIVE, HEADER));
 	}
 	move (0, 0);
 	row_buffer_finish (&buf, COLS, APP_ATTR (HEADER));
@@ -1033,7 +1054,7 @@ app_show_help (Application *self)
 	{
 		PROJECT_NAME " " PROJECT_VERSION,
 		_("Terminal UI for StarDict dictionaries"),
-		"Copyright (c) 2013 - 2021, Přemysl Eric Janouch",
+		"Copyright (c) 2013 - 2022, Přemysl Eric Janouch",
 		"",
 		_("Type to search")
 	};
@@ -1889,7 +1910,7 @@ app_process_left_mouse_click (Application *self, int line, int column)
 		if (column < indent)
 			return;
 
-		for (guint i = 0; i < self->dictionaries->len; i++)
+		for (guint i = self->dict_offset; i < self->dictionaries->len; i++)
 		{
 			AppDictionary *dict = g_ptr_array_index (self->dictionaries, i);
 			if (column < (indent += dict->name_width))

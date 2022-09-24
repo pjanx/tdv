@@ -95,7 +95,6 @@ While I've been successfully using 'sdtui' for many years now, some issues
 should be addressed before including the software in regular Linux and/or
 BSD distributions:
 
- - The tab bar doesn't handle overflows well in the TUI.
  - The GUI is awkward to configure.
  - Lacking configuration, standard StarDict locations should be scanned.
 
