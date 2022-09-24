@@ -1014,6 +1014,10 @@ stardict_longest_common_collation_prefix (StardictDict *sd,
 	u_strFromUTF8 (NULL, 0, &uc2_len, s2, -1, &error);
 	error = U_ZERO_ERROR;
 
+	// Prevent undefined behaviour with VLAs.
+	if (!uc1_len || !uc2_len)
+		return 0;
+
 	UChar uc1[uc1_len];
 	UChar uc2[uc2_len];
 	u_strFromUTF8 (uc1, uc1_len, NULL, s1, -1, &error);
