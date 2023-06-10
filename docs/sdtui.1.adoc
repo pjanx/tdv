@@ -75,7 +75,7 @@ Extensions
 ----------
 Because the StarDict file format is a bit of a clusterfuck with regard to
 collation of dictionary entries, this software introduces an additional,
-optional "collation" field into the '.ifo' file.  When *sdtui* discovers this
+optional "collation" field into the _.ifo_ file.  When *sdtui* discovers this
 field while reading a dictionary, it automatically reorders the index according
 to that locale (e.g., "cs_CZ").  This operation may take a little while,
 in the order of seconds.
