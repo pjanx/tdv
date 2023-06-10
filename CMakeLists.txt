@@ -132,7 +132,8 @@ GETTEXT_CREATE_TRANSLATIONS (
 find_program (ASCIIDOCTOR_EXECUTABLE asciidoctor)
 find_program (A2X_EXECUTABLE a2x)
 if (NOT ASCIIDOCTOR_EXECUTABLE AND NOT A2X_EXECUTABLE)
-	message (FATAL_ERROR "Neither asciidoctor nor a2x were found")
+	message (WARNING "Neither asciidoctor nor a2x were found, "
+		"falling back to a substandard manual page generator")
 endif ()
 
 foreach (page "${PROJECT_NAME}.1")
@@ -153,6 +154,14 @@ foreach (page "${PROJECT_NAME}.1")
 				-D "${PROJECT_BINARY_DIR}"
 				"${PROJECT_SOURCE_DIR}/docs/${page}.adoc"
 			DEPENDS "docs/${page}.adoc"
+			COMMENT "Generating man page for ${page}" VERBATIM)
+	else ()
+		set (ASCIIMAN ${PROJECT_SOURCE_DIR}/liberty/tools/asciiman.awk)
+		add_custom_command (OUTPUT ${page_output}
+			COMMAND env LC_ALL=C asciidoc-release-version=${PROJECT_VERSION}
+				awk -f ${ASCIIMAN} "${PROJECT_SOURCE_DIR}/docs/${page}.adoc"
+				> ${page_output}
+			DEPENDS "docs/${page}.adoc" ${ASCIIMAN}
 			COMMENT "Generating man page for ${page}" VERBATIM)
 	endif ()
 endforeach ()
