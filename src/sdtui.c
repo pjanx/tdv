@@ -207,6 +207,10 @@ app_char_width (Application *app, gunichar c)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+#if !GLIB_CHECK_VERSION(2, 68, 0)
+#define g_memdup2 g_memdup
+#endif
+
 /// Splits the entry and adds it to a pointer array.
 static void
 view_entry_split_add (ViewEntry *ve, const gchar *text, const chtype *attrs)
