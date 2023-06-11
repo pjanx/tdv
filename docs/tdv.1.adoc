@@ -24,6 +24,9 @@ database files.
 
 Options
 -------
+*--gui*::
+	Launch the GUI even when run from a terminal.
+
 *-h*, *--help*::
 	Display a help message and exit.
 
