@@ -1,21 +1,21 @@
-sdtui(1)
-========
+tdv(1)
+======
 :doctype: manpage
-:manmanual: sdtui Manual
-:mansource: sdtui {release-version}
+:manmanual: tdv Manual
+:mansource: tdv {release-version}
 
 Name
 ----
-sdtui - StarDict terminal UI
+tdv - Translation dictionary viewer
 
 Synopsis
 --------
-*sdtui* [_OPTION_]... [_DICTIONARY_.ifo]...
+*tdv* [_OPTION_]... [_DICTIONARY_.ifo]...
 
 Description
 -----------
-*sdtui* is a StarDict dictionary viewer, custom-tailored for translation
-dictionaries, with a simple curses-based terminal UI.
+*tdv* is a StarDict dictionary viewer, custom-tailored for translation
+dictionaries, with a simple curses-based terminal UI, and a GTK+ graphical UI.
 
 Without any command line arguments, the program expects to find a list of
 dictionaries to load on start-up in its configuration file.  The _.ifo_ files
@@ -32,7 +32,7 @@ Options
 
 Configuration
 -------------
-You can start your _sdtui.conf_ file with the following snippet:
+You can start your _tdv.conf_ file with the following snippet:
 
  [Settings]
  center-search = true     # Ensure visibility of preceding entries?
@@ -75,16 +75,16 @@ Extensions
 ----------
 Because the StarDict file format is a bit of a clusterfuck with regard to
 collation of dictionary entries, this software introduces an additional,
-optional "collation" field into the _.ifo_ file.  When *sdtui* discovers this
+optional "collation" field into the _.ifo_ file.  When *tdv* discovers this
 field while reading a dictionary, it automatically reorders the index according
 to that locale (e.g., "cs_CZ").  This operation may take a little while,
 in the order of seconds.
 
 Files
 -----
-*sdtui* follows the XDG Base Directory Specification.
+*tdv* follows the XDG Base Directory Specification.
 
-_~/.config/sdtui/sdtui.conf_::
+_~/.config/tdv/tdv.conf_::
 	The configuration file.
 
 Reporting bugs

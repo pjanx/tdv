@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=sdgui
-GenericName=StarDict GUI
-Icon=sdgui
-Exec=sdgui %F
+Name=tdv
+GenericName=Translation dictionary viewer
+Icon=tdv
+Exec=tdv %F
 StartupNotify=true
 MimeType=application/x-stardict-ifo;
 Categories=Office;Dictionary;GTK;

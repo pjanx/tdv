@@ -6,7 +6,7 @@
  * finalised with an empty line.  Newlines are escaped with `\n',
  * backslashes with `\\'.
  *
- * So far only the `m', `g`, and `x` fields are supported, as in sdtui.
+ * So far only the `m', `g`, and `x` fields are supported, as in tdv.
  *
  * Copyright (c) 2013 - 2021, Přemysl Eric Janouch <p@janouch.name>
  *

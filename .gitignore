@@ -3,9 +3,9 @@
 
 # Qt Creator files
 /CMakeLists.txt.user*
-/sdtui.cflags
-/sdtui.cxxflags
-/sdtui.config
-/sdtui.files
-/sdtui.creator*
-/sdtui.includes
+/tdv.cflags
+/tdv.cxxflags
+/tdv.config
+/tdv.files
+/tdv.creator*
+/tdv.includes

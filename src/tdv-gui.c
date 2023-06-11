@@ -19,16 +19,12 @@
 #include <gtk/gtk.h>
 #include <glib/gi18n.h>
 
-#include <locale.h>
 #include <stdlib.h>
 
 #include "config.h"
 #include "stardict.h"
 #include "utils.h"
 #include "stardict-view.h"
-
-#undef PROJECT_NAME
-#define PROJECT_NAME "sdgui"
 
 static struct
 {
@@ -452,42 +448,18 @@ die_with_dialog (const gchar *message)
 }
 
 int
-main (int argc, char *argv[])
+gui_main (char *argv[])
 {
-	if (!setlocale (LC_ALL, ""))
-		g_printerr ("%s: %s\n", _("Warning"), _("failed to set the locale"));
-
-	bindtextdomain (GETTEXT_PACKAGE, GETTEXT_DIRNAME);
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-	textdomain (GETTEXT_PACKAGE);
-
-	gchar **filenames = NULL;
-	GOptionEntry option_entries[] =
-	{
-		{G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filenames,
-			NULL, N_("[FILE]...")},
-		{},
-	};
-
-	GError *error = NULL;
-	gtk_init_with_args (&argc, &argv, N_("- StarDict GTK+ UI"),
-		option_entries, GETTEXT_PACKAGE, &error);
-	if (error)
-	{
-		g_warning ("%s", error->message);
-		g_error_free (error);
-		return 1;
-	}
+	// Just like with GtkApplication, argv has been parsed by the option group.
+	gtk_init (NULL, NULL);
 
 	gtk_window_set_default_icon_name (PROJECT_NAME);
 
+	GError *error = NULL;
 	GPtrArray *new_dictionaries =
 		g_ptr_array_new_with_free_func ((GDestroyNotify) dictionary_destroy);
-	if (filenames)
-	{
-		load_from_filenames (new_dictionaries, filenames);
-		g_strfreev (filenames);
-	}
+	if (argv[0])
+		load_from_filenames (new_dictionaries, argv);
 	else if (!load_from_config (new_dictionaries, &error) && error)
 		die_with_dialog (error->message);
 

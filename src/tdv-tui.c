@@ -18,16 +18,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <locale.h>
 #include <stdarg.h>
 #include <limits.h>
 #include <string.h>
 
 #include <glib.h>
 #include <glib-unix.h>
+#include <glib/gi18n.h>
 #include <gio/gio.h>
 #include <pango/pango.h>
-#include <glib/gi18n.h>
 
 #include <unistd.h>
 #include <poll.h>
@@ -2438,53 +2437,10 @@ log_handler (const gchar *domain, GLogLevelFlags level,
 }
 
 int
-main (int argc, char *argv[])
+tui_main (char *argv[])
 {
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-	if (glib_check_version (2, 36, 0))
-		g_type_init ();
-G_GNUC_END_IGNORE_DEPRECATIONS
-
-	gboolean show_version = FALSE;
-	GOptionEntry entries[] =
-	{
-		{ "version", 0, G_OPTION_FLAG_IN_MAIN,
-		  G_OPTION_ARG_NONE, &show_version,
-		  N_("Output version information and exit"), NULL },
-		{ NULL }
-	};
-
-	if (!setlocale (LC_ALL, ""))
-		g_printerr ("%s: %s\n", _("Warning"), _("failed to set the locale"));
-
-	bindtextdomain (GETTEXT_PACKAGE, GETTEXT_DIRNAME);
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-	textdomain (GETTEXT_PACKAGE);
-
-	GError *error = NULL;
-	GOptionContext *ctx = g_option_context_new
-		(N_("[dictionary.ifo...] - StarDict terminal UI"));
-	GOptionGroup *group = g_option_group_new ("", "", "", NULL, NULL);
-	g_option_group_add_entries (group, entries);
-	g_option_group_set_translation_domain (group, GETTEXT_PACKAGE);
-	g_option_context_add_group (ctx, group);
-	g_option_context_set_translation_domain (ctx, GETTEXT_PACKAGE);
-	if (!g_option_context_parse (ctx, &argc, &argv, &error))
-	{
-		g_printerr ("%s: %s: %s\n", _("Error"), _("option parsing failed"),
-			error->message);
-		exit (EXIT_FAILURE);
-	}
-	g_option_context_free (ctx);
-
-	if (show_version)
-	{
-		g_print (PROJECT_NAME " " PROJECT_VERSION "\n");
-		exit (EXIT_SUCCESS);
-	}
-
 	Application app;
-	app_init (&app, argv + 1);
+	app_init (&app, argv);
 	app_init_terminal (&app);
 	app_redraw (&app);
 
@@ -2528,4 +2484,3 @@ G_GNUC_END_IGNORE_DEPRECATIONS
 
 	return 0;
 }
-

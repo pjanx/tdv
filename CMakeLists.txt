@@ -1,12 +1,14 @@
 cmake_minimum_required (VERSION 3.0)
-project (sdtui VERSION 0.1.0 LANGUAGES C)
+project (tdv VERSION 0.1.0 LANGUAGES C)
 
-# Moar warnings
+# Adjust warnings
 if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
 	set (ignores "-Wno-missing-field-initializers -Wno-cast-function-type")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 ${ignores}")
 	set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra")
 endif ()
+
+add_definitions (-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_38)
 
 # For custom modules
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -108,6 +110,7 @@ if (WITH_GUI)
 		message (FATAL_ERROR "GTK+ not found")
 	endif ()
 
+	include_directories (${gtk_INCLUDE_DIRS})
 	link_directories (${gtk_LIBRARY_DIRS})
 endif ()
 
@@ -198,25 +201,7 @@ configure_file (${PROJECT_SOURCE_DIR}/config.h.in
 	${PROJECT_BINARY_DIR}/config.h)
 include_directories (${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
-# Primary target source files
-set (project_sources
-	src/${PROJECT_NAME}.c)
-set (project_headers
-	${project_common_headers})
-
-# Build the main executable and link it
-add_definitions (-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_38)
-if (NOT WIN32)
-	add_executable (${PROJECT_NAME}
-		${project_sources} ${project_headers} ${project_common_sources})
-	target_link_libraries (${PROJECT_NAME} ${project_common_libraries}
-		${Ncursesw_LIBRARIES} termo-static)
-	if (WITH_X11)
-		target_link_libraries (${PROJECT_NAME} ${xcb_LIBRARIES})
-	endif ()
-endif (NOT WIN32)
-
-# The same for the alternative GTK+ UI
+# Icon generation utilities
 if (NOT ${CMAKE_VERSION} VERSION_LESS 3.18.0)
 	set (find_program_REQUIRE REQUIRED)
 endif ()
@@ -224,7 +209,7 @@ endif ()
 function (icon_to_png svg size output_dir output)
 	set (_dimensions ${size}x${size})
 	set (_png_path ${output_dir}/hicolor/${_dimensions}/apps)
-	set (_png ${_png_path}/sdgui.png)
+	set (_png ${_png_path}/${PROJECT_NAME}.png)
 	set (${output} ${_png} PARENT_SCOPE)
 
 	find_program (rsvg_convert_EXECUTABLE rsvg-convert ${find_program_REQUIRE})
@@ -244,8 +229,17 @@ function (icon_for_win32 pngs ico)
 		COMMENT "Generating Windows program icon" VERBATIM)
 endfunction ()
 
+# Build the main executable and link it
+set (project_libraries
+	${project_common_libraries})
+set (project_sources
+	${project_common_sources}
+	src/${PROJECT_NAME}.c)
+set (project_headers
+	${project_common_headers})
+
 if (WITH_GUI)
-	set (icon_svg ${PROJECT_SOURCE_DIR}/sdgui.svg)
+	set (icon_svg ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.svg)
 	set (icon_base ${PROJECT_BINARY_DIR}/icons)
 
 	# The largest size is mainly for an appropriately sized Windows icon
@@ -254,30 +248,41 @@ if (WITH_GUI)
 		icon_to_png (${icon_svg} ${icon_size} ${icon_base} icon_png)
 		list (APPEND icon_png_list ${icon_png})
 	endforeach ()
-	add_custom_target (sdgui-icons ALL DEPENDS ${icon_png_list})
-
-	set (sdgui_sources
-		src/sdgui.c
-		src/stardict-view.c
-		${project_common_sources})
-
-	if (WIN32)
-		set (icon_ico ${PROJECT_BINARY_DIR}/sdgui.ico)
-		icon_for_win32 ("${icon_png_list}" ${icon_ico})
-
-		set (resource_file ${PROJECT_BINARY_DIR}/sdgui.rc)
-		list (APPEND sdgui_sources ${resource_file})
-		add_custom_command (OUTPUT ${resource_file}
-			COMMAND ${CMAKE_COMMAND} -E echo "1 ICON \"sdgui.ico\""
-				> ${resource_file} VERBATIM)
-		set_property (SOURCE ${resource_file}
-			APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
-	endif ()
-
-	add_executable (sdgui WIN32 ${sdgui_sources})
-	target_include_directories (sdgui PUBLIC ${gtk_INCLUDE_DIRS})
-	target_link_libraries (sdgui ${project_common_libraries} ${gtk_LIBRARIES})
+	add_custom_target (icons ALL DEPENDS ${icon_png_list})
 endif ()
+
+if (WIN32)
+	set (icon_ico ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.ico)
+	icon_for_win32 ("${icon_png_list}" ${icon_ico})
+
+	set (resource_file ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.rc)
+	list (APPEND project_sources ${resource_file})
+	add_custom_command (OUTPUT ${resource_file}
+		COMMAND ${CMAKE_COMMAND} -E echo "1 ICON \"${PROJECT_NAME}.ico\""
+			> ${resource_file} VERBATIM)
+	set_property (SOURCE ${resource_file}
+		APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
+else ()
+	list (APPEND project_libraries ${Ncursesw_LIBRARIES} termo-static)
+	list (APPEND project_sources
+		src/${PROJECT_NAME}-tui.c)
+endif ()
+
+if (WITH_X11)
+	list (APPEND project_libraries ${xcb_LIBRARIES})
+endif ()
+if (WITH_GUI)
+	list (APPEND project_libraries ${gtk_LIBRARIES})
+	list (APPEND project_sources
+		src/${PROJECT_NAME}-gui.c
+		src/stardict-view.c)
+
+	add_executable (${PROJECT_NAME} WIN32 ${project_sources} ${project_headers})
+else ()
+	add_executable (${PROJECT_NAME} ${project_sources} ${project_headers})
+endif ()
+
+target_link_libraries (${PROJECT_NAME} ${project_libraries})
 
 # Tools
 set (tools tabfile add-pronunciation query-tool transform)
@@ -311,14 +316,13 @@ if (NOT WIN32)
 	install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 	if (WITH_GUI)
-		install (TARGETS sdgui DESTINATION ${CMAKE_INSTALL_BINDIR})
-		install (FILES sdgui.svg
+		install (FILES ${PROJECT_NAME}.svg
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 		install (DIRECTORY ${PROJECT_BINARY_DIR}/icons
 			DESTINATION ${CMAKE_INSTALL_DATADIR})
-		install (FILES sdgui.desktop
+		install (FILES ${PROJECT_NAME}.desktop
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-		install (FILES sdgui.xml
+		install (FILES ${PROJECT_NAME}.xml
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
 	endif ()
 
@@ -329,7 +333,7 @@ if (NOT WIN32)
 	endforeach ()
 elseif (WITH_GUI)
 	# This rather crude filter has been mostly copied over from logdiag
-	install (TARGETS sdgui DESTINATION .)
+	install (TARGETS ${PROJECT_NAME} DESTINATION .)
 	install (DIRECTORY
 		${win32_deps_prefix}/bin/
 		DESTINATION .
@@ -377,7 +381,7 @@ if (BUILD_TESTING)
 
 	find_program (xmlwf_EXECUTABLE xmlwf)
 	find_program (xmllint_EXECUTABLE xmllint)
-	foreach (xml sdgui.xml)
+	foreach (xml ${PROJECT_NAME}.xml)
 		if (xmlwf_EXECUTABLE)
 			add_test (test-xmlwf-${xml} ${xmlwf_EXECUTABLE}
 				${PROJECT_SOURCE_DIR}/${xml})
@@ -397,7 +401,7 @@ if (BUILD_TESTING)
 endif ()
 
 # CPack
-set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "StarDict TUI and GUI")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "Translation dictionary viewer")
 set (CPACK_PACKAGE_VENDOR "Premysl Eric Janouch")
 set (CPACK_PACKAGE_CONTACT "Přemysl Eric Janouch <p@janouch.name>")
 set (CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
@@ -413,17 +417,17 @@ set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}")
 set (CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${PROJECT_NAME}")
 
-set (CPACK_NSIS_INSTALLED_ICON_NAME sdgui.exe)
-set (CPACK_PACKAGE_EXECUTABLES sdgui sdgui)
+set (CPACK_NSIS_INSTALLED_ICON_NAME ${PROJECT_NAME}.exe)
+set (CPACK_PACKAGE_EXECUTABLES ${PROJECT_NAME} ${PROJECT_NAME})
 set (CPACK_NSIS_EXECUTABLES_DIRECTORY .)
 set (CPACK_NSIS_EXTRA_INSTALL_COMMANDS [[
-	WriteRegStr HKCR '.ifo' '' 'sdgui.Dictionary'
-	WriteRegStr HKCR 'sdgui.Dictionary' '' 'StarDict Dictionary'
-	WriteRegStr HKCR 'sdgui.Dictionary\\shell\\open\\command' '' '\"$INSTDIR\\sdgui.exe\" \"%1\"'
+	WriteRegStr HKCR '.ifo' '' 'tdv.Dictionary'
+	WriteRegStr HKCR 'tdv.Dictionary' '' 'StarDict Dictionary'
+	WriteRegStr HKCR 'tdv.Dictionary\\shell\\open\\command' '' '\"$INSTDIR\\tdv.exe\" \"%1\"'
 	System::Call 'shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)'
 ]])
 set (CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS [[
-	DeleteRegKey HKCR 'sdgui.Dictionary'
+	DeleteRegKey HKCR 'tdv.Dictionary'
 	System::Call 'shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)'
 ]])
 

@@ -8,6 +8,7 @@
 #define GETTEXT_DIRNAME "${CMAKE_INSTALL_PREFIX}/share/locale"
 
 #cmakedefine WITH_X11
+#cmakedefine WITH_GUI
 #cmakedefine HAVE_RESIZETERM
 
 #endif  // ! CONFIG_H

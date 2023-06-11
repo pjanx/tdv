@@ -1,20 +1,19 @@
-StarDict Terminal and Graphical UI
-==================================
+Translation dictionary viewer
+=============================
 
-'sdtui' aims to provide an easy way of viewing translation as well as other
-kinds of dictionaries in your terminal, and is inspired by the dictionary
-component of PC Translator.  I wasn't successful in finding any free software
-of this kind, GUI or not, and thus decided to write my own.
+'tdv' aims to provide an easy way of viewing translation as well as other kinds
+of StarDict dictionaries, and is inspired by the dictionary component
+of PC Translator.  I was unsuccessful in finding any free software of this kind,
+and thus decided to write my own.
 
 The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
 software.
 
-image::sdtui.png[align="center"]
+image::tdv.png[align="center"]
 
-As a recent addition, there is now an alternative GTK+ 3 based frontend as well,
-called 'sdgui'.  It shares its dictionary list with 'sdtui', but styling will
-follow your theme, and may be customized from 'gtk.css'.
+As a recent addition, the program also offers a GTK+ 3 based user interface,
+whose styling will follow your theme, and may be customized from 'gtk.css'.
 
 Packages
 --------
@@ -23,7 +22,7 @@ a package with the latest development version from Archlinux's AUR.
 
 Documentation
 -------------
-See the link:docs/sdtui.1.adoc[man page] for information about usage.
+See the link:docs/tdv.1.adoc[man page] for information about usage.
 The rest of this README will concern itself with externalities.
 
 Building and Running
@@ -51,16 +50,16 @@ To install the application, you can do either the usual:
 Or you can try telling CMake to make a package for you.  For Debian it is:
 
  $ cpack -G DEB
- # dpkg -i sdtui-*.deb
+ # dpkg -i tdv-*.deb
 
 Having the program installed, simply run it with a StarDict '.ifo' file as
 an argument.  It is, however, preferable to
-link:docs/sdtui.1.adoc#_configuration[configure it] to load your dictionaries
+link:docs/tdv.1.adoc#_configuration[configure it] to load your dictionaries
 automatically.
 
 Windows
 ~~~~~~~
-With the help of Mingw-w64 and WINE, 'sdgui' will successfully cross-compile
+With the help of Mingw-w64 and WINE, 'tdv' will successfully cross-compile
 for Windows.  It isn't particularly usable on that system, if only because
 selection watching is a very X11/Wayland-specific feature.  Beware that build
 dependencies take up almost a gigabyte of disk space.
@@ -91,7 +90,7 @@ https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--
 
 Further Development
 -------------------
-While I've been successfully using 'sdtui' for many years now, some issues
+While I've been successfully using 'tdv' for many years now, some issues
 should be addressed before including the software in regular Linux and/or
 BSD distributions:
 
