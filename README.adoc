@@ -36,9 +36,9 @@ Runtime dependencies:
 Optional runtime dependencies:
  xcb, xcb-xfixes (the first two for the TUI), gtk+-3.0 (for the GUI)
 
- $ git clone --recursive https://git.janouch.name/p/sdtui.git
- $ mkdir sdtui/build
- $ cd sdtui/build
+ $ git clone --recursive https://git.janouch.name/p/tdv.git
+ $ mkdir tdv/build
+ $ cd tdv/build
  $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug \
    -DWITH_X11=ON -DWITH_GUI=ON
  $ make
@@ -101,7 +101,7 @@ Given all issues with the file format, it might be better to start anew.
 
 Contributing and Support
 ------------------------
-Use https://git.janouch.name/p/sdtui to report any bugs, request features,
+Use https://git.janouch.name/p/tdv to report any bugs, request features,
 or submit pull requests.  `git send-email` is tolerated.  If you want to discuss
 the project, feel free to join me at ircs://irc.janouch.name, channel #dev.
 

@@ -89,7 +89,7 @@ _~/.config/tdv/tdv.conf_::
 
 Reporting bugs
 --------------
-Use https://git.janouch.name/p/sdtui to report bugs, request features,
+Use https://git.janouch.name/p/tdv to report bugs, request features,
 or submit pull requests.
 
 See also
