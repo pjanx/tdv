@@ -81,10 +81,10 @@ The `make dicts` command will build some examples from freely available sources:
  - Czech foreign words (the site's export is broken as of 2022/08, no response)
  - Czech WordNet 1.9 PDT (synonyms, hypernyms, hyponyms)
 
-You can use the included 'transform' tool to convert already existing StarDict
-dictionaries that are nearly good as they are.  Remember that you can change
-the `sametypesequence` of the resulting '.ifo' file to another format, or run
-'dictzip' on '.dict' files to make them compact.
+You can use the included 'tdv-transform' tool to convert already existing
+StarDict dictionaries that are nearly good as they are.  Remember that you can
+change the `sametypesequence` of the resulting '.ifo' file to another format,
+or run 'dictzip' on '.dict' files to make them compact.
 
 https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--> EN/DE/PL/RU dictionaries]
 

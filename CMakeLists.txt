@@ -285,14 +285,17 @@ endif ()
 target_link_libraries (${PROJECT_NAME} ${project_libraries})
 
 # Tools
-set (tools tabfile add-pronunciation query-tool transform)
+set (tools tdv-tabfile tdv-add-pronunciation tdv-query-tool tdv-transform)
 foreach (tool ${tools})
 	add_executable (${tool} EXCLUDE_FROM_ALL
 		src/${tool}.c ${project_common_sources})
 	target_link_libraries (${tool} ${project_common_libraries})
 endforeach ()
 
-add_custom_target (tools DEPENDS ${tools})
+option (WITH_TOOLS "Build and install some StarDict tools" ${UNIX})
+if (WITH_TOOLS)
+	add_custom_target (tools ALL DEPENDS ${tools})
+endif ()
 
 # Example dictionaries
 file (GLOB dicts_scripts "${PROJECT_SOURCE_DIR}/dicts/*.*")
@@ -315,6 +318,9 @@ if (NOT WIN32)
 	install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 	install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
+	if (WITH_TOOLS)
+		install (TARGETS ${tools} DESTINATION ${CMAKE_INSTALL_BINDIR})
+	endif ()
 	if (WITH_GUI)
 		install (FILES ${PROJECT_NAME}.svg
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
