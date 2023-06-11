@@ -1,14 +1,14 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR Přemysl Eric Janouch
-# This file is distributed under the same license as the sdtui package.
+# This file is distributed under the same license as the tdv package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: sdtui 0.1.0\n"
-"Report-Msgid-Bugs-To: https://git.janouch.name/p/sdtui/issues\n"
-"POT-Creation-Date: 2021-10-11 21:10+0200\n"
+"Project-Id-Version: tdv 0.1.0\n"
+"Report-Msgid-Bugs-To: https://git.janouch.name/p/tdv/issues\n"
+"POT-Creation-Date: 2023-06-11 17:47+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,83 +17,8 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ../src/sdgtk.c:289 ../src/sdtui.c:2481
-msgid "Warning"
-msgstr ""
-
-#: ../src/sdgtk.c:289 ../src/sdtui.c:2481
-msgid "failed to set the locale"
-msgstr ""
-
-#: ../src/sdgtk.c:299
-msgid "FILE..."
-msgstr ""
-
-#: ../src/sdgtk.c:304
-msgid "- StarDict GTK+ UI"
-msgstr ""
-
-#: ../src/sdgtk.c:355
-msgid "Follow selection"
-msgstr ""
-
-#: ../src/sdtui.c:320
-msgid "error in entry"
-msgstr ""
-
-#: ../src/sdtui.c:415
+#: ../src/stardict-view.c:96 ../src/tdv-tui.c:340
 msgid "no usable field found"
-msgstr ""
-
-#: ../src/sdtui.c:700
-msgid "Search"
-msgstr ""
-
-#: ../src/sdtui.c:726
-msgid "Cannot load configuration"
-msgstr ""
-
-#: ../src/sdtui.c:745
-msgid "Error loading dictionary"
-msgstr ""
-
-#: ../src/sdtui.c:750
-msgid ""
-"No dictionaries found either in the configuration or on the command line"
-msgstr ""
-
-#: ../src/sdtui.c:1114
-msgid "Terminal UI for StarDict dictionaries"
-msgstr ""
-
-#: ../src/sdtui.c:1117
-msgid "Type to search"
-msgstr ""
-
-#: ../src/sdtui.c:2095
-#, c-format
-msgid "X11 connection failed (error code %d)"
-msgstr ""
-
-#: ../src/sdtui.c:2241
-#, c-format
-msgid "X11 request error (%d, major %d, minor %d)"
-msgstr ""
-
-#: ../src/sdtui.c:2476
-msgid "Output version information and exit"
-msgstr ""
-
-#: ../src/sdtui.c:2489
-msgid "[dictionary.ifo...] - StarDict terminal UI"
-msgstr ""
-
-#: ../src/sdtui.c:2497
-msgid "Error"
-msgstr ""
-
-#: ../src/sdtui.c:2497
-msgid "option parsing failed"
 msgstr ""
 
 #: ../src/stardict.c:89
@@ -124,19 +49,19 @@ msgstr ""
 msgid "option format error"
 msgstr ""
 
-#: ../src/stardict.c:318
+#: ../src/stardict.c:316
 msgid "no book name specified"
 msgstr ""
 
-#: ../src/stardict.c:324
+#: ../src/stardict.c:322
 msgid "word count not specified"
 msgstr ""
 
-#: ../src/stardict.c:330
+#: ../src/stardict.c:328
 msgid "index file size not specified"
 msgstr ""
 
-#: ../src/stardict.c:339
+#: ../src/stardict.c:337
 msgid "invalid index offset bits"
 msgstr ""
 
@@ -148,6 +73,93 @@ msgstr ""
 msgid "cannot find .dict file"
 msgstr ""
 
-#: ../src/stardict.c:1153 ../src/stardict.c:1178
+#: ../src/stardict.c:1157 ../src/stardict.c:1182
 msgid "invalid data entry"
+msgstr ""
+
+#: ../src/tdv-gui.c:367
+msgid "Open dictionary"
+msgstr ""
+
+#: ../src/tdv-gui.c:369
+msgid "_Cancel"
+msgstr ""
+
+#: ../src/tdv-gui.c:370
+msgid "_Open"
+msgstr ""
+
+#: ../src/tdv-gui.c:467 ../src/tdv-tui.c:597
+msgid ""
+"No dictionaries found either in the configuration or on the command line"
+msgstr ""
+
+#: ../src/tdv-gui.c:504
+msgid "_Open..."
+msgstr ""
+
+#: ../src/tdv-gui.c:509
+msgid "_Follow selection"
+msgstr ""
+
+#: ../src/tdv-tui.c:258
+msgid "error in entry"
+msgstr ""
+
+#: ../src/tdv-tui.c:555
+msgid "Search"
+msgstr ""
+
+#: ../src/tdv-tui.c:572
+msgid "Cannot load configuration"
+msgstr ""
+
+#: ../src/tdv-tui.c:592
+msgid "Error loading dictionary"
+msgstr ""
+
+#: ../src/tdv-tui.c:1068
+msgid "Terminal UI for StarDict dictionaries"
+msgstr ""
+
+#: ../src/tdv-tui.c:1071
+msgid "Type to search"
+msgstr ""
+
+#: ../src/tdv-tui.c:2071
+#, c-format
+msgid "X11 connection failed (error code %d)"
+msgstr ""
+
+#: ../src/tdv-tui.c:2217
+#, c-format
+msgid "X11 request error (%d, major %d, minor %d)"
+msgstr ""
+
+#: ../src/tdv.c:39
+msgid "Warning"
+msgstr ""
+
+#: ../src/tdv.c:39
+msgid "failed to set the locale"
+msgstr ""
+
+#: ../src/tdv.c:55
+msgid "Output version information and exit"
+msgstr ""
+
+#: ../src/tdv.c:60
+msgid "Launch the GUI even when run from a terminal"
+msgstr ""
+
+#: ../src/tdv.c:67
+msgid "[dictionary.ifo...] - Translation dictionary viewer"
+msgstr ""
+
+#: ../src/tdv.c:77
+msgid "Error"
+msgstr ""
+
+#: ../src/tdv.c:77
+msgid "option parsing failed"
 msgstr ""
