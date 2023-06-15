@@ -380,14 +380,12 @@ endif ()
 
 # Do some unit tests
 option (BUILD_TESTING "Build tests" OFF)
-set (project_tests stardict)
-
 if (BUILD_TESTING)
 	enable_testing ()
 
 	find_program (xmlwf_EXECUTABLE xmlwf)
 	find_program (xmllint_EXECUTABLE xmllint)
-	foreach (xml ${PROJECT_NAME}.xml)
+	foreach (xml ${PROJECT_NAME}.xml ${PROJECT_NAME}.svg)
 		if (xmlwf_EXECUTABLE)
 			add_test (test-xmlwf-${xml} ${xmlwf_EXECUTABLE}
 				${PROJECT_SOURCE_DIR}/${xml})
@@ -398,7 +396,15 @@ if (BUILD_TESTING)
 		endif ()
 	endforeach ()
 
-	foreach (name ${project_tests})
+	find_program (dfv_EXECUTABLE desktop-file-validate)
+	if (dfv_EXECUTABLE)
+		foreach (df ${PROJECT_NAME}.desktop)
+			add_test (test-dfv-${df} ${dfv_EXECUTABLE}
+				${PROJECT_SOURCE_DIR}/${df})
+		endforeach ()
+	endif ()
+
+	foreach (name stardict)
 		add_executable (test-${name}
 			src/test-${name}.c ${project_common_sources})
 		target_link_libraries (test-${name} ${project_common_libraries})
