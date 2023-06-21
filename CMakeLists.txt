@@ -305,7 +305,7 @@ foreach (dict_script ${dicts_scripts})
 	list (APPEND dicts_targets "dicts-${dict_name}")
 	add_custom_target (dicts-${dict_name}
 		COMMAND sh -c "PATH=.:$PATH \"$0\"" "${dict_script}"
-		DEPENDS tabfile
+		DEPENDS tdv-tabfile
 		COMMENT "Generating sample dictionary ${dict_name}"
 		VERBATIM)
 endforeach ()
