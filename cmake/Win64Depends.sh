@@ -27,7 +27,8 @@ fetch() {
 	} BEGIN { while ((getline < "db.tsv") > 0) {
 		filenames[$1] = $2; deps[$1] = ""; for (i = 3; i <= NF; i++) {
 			gsub(/[<=>].*/, "", $i); deps[$1] = deps[$1] $i FS }
-	} for (i = 0; i < ARGC; i++) get(ARGV[i]) }' "$@" | while IFS= read -r name
+	} for (i = 0; i < ARGC; i++) get(ARGV[i]) }' "$@" | tee db.want | \
+	while IFS= read -r name
 	do
 		status Fetching "$name"
 		[ -f "packages/$name" ] || curl -#o "packages/$name" "$repository/$name"
@@ -44,9 +45,9 @@ extract() {
 	for subdir in *
 	do [ -d "$subdir" -a "$subdir" != packages ] && rm -rf -- "$subdir"
 	done
-	for i in packages/*
-	do bsdtar -xf "$i" --strip-components 1 mingw64
-	done
+	while IFS= read -r name
+	do bsdtar -xf "packages/$name" --strip-components 1
+	done < db.want
 }
 
 configure() {
