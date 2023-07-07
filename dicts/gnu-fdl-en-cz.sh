@@ -5,7 +5,7 @@ zcat | grep -v ^# | sed 's/\\//g' | perl -CSD -F\\t -le '
 	sub tabesc { shift =~ s/\\/\\\\/gr =~ s/\n/\\n/gr =~ s/\t/\\t/gr }
 	sub w {
 		my ($name, $dict, $collation) = @_;
-		open(my $f, "|-", "tabfile", "--pango", "--collation=$collation",
+		open(my $f, "|-", "tdv-tabfile", "--pango", "--collation=$collation",
 			"--website=https://www.svobodneslovniky.cz",
 			"gnu-fdl-$name") or die $!;
 		print $f tabesc($keyword) . "\t" . tabesc(join("\n", @$defs))

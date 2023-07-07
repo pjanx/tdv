@@ -55,7 +55,7 @@ while (my ($id, $synset) = each %synsets) {
 
 # Output synsets exploded to individual words, with expanded relationships
 close($doc) or die $?;
-open(my $tabfile, '|-', 'tabfile', 'czech-wordnet',
+open(my $tabfile, '|-', 'tdv-tabfile', 'czech-wordnet',
 	'--book-name=Czech WordNet 1.9 PDT', "--website=$base/$path",
 	'--date=2011-01-24', '--collation=cs_CZ') or die $!;
 
