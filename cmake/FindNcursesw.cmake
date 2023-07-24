@@ -7,7 +7,7 @@ pkg_check_modules (Ncursesw QUIET ncursesw)
 set (required_vars Ncursesw_LIBRARIES)
 if (NOT Ncursesw_FOUND)
 	find_library (Ncursesw_LIBRARIES NAMES ncursesw)
-	find_path (Ncursesw_INCLUDE_DIRS ncurses.h)
+	find_path (Ncursesw_INCLUDE_DIRS ncurses.h PATH_SUFFIXES ncurses)
 	list (APPEND required_vars Ncursesw_INCLUDE_DIRS)
 endif (NOT Ncursesw_FOUND)
 
