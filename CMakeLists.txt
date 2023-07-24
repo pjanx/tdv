@@ -11,7 +11,8 @@ endif ()
 add_definitions (-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_38)
 
 # For custom modules
-set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+set (CMAKE_MODULE_PATH
+	"${PROJECT_SOURCE_DIR}/cmake;${PROJECT_SOURCE_DIR}/liberty/cmake")
 
 # Cross-compilation for Windows, as a proof-of-concept pulled in from logdiag
 if (WIN32)
