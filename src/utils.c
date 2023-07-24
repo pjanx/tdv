@@ -16,6 +16,9 @@
  *
  */
 
+// getpwnam_r
+#define _POSIX_C_SOURCE 199506L
+
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gio/gio.h>
