@@ -202,34 +202,6 @@ configure_file (${PROJECT_SOURCE_DIR}/config.h.in
 	${PROJECT_BINARY_DIR}/config.h)
 include_directories (${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
-# Icon generation utilities
-if (NOT ${CMAKE_VERSION} VERSION_LESS 3.18.0)
-	set (find_program_REQUIRE REQUIRED)
-endif ()
-
-function (icon_to_png svg size output_dir output)
-	set (_dimensions ${size}x${size})
-	set (_png_path ${output_dir}/hicolor/${_dimensions}/apps)
-	set (_png ${_png_path}/${PROJECT_NAME}.png)
-	set (${output} ${_png} PARENT_SCOPE)
-
-	find_program (rsvg_convert_EXECUTABLE rsvg-convert ${find_program_REQUIRE})
-	add_custom_command (OUTPUT ${_png}
-		COMMAND ${CMAKE_COMMAND} -E make_directory ${_png_path}
-		COMMAND ${rsvg_convert_EXECUTABLE} --output=${_png}
-			--width=${size} --height=${size} ${svg}
-		DEPENDS ${svg}
-		COMMENT "Generating ${_dimensions} application icon" VERBATIM)
-endfunction ()
-
-function (icon_for_win32 pngs ico)
-	find_program (icotool_EXECUTABLE icotool ${find_program_REQUIRE})
-	add_custom_command (OUTPUT ${ico}
-		COMMAND ${icotool_EXECUTABLE} -c -o ${ico} ${pngs}
-		DEPENDS ${pngs}
-		COMMENT "Generating Windows program icon" VERBATIM)
-endfunction ()
-
 # Build the main executable and link it
 set (project_libraries
 	${project_common_libraries})
@@ -240,21 +212,23 @@ set (project_headers
 	${project_common_headers})
 
 if (WITH_GUI)
-	set (icon_svg ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.svg)
-	set (icon_base ${PROJECT_BINARY_DIR}/icons)
+	include (IconUtils)
 
 	# The largest size is mainly for an appropriately sized Windows icon
+	set (icon_base ${PROJECT_BINARY_DIR}/icons)
 	set (icon_png_list)
 	foreach (icon_size 16 32 48 256)
-		icon_to_png (${icon_svg} ${icon_size} ${icon_base} icon_png)
+		icon_to_png (${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.svg
+			${icon_size} ${icon_base} icon_png)
 		list (APPEND icon_png_list ${icon_png})
 	endforeach ()
+
 	add_custom_target (icons ALL DEPENDS ${icon_png_list})
 endif ()
 
 if (WIN32)
 	set (icon_ico ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.ico)
-	icon_for_win32 ("${icon_png_list}" ${icon_ico})
+	icon_for_win32 (${icon_ico} "${icon_png_list}" "")
 
 	set (resource_file ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.rc)
 	list (APPEND project_sources ${resource_file})
@@ -325,7 +299,7 @@ if (NOT WIN32)
 	if (WITH_GUI)
 		install (FILES ${PROJECT_NAME}.svg
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
-		install (DIRECTORY ${PROJECT_BINARY_DIR}/icons
+		install (DIRECTORY ${icon_base}
 			DESTINATION ${CMAKE_INSTALL_DATADIR})
 		install (FILES ${PROJECT_NAME}.desktop
 			DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
