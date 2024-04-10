@@ -78,7 +78,7 @@ if (USE_SYSTEM_TERMO)
 	if (NOT Termo_FOUND)
 		message (FATAL_ERROR "System termo library not found")
 	endif ()
-else ()
+elseif (NOT WIN32)
 	# We don't want the library to install, but EXCLUDE_FROM_ALL ignores tests
 	add_subdirectory (termo EXCLUDE_FROM_ALL)
 	file (WRITE ${PROJECT_BINARY_DIR}/CTestCustom.cmake
@@ -238,7 +238,7 @@ if (WIN32)
 	set_property (SOURCE ${resource_file}
 		APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
 else ()
-	list (APPEND project_libraries ${Ncursesw_LIBRARIES} termo-static)
+	list (APPEND project_libraries ${Ncursesw_LIBRARIES} ${Termo_LIBRARIES})
 	list (APPEND project_sources
 		src/${PROJECT_NAME}-tui.c)
 endif ()
@@ -383,7 +383,7 @@ if (BUILD_TESTING)
 		add_executable (test-${name}
 			src/test-${name}.c ${project_common_sources})
 		target_link_libraries (test-${name} ${project_common_libraries})
-		add_test (test-${name} test-${name})
+		add_test (NAME test-${name} COMMAND test-${name})
 	endforeach ()
 endif ()
 
