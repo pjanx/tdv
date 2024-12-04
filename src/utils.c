@@ -16,8 +16,10 @@
  *
  */
 
-// getpwnam_r
-#define _POSIX_C_SOURCE 199506L
+// getpwnam_r, _SC_GETPW_R_SIZE_MAX
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
 
 #include <glib.h>
 #include <glib/gprintf.h>
