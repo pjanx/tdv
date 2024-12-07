@@ -127,9 +127,9 @@ CHECK_FUNCTION_EXISTS ("resizeterm" HAVE_RESIZETERM)
 
 # Localization
 find_package (Gettext REQUIRED)
-file (GLOB project_PO_FILES ${PROJECT_SOURCE_DIR}/po/*.po)
+file (GLOB project_PO_FILES "${PROJECT_SOURCE_DIR}/po/*.po")
 GETTEXT_CREATE_TRANSLATIONS (
-	${PROJECT_SOURCE_DIR}/po/${PROJECT_NAME}.pot
+	"${PROJECT_SOURCE_DIR}/po/${PROJECT_NAME}.pot"
 	ALL ${project_PO_FILES})
 
 # Documentation
@@ -144,7 +144,7 @@ foreach (page "${PROJECT_NAME}.1")
 	set (page_output "${PROJECT_BINARY_DIR}/${page}")
 	list (APPEND project_MAN_PAGES "${page_output}")
 	if (ASCIIDOCTOR_EXECUTABLE)
-		add_custom_command (OUTPUT ${page_output}
+		add_custom_command (OUTPUT "${page_output}"
 			COMMAND ${ASCIIDOCTOR_EXECUTABLE} -b manpage
 				-a release-version=${PROJECT_VERSION}
 				-o "${page_output}"
@@ -152,7 +152,7 @@ foreach (page "${PROJECT_NAME}.1")
 			DEPENDS "docs/${page}.adoc"
 			COMMENT "Generating man page for ${page}" VERBATIM)
 	elseif (A2X_EXECUTABLE)
-		add_custom_command (OUTPUT ${page_output}
+		add_custom_command (OUTPUT "${page_output}"
 			COMMAND ${A2X_EXECUTABLE} --doctype manpage --format manpage
 				-a release-version=${PROJECT_VERSION}
 				-D "${PROJECT_BINARY_DIR}"
@@ -161,10 +161,10 @@ foreach (page "${PROJECT_NAME}.1")
 			COMMENT "Generating man page for ${page}" VERBATIM)
 	else ()
 		set (ASCIIMAN ${PROJECT_SOURCE_DIR}/liberty/tools/asciiman.awk)
-		add_custom_command (OUTPUT ${page_output}
+		add_custom_command (OUTPUT "${page_output}"
 			COMMAND env LC_ALL=C asciidoc-release-version=${PROJECT_VERSION}
 				awk -f ${ASCIIMAN} "${PROJECT_SOURCE_DIR}/docs/${page}.adoc"
-				> ${page_output}
+				> "${page_output}"
 			DEPENDS "docs/${page}.adoc" ${ASCIIMAN}
 			COMMENT "Generating man page for ${page}" VERBATIM)
 	endif ()
@@ -181,7 +181,7 @@ if (WIN32)
 endif (WIN32)
 
 set (project_common_headers
-	${PROJECT_BINARY_DIR}/config.h
+	"${PROJECT_BINARY_DIR}/config.h"
 	src/dictzip-input-stream.h
 	src/stardict.h
 	src/stardict-private.h
@@ -198,9 +198,9 @@ add_library (stardict OBJECT
 set (project_common_sources $<TARGET_OBJECTS:stardict>)
 
 # Generate a configuration file
-configure_file (${PROJECT_SOURCE_DIR}/config.h.in
-	${PROJECT_BINARY_DIR}/config.h)
-include_directories (${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
+configure_file ("${PROJECT_SOURCE_DIR}/config.h.in"
+	"${PROJECT_BINARY_DIR}/config.h")
+include_directories ("${PROJECT_SOURCE_DIR}" "${PROJECT_BINARY_DIR}")
 
 # Build the main executable and link it
 set (project_libraries
@@ -215,28 +215,29 @@ if (WITH_GUI)
 	include (IconUtils)
 
 	# The largest size is mainly for an appropriately sized Windows icon
-	set (icon_base ${PROJECT_BINARY_DIR}/icons)
+	set (icon_base "${PROJECT_BINARY_DIR}/icons")
 	set (icon_png_list)
 	foreach (icon_size 16 32 48 256)
-		icon_to_png (${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.svg
-			${icon_size} ${icon_base} icon_png)
-		list (APPEND icon_png_list ${icon_png})
+		icon_to_png (${PROJECT_NAME} "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.svg"
+			${icon_size} "${icon_base}" icon_png)
+		list (APPEND icon_png_list "${icon_png}")
 	endforeach ()
 
 	add_custom_target (icons ALL DEPENDS ${icon_png_list})
 endif ()
 
 if (WIN32)
-	set (icon_ico ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.ico)
-	icon_for_win32 (${icon_ico} "${icon_png_list}" "")
+	list (REMOVE_ITEM icon_png_list "${icon_png}")
+	set (icon_ico "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.ico")
+	icon_for_win32 ("${icon_ico}" "${icon_png_list}" "${icon_png}")
 
-	set (resource_file ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.rc)
-	list (APPEND project_sources ${resource_file})
-	add_custom_command (OUTPUT ${resource_file}
+	set (resource_file "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.rc")
+	list (APPEND project_sources "${resource_file}")
+	add_custom_command (OUTPUT "${resource_file}"
 		COMMAND ${CMAKE_COMMAND} -E echo "1 ICON \"${PROJECT_NAME}.ico\""
-			> ${resource_file} VERBATIM)
-	set_property (SOURCE ${resource_file}
-		APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
+			> "${resource_file}" VERBATIM)
+	set_property (SOURCE "${resource_file}"
+		APPEND PROPERTY OBJECT_DEPENDS "${icon_ico}")
 else ()
 	list (APPEND project_libraries ${Ncursesw_LIBRARIES} ${Termo_LIBRARIES})
 	list (APPEND project_sources
@@ -336,7 +337,7 @@ elseif (WITH_GUI)
 	install (FILES
 		${win32_deps_prefix}/share/icons/hicolor/index.theme
 		DESTINATION share/icons/hicolor)
-	install (DIRECTORY ${icon_base} DESTINATION share)
+	install (DIRECTORY "${icon_base}" DESTINATION share)
 
 	install (SCRIPT cmake/Win32Cleanup.cmake)
 
@@ -363,11 +364,11 @@ if (BUILD_TESTING)
 	foreach (xml ${PROJECT_NAME}.xml ${PROJECT_NAME}.svg)
 		if (xmlwf_EXECUTABLE)
 			add_test (test-xmlwf-${xml} ${xmlwf_EXECUTABLE}
-				${PROJECT_SOURCE_DIR}/${xml})
+				"${PROJECT_SOURCE_DIR}/${xml}")
 		endif ()
 		if (xmllint_EXECUTABLE)
 			add_test (test-xmllint-${xml} ${xmllint_EXECUTABLE} --noout
-				${PROJECT_SOURCE_DIR}/${xml})
+				"${PROJECT_SOURCE_DIR}/${xml}")
 		endif ()
 	endforeach ()
 
@@ -375,7 +376,7 @@ if (BUILD_TESTING)
 	if (dfv_EXECUTABLE)
 		foreach (df ${PROJECT_NAME}.desktop)
 			add_test (test-dfv-${df} ${dfv_EXECUTABLE}
-				${PROJECT_SOURCE_DIR}/${df})
+				"${PROJECT_SOURCE_DIR}/${df}")
 		endforeach ()
 	endif ()
 
