@@ -10,11 +10,13 @@ The program offers both a terminal user interface, and a GTK+ 3 based UI.
 The styling of the latter will follow your theme, and may be customized
 from 'gtk.css'.
 
-image::tdv.png[align="center"]
-
 The project is covered by a permissive license, unlike vast majority of other
 similar projects, and can serve as a base for implementing other dictionary
 software.
+
+Screenshot
+----------
+image::tdv.png[align="center"]
 
 Packages
 --------
