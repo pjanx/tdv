@@ -222,7 +222,7 @@ load_project_config_file (GError **error)
 	//   which is completely undocumented
 	g_key_file_load_from_dirs (key_file,
 		PROJECT_NAME G_DIR_SEPARATOR_S PROJECT_NAME ".conf",
-		paths, NULL, 0, &e);
+		paths, NULL, G_KEY_FILE_KEEP_COMMENTS, &e);
 	g_free (paths);
 	if (!e)
 		return key_file;
@@ -234,6 +234,25 @@ load_project_config_file (GError **error)
 
 	g_key_file_free (key_file);
 	return NULL;
+}
+
+gboolean
+save_project_config_file (GKeyFile *key_file, GError **error)
+{
+	gchar *dirname =
+		g_build_filename (g_get_user_config_dir (), PROJECT_NAME, NULL);
+	(void) g_mkdir_with_parents (dirname, 0755);
+	gchar *path = g_build_filename (dirname, PROJECT_NAME ".conf", NULL);
+	g_free (dirname);
+
+	gsize length = 0;
+	gchar *data = g_key_file_to_data (key_file, &length, error);
+	if (!data)
+		return FALSE;
+
+	gboolean result = g_file_set_contents (path, data, length, error);
+	g_free (data);
+	return result;
 }
 
 // --- Loading -----------------------------------------------------------------

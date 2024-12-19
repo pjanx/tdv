@@ -6,14 +6,15 @@ of StarDict dictionaries, and is inspired by the dictionary component
 of PC Translator.  I was unsuccessful in finding any free software of this kind,
 and thus decided to write my own.
 
-The project is covered by a permissive license, unlike vast majority of other
-similar projects, and can serve as a base for implementing other dictionary
-software.
+The program offers both a terminal user interface, and a GTK+ 3 based UI.
+The styling of the latter will follow your theme, and may be customized
+from 'gtk.css'.
 
 image::tdv.png[align="center"]
 
-As a recent addition, the program also offers a GTK+ 3 based user interface,
-whose styling will follow your theme, and may be customized from 'gtk.css'.
+The project is covered by a permissive license, unlike vast majority of other
+similar projects, and can serve as a base for implementing other dictionary
+software.
 
 Packages
 --------
@@ -92,14 +93,8 @@ https://mega.co.nz/#!axtD0QRK!sbtBgizksyfkPqKvKEgr8GQ11rsWhtqyRgUUV0B7pwg[CZ <--
 
 Further Development
 -------------------
-While I've been successfully using 'tdv' for many years now, some issues
-should be addressed before including the software in regular Linux and/or
-BSD distributions:
-
- - The GUI is awkward to configure.
- - Lacking configuration, standard StarDict locations should be scanned.
-
-Given all issues with the file format, it might be better to start anew.
+Lacking configuration, standard StarDict locations should be scanned.
+We should try harder to display arbitrary dictionaries sensibly.
 
 Contributing and Support
 ------------------------

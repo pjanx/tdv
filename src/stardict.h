@@ -108,6 +108,7 @@ GQuark stardict_error_quark (void);
 
 // --- Dictionary information --------------------------------------------------
 
+StardictInfo *stardict_info_new (const gchar *filename, GError **error);
 const gchar *stardict_info_get_path (StardictInfo *sdi) G_GNUC_PURE;
 const gchar *stardict_info_get_book_name (StardictInfo *sdi) G_GNUC_PURE;
 gsize stardict_info_get_word_count (StardictInfo *sd) G_GNUC_PURE;

@@ -357,6 +357,20 @@ error:
 	return ret_val;
 }
 
+/// Read an .ifo file.
+/// @return StardictInfo *. Deallocate with stardict_info_free();
+StardictInfo *
+stardict_info_new (const gchar *filename, GError **error)
+{
+	StardictInfo *ifo = g_new (StardictInfo, 1);
+	if (!load_ifo (ifo, filename, error))
+	{
+		g_free (ifo);
+		return NULL;
+	}
+	return ifo;
+}
+
 /// List all dictionary files located in a path.
 /// @return GList<StardictInfo *>. Deallocate the list with:
 /// @code
@@ -377,12 +391,10 @@ stardict_list_dictionaries (const gchar *path)
 			continue;
 
 		gchar *filename = g_build_filename (path, name, NULL);
-		StardictInfo *ifo = g_new (StardictInfo, 1);
-		if (load_ifo (ifo, filename, NULL))
-			dicts = g_list_append (dicts, ifo);
-		else
-			g_free (ifo);
+		StardictInfo *ifo = stardict_info_new (filename, NULL);
 		g_free (filename);
+		if (ifo)
+			dicts = g_list_append (dicts, ifo);
 	}
 	g_dir_close (dir);
 	g_pattern_spec_free (ps);

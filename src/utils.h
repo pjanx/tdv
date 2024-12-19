@@ -54,6 +54,7 @@ gchar *resolve_relative_config_filename (const gchar *filename);
 gchar *resolve_filename
 	(const gchar *filename, gchar *(*relative_cb) (const char *));
 GKeyFile *load_project_config_file (GError **error);
+gboolean save_project_config_file (GKeyFile *key_file, GError **error);
 
 // --- Loading -----------------------------------------------------------------
 
