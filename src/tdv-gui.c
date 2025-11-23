@@ -146,8 +146,8 @@ on_selection_received (G_GNUC_UNUSED GtkClipboard *clipboard, const gchar *text,
 	gchar *trimmed = g_strstrip (g_strdup (text));
 	gtk_entry_set_text (GTK_ENTRY (g.entry), trimmed);
 	g_free (trimmed);
-	g_signal_emit_by_name (g.entry,
-		"move-cursor", GTK_MOVEMENT_BUFFER_ENDS, 1, FALSE);
+
+	gtk_editable_set_position (GTK_EDITABLE (g.entry), -1);
 }
 
 static void
